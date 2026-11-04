@@ -9,7 +9,7 @@ const snapshot: SandboxSnapshot = {
     { kind: 'user', id: '10001', name: '当前用户' },
     { kind: 'user', id: '10002', name: '好友用户' },
     { kind: 'user', id: '10003', name: '陌生用户' },
-    { kind: 'bot', id: '20001', name: 'Koishi', implementation: 'napcat', enabled: true },
+    { kind: 'bot', id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: true },
   ],
   groups: [
     { id: '30001', name: '已加入群', announcements: [], members: [{ participantId: '10001', role: 'member' }] },

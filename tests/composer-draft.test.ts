@@ -35,7 +35,7 @@ describe('WebQQ 内联提及草稿', () => {
     const tokens: ComposerDraftToken[] = [
       { type: 'mention', id: '10002', name: '测试用户2' },
       { type: 'text', text: ' ' },
-      { type: 'mention', id: '20001', name: 'Koishi' },
+      { type: 'mention', id: '20001', name: 'ChatLuna' },
     ]
 
     expect(serializeComposerDraft(tokens)).toBe('<at id="10002"/> <at id="20001"/>')
@@ -55,7 +55,7 @@ describe('WebQQ 内联提及草稿', () => {
   it('按名称、ID 与 keywords 过滤候选并优先前缀匹配', () => {
     const candidates = [
       { id: '10002', name: '管理员小王', kind: 'user' as const },
-      { id: '20001', name: 'Koishi', kind: 'bot' as const },
+      { id: '20001', name: 'ChatLuna', kind: 'bot' as const },
       { id: '10003', name: '测试用户', kind: 'user' as const, keywords: ['真实昵称'] },
     ]
 

@@ -339,7 +339,7 @@ export function createDefaultScene(): SandboxSnapshot {
       { kind: 'user', id: DEFAULT_USER_ID, name: '测试用户1' },
       { kind: 'user', id: SECONDARY_USER_ID, name: '测试用户2' },
       { kind: 'user', id: ADMIN_USER_ID, name: '测试用户3' },
-      { kind: 'bot', id: DEFAULT_BOT_ID, name: 'Koishi', implementation: 'napcat', enabled: true },
+      { kind: 'bot', id: DEFAULT_BOT_ID, name: 'ChatLuna', implementation: 'napcat', enabled: true },
     ],
     groups: [{
       id: DEFAULT_GROUP_ID,
@@ -348,7 +348,7 @@ export function createDefaultScene(): SandboxSnapshot {
         { participantId: DEFAULT_USER_ID, card: '测试用户1', role: 'owner' },
         { participantId: SECONDARY_USER_ID, card: '测试用户2', role: 'admin' },
         { participantId: ADMIN_USER_ID, card: '测试用户3', role: 'member' },
-        { participantId: DEFAULT_BOT_ID, card: 'Koishi', role: 'admin' },
+        { participantId: DEFAULT_BOT_ID, card: 'ChatLuna', role: 'admin' },
       ],
       announcements: [{
         id: 'announcement:welcome',

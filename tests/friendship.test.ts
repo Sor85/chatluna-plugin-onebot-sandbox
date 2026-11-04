@@ -118,7 +118,7 @@ describe('模拟 QQ 环境好友关系', () => {
 
   it('停用机器人保持可观察但不能执行好友操作', async () => {
     const { control } = await createControl()
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: false })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: false })
 
     await expect(control.performFriendAction({ action: 'delete', operatorId: '20001', targetId: '10001' }))
       .rejects.toThrow('机器人已停用：20001')
@@ -156,7 +156,7 @@ describe('模拟 QQ 环境好友关系', () => {
     expect(pokeMessage).toEqual(expect.objectContaining({
       authorId: '10004',
       conversationId: 'private:10004:20001',
-      content: '申请用户 戳了戳 Koishi',
+      content: '申请用户 戳了戳 ChatLuna',
       event: { type: 'poke', targetId: '20001' },
     }))
     expect(pokeMessage).not.toHaveProperty('botId')

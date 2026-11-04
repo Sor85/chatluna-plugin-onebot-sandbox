@@ -121,7 +121,7 @@ describe('MCP 读取类工具', () => {
   it('读取单个会话及其消息，并拒绝不可见会话', async () => {
     const { service, credential, control } = createMcpTestService(['read', 'interact'])
     // 未启动 App 时机器人 middleware 不会收敛，send_message 会一直等待同步回复；停用机器人后仍会写入消息。
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: false })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: false })
     const sent = await service.callTool(credential.token, 'send_message', {
       operatorId: '10001',
       conversationId: 'private:10001:20001',
@@ -245,7 +245,7 @@ describe('MCP 读取类工具', () => {
   it('导出的场景包含会话实例及其消息归属', async () => {
     const { service, credential, control } = createMcpTestService(['read'])
     // 未启动 App 时机器人 middleware 不会收敛，sendMessage 会一直等待同步回复；停用机器人后仍会写入消息。
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: false })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: false })
     const instance = control.createConversationInstance({
       operatorId: '10001',
       rootConversationId: 'private:10001:20001',

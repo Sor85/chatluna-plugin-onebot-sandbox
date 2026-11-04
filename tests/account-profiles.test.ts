@@ -186,12 +186,12 @@ describe('类型化账号资料', () => {
         },
         { participantId: '10002', card: '测试用户2', role: 'admin' },
         { participantId: '10003', card: '测试用户3', role: 'member' },
-        { participantId: '20001', card: 'Koishi', role: 'admin' },
+        { participantId: '20001', card: 'ChatLuna', role: 'admin' },
       ],
     })
     control.updateBot({
       id: '20001',
-      name: 'Koishi',
+      name: 'ChatLuna',
       implementation: 'napcat',
       enabled: true,
       profile: { personalNote: '机器人签名', sex: 'unknown' },
@@ -202,7 +202,7 @@ describe('类型化账号资料', () => {
       retcode: 0,
       data: {
         user_id: 20001,
-        nickname: 'Koishi',
+        nickname: 'ChatLuna',
         long_nick: '机器人签名',
         sex: 'unknown',
       },
@@ -317,7 +317,7 @@ describe('类型化账号资料', () => {
       participants: [
         dirtyUser as never,
         { kind: 'user', id: '10002', name: '测试用户2' },
-        { kind: 'bot', id: '20001', name: 'Koishi', implementation: 'napcat', enabled: true },
+        { kind: 'bot', id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: true },
       ],
       groups: [{
         id: '30001',

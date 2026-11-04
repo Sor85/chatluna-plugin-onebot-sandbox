@@ -52,7 +52,7 @@ describe('测试调用值脱敏', () => {
 describe('MCP 测试调用记录', () => {
   it('记录脱敏参数和结果，并区分列表摘要与详情', async () => {
     const { control, service, credential } = createService(['read', 'interact', 'debug'])
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: false })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: false })
     const debugCredential = service.createCredential('调试凭证', ['debug'])
     const mediaBase64 = Buffer.alloc(12 * 1024, 1).toString('base64')
     await service.callTool(credential.token, 'send_message', {

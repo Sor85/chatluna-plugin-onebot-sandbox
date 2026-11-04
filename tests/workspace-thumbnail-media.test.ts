@@ -13,7 +13,7 @@ const mediaId = 'a'.repeat(32)
 function snapshot(avatar: string): SandboxSnapshot {
   return {
     revision: 1,
-    participants: [{ id: '20001', name: 'Koishi', kind: 'bot', avatar }],
+    participants: [{ id: '20001', name: 'ChatLuna', kind: 'bot', avatar }],
     groups: [{ id: '30001', name: '测试群', avatar, members: [], announcements: [] }],
     conversations: [],
     messages: [],

@@ -21,7 +21,7 @@ function createService(uploadedMediaLimit?: number) {
   const service = new SandboxMcpService(app, control, { dataDirectory: directory, uploadedMediaLimit })
   const credential = service.createCredential('测试凭证', ['read', 'interact'])
   // 关闭机器人运行时：本组用例只关心上传缓存，不需要等待真实投递。
-  control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: false })
+  control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: false })
   return { app, control, service, credential }
 }
 

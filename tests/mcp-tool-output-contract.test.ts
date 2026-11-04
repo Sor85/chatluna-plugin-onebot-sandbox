@@ -173,7 +173,7 @@ describe('工具返回值与声明一致', () => {
   it('服务自述与两个发送工具的返回值字段齐全且没有多余字段', async () => {
     const { service, credential, control } = createMcpTestService(['read', 'interact'])
     // 未启动 App 时机器人 middleware 不会收敛，send_message 会一直等待同步回复；停用后仍会写入消息。
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: false })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: false })
     const schemas = readOutputSchemas(service)
     const call = (tool: string, args: Record<string, unknown>) => service.callTool(credential.token, tool, args)
 
@@ -192,7 +192,7 @@ describe('工具返回值与声明一致', () => {
 
   it('等待类工具的 matched 分支与声明一致，静默期序列也在声明里', async () => {
     const { service, credential, control } = createMcpTestService(['read', 'interact'])
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: false })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: false })
     const schemas = readOutputSchemas(service)
     const call = (tool: string, args: Record<string, unknown>) => service.callTool(credential.token, tool, args)
 

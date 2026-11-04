@@ -158,7 +158,7 @@ describe('模拟 QQ 环境目录管理', () => {
       id: '30099',
       name: '机器人群主测试群',
       members: [
-        { participantId: '20001', card: 'Koishi', role: 'owner' },
+        { participantId: '20001', card: 'ChatLuna', role: 'owner' },
         { participantId: '10001', card: '测试用户1', role: 'member' },
       ],
     })

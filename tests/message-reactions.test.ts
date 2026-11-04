@@ -178,7 +178,7 @@ describe('消息表情回应', () => {
 
     control.updateBot({
       id: '20001',
-      name: 'Koishi',
+      name: 'ChatLuna',
       implementation: 'napcat',
       enabled: true,
       disabledCapabilities: ['message.emoji-like'],

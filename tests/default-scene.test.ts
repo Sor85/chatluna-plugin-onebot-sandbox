@@ -29,7 +29,7 @@ describe('统一参与者默认场景', () => {
       expect.objectContaining({ kind: 'user', id: '10001', name: '测试用户1' }),
       expect.objectContaining({ kind: 'user', id: '10002', name: '测试用户2' }),
       expect.objectContaining({ kind: 'user', id: '10003', name: '测试用户3' }),
-      expect.objectContaining({ kind: 'bot', id: '20001', name: 'Koishi', implementation: 'napcat', enabled: true }),
+      expect.objectContaining({ kind: 'bot', id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: true }),
     ])
     expect(snapshot.groups).toEqual([expect.objectContaining({
       id: '30001',

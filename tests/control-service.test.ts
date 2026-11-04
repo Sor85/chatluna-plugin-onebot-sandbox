@@ -533,7 +533,7 @@ describe('模拟 QQ 环境消息闭环', () => {
         userId: '20001',
         content: '引用机器人',
         quoteUserId: '20001',
-        quoteUserName: 'Koishi',
+        quoteUserName: 'ChatLuna',
         quoteTimestamp: storedBotMessage ? new Date(storedBotMessage.createdAt).getTime() : undefined,
         atSelf: false,
         atIds: [],
@@ -584,7 +584,7 @@ describe('模拟 QQ 环境消息闭环', () => {
     const initial = control.getSnapshot()
     expect(initial.participants.filter(({ kind }) => kind === 'user').map(({ id }) => id)).toEqual(['10001', '10002', '10003'])
     expect(initial.participants.filter(({ kind }) => kind === 'user').map(({ name }) => name)).toEqual(['测试用户1', '测试用户2', '测试用户3'])
-    expect(initial.participants).toContainEqual(expect.objectContaining({ kind: 'bot', id: '20001', name: 'Koishi' }))
+    expect(initial.participants).toContainEqual(expect.objectContaining({ kind: 'bot', id: '20001', name: 'ChatLuna' }))
     expect(initial.groups[0]).toMatchObject({
       id: '30001',
       name: '测试群',

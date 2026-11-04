@@ -118,7 +118,7 @@ describe('SandboxMcpService', () => {
 
   it('上传媒体、发送消息和等待事实共享同一事件游标', async () => {
     const { control, service, credential } = createService(['read', 'interact'])
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: false })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: false })
     const cursor = service.currentCursor()
     const upload = await service.callTool(credential.token, 'upload_media', {
       fileName: '测试.txt',
@@ -176,7 +176,7 @@ describe('SandboxMcpService', () => {
 
   it('发送、读取并幂等重放合并转发，同时支持上传媒体与嵌套节点', async () => {
     const { control, service, credential } = createService(['read', 'interact'])
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: false })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: false })
     const firstMessage = await service.callTool(credential.token, 'send_message', {
       operatorId: '10001', conversationId: 'private:10001:20001', content: '第一条', idempotencyKey: 'forward-source-1',
     }) as { messageId: string }

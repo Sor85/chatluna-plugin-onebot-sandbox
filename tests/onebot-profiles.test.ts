@@ -330,7 +330,7 @@ describe('OneBot 实现配置', () => {
     const control = await createControl()
     control.updateBot({
       id: '20001',
-      name: 'Koishi',
+      name: 'ChatLuna',
       implementation: 'napcat',
       enabled: true,
       disabledCapabilities: ['set_qq_avatar'],
@@ -354,7 +354,7 @@ describe('OneBot 实现配置', () => {
     const control = await createControl()
     control.updateBot({
       id: '20001',
-      name: 'Koishi',
+      name: 'ChatLuna',
       implementation: 'napcat',
       enabled: true,
       disabledCapabilities: ['set_friend_add_request', 'set_group_add_request'],

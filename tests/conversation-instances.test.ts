@@ -757,7 +757,7 @@ describe('从消息分叉出会话实例', () => {
     })
 
     const scene = control.getSnapshot()
-    expect(resolveConversation(scene, fromDirect.conversationId)?.title).toBe('分支：Koishi')
+    expect(resolveConversation(scene, fromDirect.conversationId)?.title).toBe('分支：ChatLuna')
     expect(resolveConversation(scene, fromGroup.conversationId)?.title).toBe('分支：测试群')
 
     const nested = control.branchConversationInstance({
@@ -766,7 +766,7 @@ describe('从消息分叉出会话实例', () => {
       messageId: readConversationMessageIds(scene, fromDirect.conversationId)[0]!,
     })
     const nestedConversation = resolveConversation(control.getSnapshot(), nested.conversationId)
-    expect(nestedConversation?.title).toBe('分支：分支：Koishi')
+    expect(nestedConversation?.title).toBe('分支：分支：ChatLuna')
     // 层级严格两层：从实例分叉仍然挂在同一个根会话下。
     expect(nestedConversation?.rootConversationId).toBe('private:10001:20001')
   })

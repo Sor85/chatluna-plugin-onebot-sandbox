@@ -171,7 +171,7 @@ describe('群公告读取', () => {
     await expect(control.bot.internal._request('get_group_notice', { group_id: 30001 }))
       .rejects.toThrow('NapCat 基线不支持 OneBot action：get_group_notice')
 
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: true, disabledCapabilities: ['group.notice.list'] })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: true, disabledCapabilities: ['group.notice.list'] })
     await expect(control.bot.internal._request('_get_group_notice', { group_id: 30001 }))
       .rejects.toThrow('能力已被禁用：group.notice.list')
     // 删除公告是另一项能力，不受这次禁用影响。
@@ -322,7 +322,7 @@ describe('群系统消息读取', () => {
     await seedGroupSystemMessages(control)
     await expectSceneUnchanged(control, () => readGroupSystemMsg(control.bot))
 
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: true, disabledCapabilities: ['group.system-msg'] })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: true, disabledCapabilities: ['group.system-msg'] })
     await expect(control.bot.internal._request('get_group_system_msg', {}))
       .rejects.toThrow('能力已被禁用：group.system-msg')
   })
@@ -391,7 +391,7 @@ describe('好友备注写入', () => {
 
   it('能力禁用后被拒，删除好友仍是另一项能力', async () => {
     const control = await createControl()
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: true, disabledCapabilities: ['friend.remark.set'] })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: true, disabledCapabilities: ['friend.remark.set'] })
 
     await expect(control.bot.internal._request('set_friend_remark', { user_id: 10001, remark: '不该写入' }))
       .rejects.toThrow('能力已被禁用：friend.remark.set')
@@ -435,7 +435,7 @@ describe('表情回应参与者读取', () => {
       emojiLikesList: [
         { tinyId: '10002', nickName: '测试用户2', headUrl: avatarOf('10002') },
         { tinyId: '10003', nickName: '测试用户3', headUrl: avatarOf('10003') },
-        { tinyId: '20001', nickName: 'Koishi', headUrl: avatarOf('20001') },
+        { tinyId: '20001', nickName: 'ChatLuna', headUrl: avatarOf('20001') },
       ],
       // 沙盒不分页，因此 cookie 恒为空串、isFirstPage 恒为真。
       cookie: '',
@@ -545,7 +545,7 @@ describe('表情回应参与者读取', () => {
     await expect(readEmojiLike(control.bot, { message_id: sent.messageId, emojiId: '128077', emojiType: 2 }))
       .resolves.toMatchObject({ emojiLikesList: [] })
 
-    control.updateBot({ id: '20001', name: 'Koishi', implementation: 'napcat', enabled: true, disabledCapabilities: ['message.emoji-like.list'] })
+    control.updateBot({ id: '20001', name: 'ChatLuna', implementation: 'napcat', enabled: true, disabledCapabilities: ['message.emoji-like.list'] })
     await expect(control.bot.internal._request('fetch_emoji_like', { message_id: sent.messageId, emojiId: '128077', emojiType: 2 }))
       .rejects.toThrow('能力已被禁用：message.emoji-like.list')
     // 贴表情是另一项能力，不受这次禁用影响。

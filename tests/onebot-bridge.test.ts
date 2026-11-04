@@ -227,7 +227,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
 
     await secondBot.internal._request('set_qq_profile', { nickname: '第二机器人新昵称' })
     expect(control.getSnapshot().participants.find(({ id }) => id === '20002')).toMatchObject({ name: '第二机器人新昵称' })
-    expect(control.getSnapshot().participants.find(({ id }) => id === '20001')).toMatchObject({ name: 'Koishi' })
+    expect(control.getSnapshot().participants.find(({ id }) => id === '20001')).toMatchObject({ name: 'ChatLuna' })
 
     const privateResult = await secondBot.internal._request('send_private_msg', { user_id: 10001, message: '机器人主动私聊' }) as {
       data: { message_id: number }
@@ -254,25 +254,25 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     expect(await bot.internal._request('get_login_info', {})).toEqual({
       status: 'ok',
       retcode: 0,
-      data: { user_id: 20001, nickname: 'Koishi' },
+      data: { user_id: 20001, nickname: 'ChatLuna' },
     })
 
-    await bot.internal._request('set_qq_profile', { nickname: '新 Koishi' })
+    await bot.internal._request('set_qq_profile', { nickname: '新 ChatLuna' })
     await bot.internal._request('set_qq_avatar', { file: `data:image/png;base64,${Buffer.from('koishi-avatar').toString('base64')}` })
 
     expect(control.getSnapshot().participants.find(({ id }) => id === '20001')).toMatchObject({
       kind: 'bot',
       id: '20001',
-      name: '新 Koishi',
+      name: '新 ChatLuna',
       avatar: expect.stringMatching(/^sandbox-media:\/\//),
     })
     expect(bot.user).toMatchObject({
       id: '20001',
-      name: '新 Koishi',
+      name: '新 ChatLuna',
       avatar: expect.stringMatching(/^sandbox-media:\/\//),
     })
 
-    control.updateBot({ id: '20001', name: '新 Koishi', implementation: 'napcat', enabled: false })
+    control.updateBot({ id: '20001', name: '新 ChatLuna', implementation: 'napcat', enabled: false })
     await expect(bot.internal._request('get_status', {})).resolves.toMatchObject({ data: { online: false, good: false } })
     await expect(bot.sendPrivateMessage('10001', '离线消息')).rejects.toThrow('机器人已离线')
   })
@@ -336,7 +336,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     await expect(bot.getMessage('private:10001:20001', standardMessageId)).resolves.toMatchObject({
       id: standardMessageId,
       content: '标准私聊消息',
-      user: { id: '20001', name: 'Koishi', isBot: true },
+      user: { id: '20001', name: 'ChatLuna', isBot: true },
     })
 
     const privateResult = await bot.internal._request('send_private_msg', { user_id: 10001, message: '原始私聊消息' }) as {
@@ -562,20 +562,20 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     await expect(bot.internal._request('set_msg_emoji_like', { message_id: sent.data.message_id, emoji_id: '128077' })).resolves.toMatchObject({ status: 'ok' })
 
     const forward = await bot.internal._request('send_forward_msg', { group_id: 30002, messages: [
-      { type: 'node', data: { user_id: 20001, nickname: 'Koishi', content: '第一段' } },
-      { type: 'node', data: { user_id: 20001, nickname: 'Koishi', content: [{ type: 'text', data: { text: '第二段' } }] } },
+      { type: 'node', data: { user_id: 20001, nickname: 'ChatLuna', content: '第一段' } },
+      { type: 'node', data: { user_id: 20001, nickname: 'ChatLuna', content: [{ type: 'text', data: { text: '第二段' } }] } },
     ] }) as { data: { message_id: number; res_id: string; forward_id: string } }
     expect(forward.data.res_id).toBe(forward.data.forward_id)
     expect(control.getSnapshot().messages.at(-1)).toMatchObject({
       authorId: '20001',
       forwardId: forward.data.forward_id,
-      content: 'Koishi：第一段\nKoishi：第二段',
+      content: 'ChatLuna：第一段\nChatLuna：第二段',
     })
     expect(control.getSnapshot().forwards).toContainEqual(expect.objectContaining({
       id: forward.data.forward_id,
       nodes: [
-        expect.objectContaining({ userId: '20001', nickname: 'Koishi', content: '第一段' }),
-        expect.objectContaining({ userId: '20001', nickname: 'Koishi', content: '第二段' }),
+        expect.objectContaining({ userId: '20001', nickname: 'ChatLuna', content: '第一段' }),
+        expect.objectContaining({ userId: '20001', nickname: 'ChatLuna', content: '第二段' }),
       ],
     }))
 
@@ -644,7 +644,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     const privateForward = await bot.internal._request('send_private_forward_msg', {
       user_id: 10001,
       messages: [
-        { type: 'node', data: { user_id: 20001, nickname: 'Koishi', content: '私聊转发' } },
+        { type: 'node', data: { user_id: 20001, nickname: 'ChatLuna', content: '私聊转发' } },
       ],
     }) as { data: { message_id: number; forward_id: string } }
     expect(control.getSnapshot().messages.find(({ id }) => getOneBotMessageSequence(id) === privateForward.data.message_id)).toMatchObject({
@@ -656,7 +656,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     const nested = await bot.internal._request('send_forward_msg', {
       group_id: 30020,
       messages: [
-        { type: 'node', data: { user_id: 20001, nickname: 'Koishi', content: [{ type: 'forward', data: { id: mixed.data.forward_id } }] } },
+        { type: 'node', data: { user_id: 20001, nickname: 'ChatLuna', content: [{ type: 'forward', data: { id: mixed.data.forward_id } }] } },
       ],
     }) as { data: { forward_id: string } }
     const nestedDetail = await bot.internal._request('get_forward_msg', { id: nested.data.forward_id }) as {
@@ -677,7 +677,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
         type: 'node',
         data: {
           user_id: 20001,
-          nickname: 'Koishi',
+          nickname: 'ChatLuna',
           content: [{
             type: 'image',
             data: { file: `data:image/png;base64,${imagePayload}`, name: 'forward-node.png' },
@@ -754,14 +754,14 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
 
     control.updateBot({
       id: '20001',
-      name: 'Koishi',
+      name: 'ChatLuna',
       implementation: 'napcat',
       enabled: true,
       disabledCapabilities: ['message.forward.send'],
     })
     await expect(bot.internal._request('send_forward_msg', {
       group_id: 30021,
-      messages: [{ type: 'node', data: { user_id: 20001, nickname: 'Koishi', content: '禁用后' } }],
+      messages: [{ type: 'node', data: { user_id: 20001, nickname: 'ChatLuna', content: '禁用后' } }],
     })).rejects.toThrow(/不支持|disabled|禁用|message\.forward\.send|send_forward_msg/i)
   })
 
