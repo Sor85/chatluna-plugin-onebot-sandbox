@@ -113,7 +113,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
   const t = useT()
   const navigate = useNavigate()
   const { store, run, dialogs } = useSandbox()
-  const { conversation, group, operatorId, participants, participantNames, media, mediaFailures, workspace } = useWorkspace()
+  const { conversation, group, peer, operatorId, participants, participantNames, resolveAvatar, media, mediaFailures, workspace } = useWorkspace()
   const markRecalled = workspace.appearance.sandboxMarkRecalledMessages
   const bubbleTail = workspace.appearance.sandboxTimBubbleTail
   const box = React.useRef<HTMLDivElement>(null)
@@ -267,7 +267,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
       >
         {empty ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center" style={{ paddingBottom: props.bottomSpace }}>
-            <SandboxAvatar kind={peerKind} name={conversation?.title} src={undefined} className="size-14" />
+            <SandboxAvatar kind={peerKind} name={conversation?.title ?? group?.name ?? peer?.name} src={resolveAvatar(group?.avatar ?? peer?.avatar)} className="size-14" />
             {peerKind === 'bot' ? (
               <>
                 <h2 className="mt-2 text-sm font-medium">{t('sandbox.chat.emptyBotTitle')}</h2>
