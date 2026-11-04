@@ -216,7 +216,7 @@ export function TestCredentialManager() {
             <DialogDescription>{t('sandbox.credential.tokenDescription')}</DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2">
-            <Input readOnly value={createdToken} className="font-mono text-xs" />
+            <Input readOnly value={createdToken} className="font-mono text-xs!" />
             <Button size="icon-sm" variant="ghost" aria-label={t('sandbox.credential.copy')} onClick={() => void copy(createdToken)}><CopyIcon /></Button>
           </div>
           <DialogFooter><Button onClick={() => setCreatedToken('')}>{t('sandbox.credential.saved')}</Button></DialogFooter>

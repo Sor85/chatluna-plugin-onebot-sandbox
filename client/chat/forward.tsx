@@ -86,7 +86,7 @@ export function ForwardTargetDialog({ open, targets, onOpenChange, onConfirm }: 
         </DialogHeader>
         <div className="relative">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input type="search" className="pl-8" value={query} placeholder={t('sandbox.forward.search')} aria-label={t('sandbox.forward.search')} onChange={(event) => setQuery(event.target.value)} />
+          <Input type="search" className="pl-8!" value={query} placeholder={t('sandbox.forward.search')} aria-label={t('sandbox.forward.search')} onChange={(event) => setQuery(event.target.value)} />
         </div>
         <div className="flex gap-0.5 rounded-lg bg-muted p-0.5" role="tablist">
           {(['recent', 'friends', 'groups'] as const).map((id) => (

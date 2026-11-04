@@ -267,7 +267,7 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
                         <Label>{t('sandbox.entity.capabilities')}</Label>
                         <div className="relative">
                           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input className="pl-8" value={capabilitySearch} placeholder={t('sandbox.entity.capabilitySearch')} aria-label={t('sandbox.entity.capabilitySearch')} onChange={(event) => setCapabilitySearch(event.target.value)} />
+                          <Input className="pl-8!" value={capabilitySearch} placeholder={t('sandbox.entity.capabilitySearch')} aria-label={t('sandbox.entity.capabilitySearch')} onChange={(event) => setCapabilitySearch(event.target.value)} />
                         </div>
                         <ScrollArea className="h-56 rounded-lg border border-border">
                           <div className="flex flex-col p-1">

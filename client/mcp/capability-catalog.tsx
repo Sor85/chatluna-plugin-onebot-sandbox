@@ -72,7 +72,7 @@ function SearchInput({ value, onChange, placeholder }: { value: string, onChange
   return (
     <div className="relative flex-1">
       <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-      <Input type="search" className="h-8 pl-8" value={value} placeholder={placeholder} aria-label={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <Input type="search" className="h-8 pl-8!" value={value} placeholder={placeholder} aria-label={placeholder} onChange={(event) => onChange(event.target.value)} />
     </div>
   )
 }
