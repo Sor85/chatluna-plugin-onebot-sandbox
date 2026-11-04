@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Context } from 'cordis'
+import type Schema from 'schemastery'
 import { Config, Settings } from '../src'
 import { registerSettings, SETTINGS_SAVE_ACTION, SETTINGS_STATE, type SandboxSettingsView } from '../src/settings'
 
@@ -33,9 +34,15 @@ function createHost(entryId: string | undefined, stored: Record<string, unknown>
 
 describe('插件设置', () => {
   it('v2 插件页的 schema 隐藏全部字段，设置页的 schema 保持可见', () => {
-    expect(Object.keys(Config.dict ?? {})).toEqual(Object.keys(Settings.dict ?? {}))
+    // 设置页的 schema 是分区的 intersect，分区里还可能再嵌一层 intersect 分小节。
+    const fieldsOf = (schema: Schema): Array<[string, Schema]> =>
+      schema.type === 'intersect' ? (schema.list ?? []).flatMap(fieldsOf) : Object.entries(schema.dict ?? {})
+    const fields = fieldsOf(Settings)
+    expect(Object.keys(Config.dict ?? {}).sort()).toEqual(fields.map(([key]) => key).sort())
     expect(Object.values(Config.dict ?? {}).every((field) => field.meta.hidden)).toBe(true)
-    expect(Object.values(Settings.dict ?? {}).some((field) => field.meta.hidden)).toBe(false)
+    expect(fields.some(([, field]) => field.meta.hidden)).toBe(false)
+    // 每个分区都带标题，设置页的导航与面板标题取自这里。
+    expect((Settings.list ?? []).every((section) => typeof section.meta.label === 'string')).toBe(true)
     // 字段全部隐藏后，loader 仍能按同一份 schema 补默认值。
     expect(Config({}).sceneMessageLimit).toBe(Settings({}).sceneMessageLimit)
   })
@@ -45,7 +52,8 @@ describe('插件设置', () => {
     const view = host.read()
     expect(view.value).toEqual({ sceneMessageLimit: 100 })
     expect(view.revision).toBe('stamp-1')
-    expect(view.schema.refs[view.schema.uid]?.type).toBe('object')
+    // 根节点是分区的 intersect，设置页据此拆出导航（`client/settings/page.tsx`）。
+    expect(view.schema.refs[view.schema.uid]?.type).toBe('intersect')
   })
 
   it('保存写回插件自己的条目并带上乐观锁', async () => {

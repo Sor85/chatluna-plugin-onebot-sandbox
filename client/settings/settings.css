@@ -1,0 +1,33 @@
+/*
+ * 设置页（settings/page.tsx）。只按 sandbox-settings- 类名选择，SchemaForm 的结构钩子用它自带的
+ * data-schema-group。本文件不分层，压过 SchemaForm 在宿主 utilities 层里的工具类。
+ */
+
+/* 原生滚动条隐藏，由 .sandbox-settings-scrollbar 自绘（SCROLLBAR.md）。 */
+.sandbox-settings-scroller {
+  scrollbar-width: none;
+}
+
+/* 轨道上端紧贴面板标题栏下方，下端让出面板的 12px 圆角。 */
+.sandbox-settings-scrollbar {
+  top: 4px;
+  bottom: 12px;
+}
+
+/*
+ * 分区内的小节（MCP 端点、调用配额等）。SchemaForm 把小节标题和字段标题都渲染成 16px 粗体，
+ * 混在一起分不清层级；小节标题改成小号弱化色，小节之间加分隔线。
+ */
+.sandbox-settings-form [data-schema-group] > h3 {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+/* 不是第一个的小节加分隔线；第一个小节紧贴面板标题栏，不再加线。嵌套 intersect 的小节在内层 fieldset 里。 */
+.sandbox-settings-form fieldset > [data-schema-group]:not(:first-child),
+.sandbox-settings-form fieldset:not(:first-child) > [data-schema-group]:first-child {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}

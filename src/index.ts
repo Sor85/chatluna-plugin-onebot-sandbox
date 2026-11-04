@@ -60,11 +60,9 @@ export const inject = ['satori', 'chatluna_webui']
 /**
  * 端点通用设置：监听、门禁与配额。
  *
- * 单独成组不是为了代码结构，而是为了配置页：Koishi 按声明顺序把嵌套分组渲染成 h2，紧跟其后的散字段
- * 会挂在上一个 h2 下面。这些字段如果留在 `testEndpoint` 顶层，就会视觉上落进「HTTP 测试端点」标题
- * 里，读起来像是只对 HTTP 生效——而它们对两个端点同时生效。监听地址与端口同样是两个端点共用的一份
- * （同一个监听器按路径分流），配额共用同一份额度更是安全属性（换个端点绕不开限流），都不能让人误读。
- * 依 ADR-0025，配额只能由插件全局配置调整。
+ * 单独成组是为了不让人误读：同一个监听器按路径分流，监听地址、端口、访问限制与配额对 MCP 与 HTTP
+ * 两个端点同时生效，配额共用同一份额度更是安全属性（换个端点绕不开限流）。留在 `testEndpoint` 顶层
+ * 会在设置页上落进某个端点的小节里，读起来像只对那个端点生效。
  */
 export interface SandboxTestEndpointSharedConfig extends SandboxMcpQuotaConfig {
   host: string
@@ -97,79 +95,113 @@ const DEFAULT_MODEL_REQUEST_RECORD_MAX_MEGABYTES = DEFAULT_MODEL_REQUEST_RECORD_
 
 /**
  * 两个端点的配置形状相同，只有默认路径与文案不同；分组标题由调用方补上。
- *
- * 配置页把分组的 `.description()` 渲染成标题、把字段的 `.description()` 渲染成字段说明，因此标题
- * 只写端点名，「这个端点是干什么的、开关控制什么」全部落在字段说明里。
  */
-const protocolSchema = (path: string, enabledDescription: string, pathDescription: string): Schema<SandboxTestEndpointProtocolConfig> => Schema.object({
-  enabled: Schema.boolean().default(true).description(enabledDescription),
-  path: Schema.string().default(path).description(pathDescription),
+const protocolSchema = (path: string, pathLabel: string, pathDescription: string): Schema<SandboxTestEndpointProtocolConfig> => Schema.object({
+  enabled: Schema.boolean().default(true).extra('label', '启用'),
+  path: Schema.string().default(path).extra('label', pathLabel).description(pathDescription),
 })
 
 /**
- * 插件设置的完整 schema，由沙盒工作台的「设置」页渲染（`src/settings.ts`）。
+ * 设置页按分区渲染：`Settings` 是若干顶层分区的 intersect，每个分区的 `label` 是导航与面板标题，
+ * `description` 是面板说明（`client/settings/page.tsx`）。分区内部的 `.description()` 照常渲染成小节标题。
  *
- * 不写根 description：设置页自带标题，根 description 会在表单顶部多渲染一个同名分组标题。
+ * 分区只是页面结构，配置键仍是平铺的顶层字段。intersect 对同名键只做浅合并，所以同一个顶层键
+ * 只能放在一个分区里：测试端点整体是一个分区，内部再按端点、监听与配额分小节。
  */
-export const Settings: Schema<Config> = Schema.object({
-  persistenceMode: Schema.union([
-    Schema.const('memory').description('服务端内存'),
-    Schema.const('database').description('数据库'),
-  ]).default('database').role('radio').description('模拟 QQ 环境状态存储方式'),
-  sandboxTimBubbleTail: Schema.boolean().default(true).description('显示气泡小尖角'),
+const appearanceFields = {
+  sandboxAccentColor: Schema.string().default('#2563eb').role('color').extra('label', '强调色')
+    .description('己方气泡、发送框与选中态使用的颜色，不跟随 ChatLuna 主题色'),
+  sandboxTimBubbleTail: Schema.boolean().default(true).extra('label', '气泡尖角')
+    .description('在消息气泡靠近头像的一侧显示小尖角'),
   sandboxIncomingBubbleStyle: Schema.union([
-    Schema.const('shadow').description('半透明白底加投影'),
-    Schema.const('outline').description('白底加细描边'),
-  ]).default('shadow').role('radio').description('对方气泡样式（仅亮色主题）'),
-  sandboxAccentColor: Schema.string().default('#2563eb').role('color').description('Sandbox 强调色'),
-  sandboxMarkRecalledMessages: Schema.boolean().default(true).description('仅影响 Sandbox 展示：开启时保留撤回气泡并显示撤回线，关闭时只显示撤回事件'),
-  modelRequestRecordLimit: Schema.number().min(1).step(1).default(500)
-    .description('每个空间保留的模型请求记录条数上限。超出后从最旧记录开始丢弃，与体积上限同时生效'),
-  modelRequestRecordMaxMegabytes: Schema.number().min(1).step(1).default(DEFAULT_MODEL_REQUEST_RECORD_MAX_MEGABYTES)
-    .description('每个空间模型请求记录的体积上限（MB）。超出后从最旧记录开始丢弃，与条数上限同时生效。单条记录含完整请求体与响应原文，长上下文请求可达数百 KB'),
-  sceneMessageLimit: Schema.number().min(1).default(DEFAULT_SCENE_MESSAGE_LIMIT)
-    .description('每个空间保留的场景消息条数上限；主环境与每个 AI 测试空间各自独立，超出后从最旧消息开始丢弃，被丢弃的历史消息不可恢复'),
-  sceneMessageMaxBytes: Schema.number().min(64 * 1024).default(DEFAULT_SCENE_MESSAGE_MAX_BYTES)
-    .description('每个空间场景 JSON 的字节上限；达到后继续从最旧消息开始丢弃，被丢弃的历史消息不可恢复'),
+    Schema.const('shadow').description('投影'),
+    Schema.const('outline').description('描边'),
+  ]).default('shadow').role('radio').extra('label', '对方气泡样式')
+    .description('投影为半透明白底加阴影，描边为白底加细边框；仅在亮色主题下生效'),
+  sandboxMarkRecalledMessages: Schema.boolean().default(true).extra('label', '保留撤回的消息')
+    .description('开启时保留被撤回的气泡并加撤回线，关闭时只显示撤回提示；不影响存储的数据'),
+}
+
+const storageModeFields = {
+  persistenceMode: Schema.union([
+    Schema.const('database').description('数据库'),
+    Schema.const('memory').description('服务端内存'),
+  ]).default('database').role('radio').extra('label', '存储方式')
+    .description('数据库模式在重启后保留；内存模式在进程退出后清空'),
+}
+
+const sceneMessageFields = {
+  sceneMessageLimit: Schema.number().min(1).default(DEFAULT_SCENE_MESSAGE_LIMIT).extra('label', '条数上限')
+    .description('超出后从最旧的消息开始丢弃，丢弃后不可恢复'),
+  sceneMessageMaxBytes: Schema.number().min(64 * 1024).default(DEFAULT_SCENE_MESSAGE_MAX_BYTES).extra('label', '体积上限（字节）')
+    .description('单个空间场景 JSON 的大小上限，超出后同样从最旧的消息开始丢弃'),
+}
+
+const modelRequestFields = {
+  modelRequestRecordLimit: Schema.number().min(1).step(1).default(500).extra('label', '条数上限')
+    .description('与体积上限同时生效，超出后从最旧的记录开始丢弃'),
+  modelRequestRecordMaxMegabytes: Schema.number().min(1).step(1).default(DEFAULT_MODEL_REQUEST_RECORD_MAX_MEGABYTES).extra('label', '体积上限（MB）')
+    .description('单条记录包含完整请求体与响应原文，长上下文请求可达数百 KB'),
+}
+
+const endpointListenFields = {
+  host: Schema.string().default('127.0.0.1').extra('label', '监听地址')
+    .description('`127.0.0.1`仅本机可访问，`0.0.0.0`允许局域网访问；监听非本机地址时建议配置 TLS，否则测试凭证以明文传输'),
+  port: Schema.number().min(1).max(65535).default(61901).extra('label', '端口')
+    .description('端口被占用时端点启动失败，沙盒工作台不受影响'),
+  allowedSources: Schema.array(String).default([]).extra('label', '来源 IP 白名单')
+    .description('在监听地址之外再按来源 IP 筛选，支持精确 IP 与 CIDR（如`192.168.1.0/24`）；留空不筛选'),
+  allowedOrigins: Schema.array(String).default([]).extra('label', '浏览器 Origin 白名单')
+    .description('写全协议与端口，如`http://localhost:5173`；留空时拒绝所有浏览器请求。curl 与 AI 客户端不带 Origin，不受此项限制'),
+  tlsCertPath: Schema.string().extra('label', 'TLS 证书路径').description('证书与私钥都填写后以 HTTPS 提供服务'),
+  tlsKeyPath: Schema.string().extra('label', 'TLS 私钥路径'),
+}
+
+// 依 ADR-0025，配额只能由插件全局配置调整；两个端点共用一份额度，换个端点绕不开限流。
+const endpointQuotaFields = {
+  readPerMinute: Schema.number().min(1).default(120).extra('label', '每分钟读取调用'),
+  mutationPerMinute: Schema.number().min(1).default(60).extra('label', '每分钟变更调用'),
+  waitPerMinute: Schema.number().min(1).default(120).extra('label', '每分钟等待调用'),
+  uploadPerMinute: Schema.number().min(1).default(30).extra('label', '每分钟媒体上传'),
+  maxConcurrentMutations: Schema.number().min(1).default(4).extra('label', '同时进行的变更调用'),
+  maxConcurrentWaits: Schema.number().min(1).default(8).extra('label', '同时进行的等待调用'),
+  maxConcurrentUploads: Schema.number().min(1).default(2).extra('label', '同时进行的媒体上传'),
+}
+
+const endpointFields = {
   testEndpoint: Schema.object({
-    mcp: protocolSchema(
-      '/mcp',
-      '是否开启 MCP',
-      '该端点的请求路径，按完整路径精确匹配。AI 客户端里要填的地址是`http://<监听地址>:<端口><该路径>`',
-    ).description('MCP 测试端点'),
-    http: protocolSchema(
-      '/api',
-      '是否开启 HTTP',
-      '该端点的路径前缀。填`/api`时可用的地址是`/api/v1/tools`看工具清单、`/api/v1/tools/<工具名>`调用工具、`/api/v1/resources`读只读资源',
-    ).description('HTTP 测试端点'),
-    // 声明顺序即渲染顺序：这一组必须排在 mcp / http 之后，否则它的字段会挂到别的标题下面。
-    shared: Schema.object({
-      host: Schema.string().default('127.0.0.1').description('监听地址。`127.0.0.1`只允许本机访问，改成`0.0.0.0`可被局域网访问，此时建议填写 TLS 证书，否则测试凭证以明文传输'),
-      port: Schema.number().min(1).max(65535).default(61901).description('监听端口。端口被占用时端点启动失败，沙盒工作台不受影响'),
-      allowedSources: Schema.array(String).default([]).description('来源 IP 白名单，在监听地址之上再筛一层，只有命中白名单的 IP 才放行。留空表示不筛，可达范围仍由上面的监听地址决定。支持精确 IP 与 CIDR 写法，例如`192.168.1.0/24`或`::1/128`'),
-      allowedOrigins: Schema.array(String).default([]).description('只有以下浏览器 Origin 能访问，要写全协议与端口，例如`http://localhost:5173`。浏览器请求必带 Origin 头，留空表示一律拒绝；curl 与 AI 客户端不带 Origin，不受此项限制'),
-      tlsCertPath: Schema.string().description('TLS 证书路径。监听地址不是本机时建议填写，留空则以明文 HTTP 传输测试凭证'),
-      tlsKeyPath: Schema.string().description('TLS 私钥路径。监听地址不是本机时建议填写，留空则以明文 HTTP 传输测试凭证'),
-      readPerMinute: Schema.number().min(1).default(120).description('每个测试凭证每分钟的读取调用次数上限，超出返回 429'),
-      mutationPerMinute: Schema.number().min(1).default(60).description('每个测试凭证每分钟的变更调用次数上限，超出返回 429'),
-      waitPerMinute: Schema.number().min(1).default(120).description('每个测试凭证每分钟的等待调用次数上限，超出返回 429'),
-      uploadPerMinute: Schema.number().min(1).default(30).description('每个测试凭证每分钟的媒体上传次数上限，超出返回 429'),
-      maxConcurrentMutations: Schema.number().min(1).default(4).description('每个测试凭证同时进行的变更调用数上限，超出返回 429'),
-      maxConcurrentWaits: Schema.number().min(1).default(8).description('每个测试凭证同时进行的等待调用数上限，超出返回 429'),
-      maxConcurrentUploads: Schema.number().min(1).default(2).description('每个测试凭证同时进行的媒体上传数上限，超出返回 429'),
-    }).description('端点通用设置'),
-    // 外层刻意不写 description：配置页只在 object 有 description 时渲染 h2，而这一层已经没有自己的
-    // 字段了，给它标题只会得到一个下面什么都没有、紧接着又是一个标题的空标题。配置键仍是
-    // `testEndpoint.*`，分组只在页面上消失。
+    mcp: protocolSchema('/mcp', '路径', '按完整路径精确匹配。AI 客户端填写`http://<监听地址>:<端口><路径>`').description('MCP 端点'),
+    http: protocolSchema('/api', '路径前缀', '前缀为`/api`时，`/api/v1/tools`列出工具，`/api/v1/tools/<工具名>`调用工具，`/api/v1/resources`读取只读资源').description('HTTP 端点'),
+    shared: Schema.intersect([
+      Schema.object(endpointListenFields).description('监听与访问'),
+      Schema.object(endpointQuotaFields).description('调用配额').collapse(),
+    ]) as Schema<SandboxTestEndpointSharedConfig>,
   }),
-})
+}
+
+/** 插件设置的完整 schema，由沙盒工作台的「设置」页渲染（`src/settings.ts`）。 */
+export const Settings = Schema.intersect([
+  Schema.object(appearanceFields).extra('label', '外观')
+    .description('WebQQ 界面的颜色与气泡样式，只影响沙盒内的展示'),
+  Schema.intersect([
+    Schema.object(storageModeFields),
+    Schema.object(sceneMessageFields).description('场景消息'),
+    Schema.object(modelRequestFields).description('模型请求记录'),
+  ]).extra('label', '数据存储')
+    .description('模拟环境的保存位置，以及消息与模型请求记录的保留上限。上限按主环境与每个 AI 测试空间分别计算'),
+  Schema.object(endpointFields).extra('label', '测试端点')
+    .description('供 AI 客户端操控沙盒的 MCP 与 HTTP 接口。两个端点共用监听器、访问限制与调用配额，配额按测试凭证分别计数，超出返回 429'),
+]) as unknown as Schema<Config>
 
 /**
- * 交给 v2 插件页的 schema：字段与 `Settings` 相同但全部标 hidden，插件页只剩一行指向沙盒设置页的标题。
- * 配置仍存在 chatluna.yml 的同一条插件条目里，loader 照常按它补默认值、传给 `apply`。
+ * 交给 v2 插件页的 schema：字段与`Settings`相同但全部标 hidden，插件页只剩一行指向沙盒设置页的标题。
+ * 配置仍存在 chatluna.yml 的同一条插件条目里，loader 照常按它补默认值、传给`apply`。
  */
 export const Config = Schema.object(
-  Object.fromEntries(Object.entries(Settings.dict ?? {}).map(([key, field]) => [key, field.hidden()])),
+  Object.fromEntries(
+    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...modelRequestFields, ...endpointFields })
+      .map(([key, field]) => [key, (field as Schema).hidden()]),
+  ),
 ).description('设置在 OneBot 沙盒工作台的「设置」页编辑') as unknown as Schema<Config>
 
 declare module 'cordis' {
