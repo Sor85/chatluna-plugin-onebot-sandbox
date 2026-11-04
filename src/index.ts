@@ -117,6 +117,10 @@ export const Settings: Schema<Config> = Schema.object({
     Schema.const('database').description('数据库'),
   ]).default('database').role('radio').description('模拟 QQ 环境状态存储方式'),
   sandboxTimBubbleTail: Schema.boolean().default(true).description('显示气泡小尖角'),
+  sandboxIncomingBubbleStyle: Schema.union([
+    Schema.const('shadow').description('半透明白底加投影'),
+    Schema.const('outline').description('白底加细描边'),
+  ]).default('shadow').role('radio').description('对方气泡样式（仅亮色主题）'),
   sandboxAccentColor: Schema.string().default('#2563eb').role('color').description('Sandbox 强调色'),
   sandboxMarkRecalledMessages: Schema.boolean().default(true).description('仅影响 Sandbox 展示：开启时保留撤回气泡并显示撤回线，关闭时只显示撤回事件'),
   modelRequestRecordLimit: Schema.number().min(1).step(1).default(500)
@@ -290,6 +294,7 @@ export function apply(ctx: Context, config: Config) {
   }
   const appearance: SandboxAppearance = {
     sandboxTimBubbleTail: config.sandboxTimBubbleTail,
+    sandboxIncomingBubbleStyle: config.sandboxIncomingBubbleStyle,
     sandboxAccentColor: config.sandboxAccentColor,
     sandboxMarkRecalledMessages: config.sandboxMarkRecalledMessages,
   }

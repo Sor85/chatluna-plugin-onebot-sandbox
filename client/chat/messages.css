@@ -377,6 +377,43 @@
   clip-path: path("M 8 0 L 0 0 L 0 14 Q 0 3 8 0 Z");
 }
 
+/*
+ * 尖角占满头像与气泡之间的 8px，机器人、群头像右下角的角标（shared/avatar.tsx，向外伸出约 3px）会压住尖端。
+ * 开启尖角时对方头像右侧多让 4px（间距合计 12px），思考指标行让开的头像列同步加宽；自己一侧的角标在头像外侧，
+ * 不受影响。写成头像外边距而不是改 gap：普通消息的间距在 .sandbox-message-select-body 上，等待气泡行的头像
+ * 直接放在 .sandbox-message-row 里，多选时行的 gap 还管着勾选框与消息的距离。
+ */
+.sandbox-message-list.has-tail .sandbox-message-row:not(.is-outgoing) .sandbox-message-avatar-wrap {
+  margin-right: 4px;
+}
+
+.sandbox-message-list.has-tail .sandbox-message-thinking-row.is-incoming {
+  margin-left: 44px;
+}
+
+/*
+ * 对方气泡的描边样式（设置 sandboxIncomingBubbleStyle = outline，只作用于亮色主题）。border 包不到气泡外的
+ * 尖角伪元素，尖角改画一张 SVG：白底盖住气泡左边框的上段，弧线描边接上气泡的上边框，合成一条完整轮廓。
+ * SVG 里的 #fff 与 #e9eaec 是下面两个变量的字面值，改色要同步。border 占去 1px，内边距相应减 1px，
+ * 气泡尺寸与默认样式一致；伪元素的定位基准随 border 内缩 1px，尖角外移 1px。
+ */
+:root:not(.dark) .sandbox-message-list.has-outline .sandbox-message-row:not(.is-outgoing) .sandbox-message-bubble {
+  --sandbox-bubble-bg: #fff;
+
+  padding: 8px 10px;
+  border: 1px solid #e9eaec;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+}
+
+:root:not(.dark) .sandbox-message-list.has-tail.has-outline .sandbox-message-row:not(.is-outgoing):not(.is-merged) .sandbox-message-bubble::before {
+  top: -1px;
+  left: -9px;
+  width: 9px;
+  height: 15px;
+  clip-path: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='15'%3E%3Cpath d='M0 .5H9V15H8.5Q8.5 3.5 0 .5Z' fill='%23fff'/%3E%3Cpath d='M8.5 15Q8.5 3.5 0 .5H9' fill='none' stroke='%23e9eaec'/%3E%3C/svg%3E") no-repeat;
+}
+
 .sandbox-message-quote {
   width: 100%;
   display: flex;

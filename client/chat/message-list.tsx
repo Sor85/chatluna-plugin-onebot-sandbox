@@ -119,6 +119,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
   const { conversation, group, peer, operatorId, participants, participantNames, resolveAvatar, media, mediaFailures, workspace } = useWorkspace()
   const markRecalled = workspace.appearance.sandboxMarkRecalledMessages
   const bubbleTail = workspace.appearance.sandboxTimBubbleTail
+  const bubbleOutline = workspace.appearance.sandboxIncomingBubbleStyle === 'outline'
   const box = React.useRef<HTMLDivElement>(null)
   const content = React.useRef<HTMLOListElement>(null)
   const sticky = React.useRef(true)
@@ -284,7 +285,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
           ) : (
             <ol
               ref={content}
-              className={cn('sandbox-message-list', bubbleTail && 'has-tail', props.selectionMode && 'is-selecting')}
+              className={cn('sandbox-message-list', bubbleTail && 'has-tail', bubbleOutline && 'has-outline', props.selectionMode && 'is-selecting')}
               style={{ paddingBottom: props.bottomSpace }}
             >
               {props.hasMoreMessages && (

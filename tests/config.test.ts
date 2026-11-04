@@ -12,6 +12,7 @@ describe('插件持久化配置', () => {
     expect(Config.dict.persistenceMode.meta.default).toBe('database')
     expect(Config.dict.persistenceMode.meta.description).toBe('模拟 QQ 环境状态存储方式')
     expect(Config.dict.sandboxTimBubbleTail.meta.description).toBe('显示气泡小尖角')
+    expect(Config.dict.sandboxIncomingBubbleStyle.meta.default).toBe('shadow')
     // 强调色沿用源插件的默认蓝色，WebQQ 不跟随 v2 主题的 primary。
     expect(Config.dict.sandboxAccentColor.meta.default).toBe('#2563eb')
     expect(Config.dict.sandboxAccentColor.meta.role).toBe('color')
