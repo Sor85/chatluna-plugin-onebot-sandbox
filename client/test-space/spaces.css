@@ -29,6 +29,11 @@
 .sandbox-space-overview.is-zooming { overflow: visible; }
 .sandbox-space-overview.is-zooming .sandbox-space-card { content-visibility: visible; }
 
+/* 进入空间的放大期间总览垫在工作区背后（app.tsx 的 launch）：脱离文档流，top 由内联样式钉在原位置。 */
+.sandbox-space-overview.is-backdrop { position: absolute; right: 0; bottom: 0; left: 0; pointer-events: none; }
+/* 进入空间的放大期间缩略画面由放大中的工作区顶替（zoom.ts），卡片外框与底栏留在背景里随总览淡出。 */
+.sandbox-space-card[data-zoom-hidden] .sandbox-space-thumbnail { visibility: hidden; }
+
 .sandbox-space-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .sandbox-space-toolbar p { margin: 0; color: var(--sandbox-muted); font-size: 12px; }
 

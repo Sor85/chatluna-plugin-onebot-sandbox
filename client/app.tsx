@@ -13,7 +13,7 @@ import { AgentObserveOverlay } from './test-space/observe-overlay'
 import { SpaceOverview, type SpaceCardAction } from './test-space/overview'
 import { captureWorkspaceThumbnail, type WorkspaceThumbnailCapture } from './test-space/thumbnail-capture'
 import { useSpaceList } from './test-space/use-space-list'
-import { captureZoomRect, zoomWorkspaceFromRect } from './test-space/zoom'
+import { captureCardZoomRect, captureZoomRect, settleZoom, zoomWorkspaceFromRect } from './test-space/zoom'
 import { SandboxProvider } from './workspace/context'
 import { OverlayHost, useOverlayState } from './workspace/overlay-host'
 import { bindStoreTranslator, errorText, invoke, WorkspaceStore } from './workspace/store'
@@ -61,6 +61,7 @@ export function SandboxApp() {
   const { spaces, loaded: spacesLoaded, reload: reloadSpaces } = useSpaceList()
   const [captures, setCaptures] = React.useState<Record<string, WorkspaceThumbnailCapture>>({})
   const [spaceBusy, setSpaceBusy] = React.useState(false)
+  const root = React.useRef<HTMLDivElement>(null)
   const stage = React.useRef<HTMLDivElement>(null)
   // 页头高度：消息页让聊天列延伸到页头背后（glass.css 的 .sandbox-chat-pane），需要准确的像素值。
   const header = React.useRef<HTMLDivElement>(null)
@@ -76,6 +77,8 @@ export function SandboxApp() {
   }, [])
   const enterZoom = React.useRef<DOMRect | undefined>(undefined)
   const exitZoom = React.useRef<{ key: string, rect: DOMRect } | undefined>(undefined)
+  // 进入空间的放大期间，总览留在工作区背后播完推近淡出：key 是被点的卡片，top 把它钉在原来的位置。
+  const [launch, setLaunch] = React.useState<{ key: string, top: number }>()
   const space = spaceId ? spaces.find(({ id }) => id === spaceId) : undefined
   // 与源插件一致，入口图标跟随 MCP 服务器活动：有测试调用正在进行时转动并带光环。
   const mcpRunning = signal.data?.mcpRunning ?? false
@@ -115,9 +118,12 @@ export function SandboxApp() {
   // 进入空间：工作区在新路由的首帧从被点击的卡片处连续放大就位。
   React.useLayoutEffect(() => {
     const rect = enterZoom.current
-    if (!rect || view !== 'messages' || !stage.current) return
+    if (!rect || view !== 'messages') return
     enterZoom.current = undefined
-    zoomWorkspaceFromRect(stage.current, rect)
+    const backdrop = root.current?.querySelector<HTMLElement>('.sandbox-space-overview.is-backdrop')
+    const card = launch && backdrop?.querySelector<HTMLElement>(`[data-space-id="${CSS.escape(launch.key)}"]`)
+    if (stage.current) zoomWorkspaceFromRect(stage.current, rect, backdrop, card, () => setLaunch(undefined))
+    else setLaunch(undefined)
   })
 
   const runSpaceTask = async (task: () => Promise<unknown>) => {
@@ -133,23 +139,31 @@ export function SandboxApp() {
 
   const enterSpace = async (id?: string) => {
     // 新建的空间还没有卡片，从创建卡片处起步。
-    const rect = captureZoomRect(document.querySelector(`[data-space-id="${CSS.escape(id ?? 'main')}"]`) ?? document.querySelector('.sandbox-space-create'))
+    const key = id ?? 'main'
+    const rect = captureCardZoomRect(document.querySelector(`[data-space-id="${CSS.escape(key)}"]`) ?? document.querySelector('.sandbox-space-create'))
     const target = storeFor(id)
     target.activate()
     await target.load()
     enterZoom.current = rect
+    const overview = root.current?.querySelector('.sandbox-space-overview')
+    if (rect && overview && root.current) setLaunch({ key, top: overview.getBoundingClientRect().top - root.current.getBoundingClientRect().top })
     navigate(id ? `/onebot-sandbox/messages?space=${encodeURIComponent(id)}` : '/onebot-sandbox/messages')
   }
 
   const openOverview = async () => {
     // 离开前克隆消息工作区当前画面作为该空间的缩略图，并记下位置，让总览里对应卡片从这里缩回网格位。
-    const root = view === 'messages' ? stage.current : null
-    if (root) {
+    // 进入动画还没播完就退出时先让它就位，克隆与起点都取静止的画面。
+    settleZoom()
+    const workspace = view === 'messages' ? stage.current : null
+    if (workspace) {
       const key = spaceId ?? 'main'
-      const capture = captureWorkspaceThumbnail(root)
+      const capture = captureWorkspaceThumbnail(workspace)
       setCaptures((value) => ({ ...value, [key]: capture }))
-      const rect = captureZoomRect(root)
+      const rect = captureZoomRect(workspace)
       exitZoom.current = rect && { key, rect }
+    } else {
+      // 总览的清理可能放回过一个没播完的起点；从其他标签页进入时不沿用它。
+      exitZoom.current = undefined
     }
     // 先取数据再切视图，卡片的初始变换才能赶在首帧写入。
     await reloadSpaces().catch(() => {})
@@ -194,7 +208,7 @@ export function SandboxApp() {
   return (
     <TooltipProvider>
       <SandboxProvider store={store} dialogs={dialogs}>
-        <div className="flex h-full min-h-0 flex-col bg-background text-sm leading-6 text-foreground">
+        <div ref={root} className="relative flex h-full min-h-0 flex-col bg-background text-sm leading-6 text-foreground">
           {/* 页头用 v2 页面的标题与分段标签，压成一行，把高度留给工作区。 */}
           <Tabs
             ref={header}
@@ -225,17 +239,20 @@ export function SandboxApp() {
               <TooltipContent>{spacesLabel}</TooltipContent>
             </Tooltip>
           </Tabs>
-          {view === 'settings' ? <SettingsPage /> : view === 'spaces' ? (
+          {/* 总览与工作区分两个位置渲染：进入空间时总览不卸载，留在背后做背景动画，缩略图不必重新渲染。 */}
+          {(view === 'spaces' || (launch && view === 'messages')) && (
             <SpaceOverview
               spaces={spaces}
               mainStore={mainStore}
               captures={captures}
               exitZoom={exitZoom}
+              launching={view === 'spaces' ? undefined : launch}
               onEnter={(id) => void runSpaceTask(() => enterSpace(id))}
               onCreate={() => void createSpace()}
               onAction={(action, id) => void actOnSpace(action, id)}
             />
-          ) : viewState.workspace ? (
+          )}
+          {view === 'settings' ? <SettingsPage /> : view === 'spaces' ? null : viewState.workspace ? (
             <>
               {view === 'messages' && (
                 <div

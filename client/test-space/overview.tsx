@@ -10,7 +10,7 @@ import { WorkspaceStore } from '../workspace/store'
 import { AgentCursor } from './agent-visuals'
 import { instantiateWorkspaceThumbnail, restoreWorkspaceThumbnailScroll, type WorkspaceThumbnailCapture } from './thumbnail-capture'
 import { calculateContainedWorkspaceThumbnailTransform } from './thumbnail-scale'
-import { staggerCardsIn, zoomCardFromRect } from './zoom'
+import { zoomOverviewIn } from './zoom'
 import './spaces.css'
 
 export type SpaceCardAction = 'return' | 'reactivate' | 'delete'
@@ -36,13 +36,15 @@ const timeFormat = new Intl.DateTimeFormat(undefined, { month: '2-digit', day: '
  * AI 测试空间总览：主环境卡片、各测试空间卡片（按创建时间从旧到新）与创建卡片。卡片缩略图优先用
  * 离开该空间时克隆的真实画面，从未进入过的空间按服务端快照渲染一份只读工作区。
  *
- * `exitZoom` 是从空间退回总览时留下的起点：挂载后让对应卡片从工作区位置缩回网格位，其余卡片错落浮现。
+ * `exitZoom` 是从空间退回总览时留下的起点：挂载后让对应卡片从工作区位置缩回网格位，其余卡片错落浮现（`zoom.ts`）。
+ * `launching` 表示正在进入某个空间：总览脱离文档流垫在工作区背后播完推近淡出。
  */
-export function SpaceOverview({ spaces, mainStore, captures, exitZoom, onEnter, onCreate, onAction }: {
+export function SpaceOverview({ spaces, mainStore, captures, exitZoom, launching, onEnter, onCreate, onAction }: {
   spaces: SandboxTestSpaceSummary[]
   mainStore: WorkspaceStore
   captures: Readonly<Record<string, WorkspaceThumbnailCapture>>
   exitZoom: React.RefObject<{ key: string, rect: DOMRect } | undefined>
+  launching?: { top: number }
   onEnter(spaceId?: string): void
   onCreate(): void
   onAction(action: SpaceCardAction, spaceId: string): void
@@ -56,15 +58,24 @@ export function SpaceOverview({ spaces, mainStore, captures, exitZoom, onEnter, 
   const visible = filter === 'all' ? spaces : spaces.filter((space) => space.status === filter)
   const filterItems = FILTERS.map((value) => ({ value, label: t(`sandbox.spaces.filter.${value}`) }))
 
+  // 进入动画没播完就退回时总览不重新挂载，launching 由有变无也要补一次退回动画。
+  const backdrop = launching !== undefined
   React.useLayoutEffect(() => {
+    if (backdrop) return
     const pending = exitZoom.current
     exitZoom.current = undefined
     const root = overview.current
     if (!root) return
-    const active = pending && root.querySelector<HTMLElement>(`[data-space-id="${CSS.escape(pending.key)}"]`)
-    if (pending && active) zoomCardFromRect(active, root, pending.rect)
-    staggerCardsIn([...root.querySelectorAll<HTMLElement>('.sandbox-space-card')].filter((card) => card !== active))
-  }, [exitZoom])
+    // 只在挂载（或进入动画中途退回）时播一次。
+    const cancel = zoomOverviewIn(root, pending && {
+      card: root.querySelector<HTMLElement>(`[data-space-id="${CSS.escape(pending.key)}"]`),
+      rect: pending.rect,
+    })
+    // 动画没播完就被清理（StrictMode 的模拟卸载）时放回起点，重跑的 effect 才能接着从工作区缩回。
+    return () => {
+      if (cancel()) exitZoom.current = pending
+    }
+  }, [exitZoom, backdrop])
 
   const openCard = (spaceId?: string) => (event: React.KeyboardEvent | React.MouseEvent) => {
     if ('key' in event && event.key !== 'Enter') return
@@ -75,8 +86,10 @@ export function SpaceOverview({ spaces, mainStore, captures, exitZoom, onEnter, 
     <section
       ref={overview}
       aria-label={t('sandbox.spaces.overviewLabel')}
-      className="sandbox-space-overview"
-      style={{ '--sandbox-accent': base?.appearance.sandboxAccentColor ?? '#2563eb' } as React.CSSProperties}
+      className={cn('sandbox-space-overview', backdrop && 'is-backdrop')}
+      inert={backdrop}
+      aria-hidden={backdrop || undefined}
+      style={{ '--sandbox-accent': base?.appearance.sandboxAccentColor ?? '#2563eb', top: launching?.top } as React.CSSProperties}
     >
       <header className="sandbox-space-toolbar">
         <p>{t('sandbox.spaces.summary', { count: spaces.length })}</p>
