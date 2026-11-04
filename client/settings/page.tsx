@@ -54,11 +54,8 @@ export function SettingsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <header className="mx-auto flex w-full max-w-3xl shrink-0 flex-wrap items-start justify-between gap-3 px-4 pt-4 pb-3 md:px-6 md:pt-6">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h1 className="text-base font-semibold">{t('sandbox.settings.title')}</h1>
-          <p className="text-xs text-muted-foreground">{t('sandbox.settings.description')}</p>
-        </div>
+      <header className="mx-auto flex w-full max-w-3xl shrink-0 flex-wrap items-center justify-between gap-3 px-6 pt-3 pb-3">
+        <p className="min-w-0 text-xs text-muted-foreground">{t('sandbox.settings.description')}</p>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" disabled={!dirty || saving} onClick={discard}>
             <Undo2Icon />{t('sandbox.settings.discard')}
@@ -69,7 +66,7 @@ export function SettingsPage() {
         </div>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-4 pb-6 md:px-6">
+        <div className="mx-auto w-full max-w-3xl px-6 pb-6">
           {data ? (
             <fieldset disabled={saving} className="min-w-0">
               <SchemaForm

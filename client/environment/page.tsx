@@ -39,11 +39,8 @@ export function EnvironmentPage() {
   ]
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 md:p-6">
-      <header className="flex flex-col gap-0.5">
-        <h1 className="text-base font-semibold">{t('sandbox.env.title')}</h1>
-        <p className="text-xs text-muted-foreground">{t('sandbox.env.description')}</p>
-      </header>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 pt-3 pb-6">
+      <p className="text-xs text-muted-foreground">{t('sandbox.env.description')}</p>
       <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 md:grid-cols-[14rem_minmax(0,1fr)] md:grid-rows-1">
         <nav aria-label={t('sandbox.env.sections')} className="flex gap-0.5 overflow-x-auto rounded-xl p-1.5 ring-1 ring-border md:flex-col md:overflow-x-visible">
           {sections.map(({ id, icon: Icon, count }) => (

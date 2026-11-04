@@ -34,7 +34,7 @@ import { MODEL_REQUEST_LIVE_REFRESH_INTERVAL_MS } from '../model-request/live-re
 export type SortOrder = 'asc' | 'desc'
 
 /**
- * 记录工作台的页框：OneBot 调试与测试调用共用「标题 + 自动刷新/刷新/清理 + 列表|详情」的版式，
+ * 记录工作台的页框：OneBot 调试与测试调用共用「说明 + 自动刷新/刷新/清理 + 列表|详情」的版式，
  * 两页只各自提供筛选项、列表行与详情内容。
  */
 export function RecordPage({ title, description, loading, error, live, onLiveChange, onRefresh, clear, children }: {
@@ -51,12 +51,9 @@ export function RecordPage({ title, description, loading, error, live, onLiveCha
   const t = useT()
   const [confirming, setConfirming] = React.useState(false)
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 md:p-6">
+    <section aria-label={title} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 pt-3 pb-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h1 className="text-base font-semibold">{title}</h1>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
+        <p className="min-w-0 text-xs text-muted-foreground">{description}</p>
         <div className="flex items-center gap-2">
           <label className="mr-1 flex items-center gap-2 text-xs text-muted-foreground">
             <Switch checked={live} onCheckedChange={(checked) => onLiveChange(checked === true)} />
@@ -85,7 +82,7 @@ export function RecordPage({ title, description, loading, error, live, onLiveCha
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </section>
   )
 }
 

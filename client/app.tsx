@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { BugIcon, FlaskConicalIcon, MessageCircleIcon, ServerCogIcon, SettingsIcon, TerminalSquareIcon } from 'lucide-react'
-import { Button, cn, Spinner, TooltipProvider } from '@chatluna/ui-kit'
+import { Button, Spinner, Tabs, TabsList, TabsTrigger, TooltipProvider } from '@chatluna/ui-kit'
 import { useLive } from '@chatluna/ui-client/client'
 import { useT } from './i18n'
 import { WebqqView } from './chat/webqq-view'
@@ -15,13 +14,7 @@ import { WorkspaceStore } from './workspace/store'
 
 type View = 'messages' | 'debug' | 'test-calls' | 'environment' | 'settings'
 
-const VIEWS: Array<{ id: View, icon: typeof MessageCircleIcon }> = [
-  { id: 'messages', icon: MessageCircleIcon },
-  { id: 'debug', icon: BugIcon },
-  { id: 'test-calls', icon: TerminalSquareIcon },
-  { id: 'environment', icon: ServerCogIcon },
-  { id: 'settings', icon: SettingsIcon },
-]
+const VIEWS: View[] = ['messages', 'debug', 'test-calls', 'environment', 'settings']
 
 /**
  * 沙盒工作台。路由 `/onebot-sandbox/:view?` 选择工作区；预设与模型请求分别交给 ChatLuna 自带的
@@ -31,7 +24,7 @@ export function SandboxApp() {
   const t = useT()
   const navigate = useNavigate()
   const params = useParams()
-  const view = VIEWS.find(({ id }) => id === params['view'])?.id ?? 'messages'
+  const view = VIEWS.find((id) => id === params['view']) ?? 'messages'
   const store = React.useMemo(() => new WorkspaceStore(undefined), [])
   const { state, setState, dialogs } = useOverlayState(store)
   const viewState = React.useSyncExternalStore(store.subscribe, store.getView, store.getView)
@@ -68,26 +61,17 @@ export function SandboxApp() {
     <TooltipProvider>
       <SandboxProvider store={store} dialogs={dialogs}>
         <div className="flex h-full min-h-0 flex-col bg-background text-sm leading-6 text-foreground">
-          <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
-            <div className="flex items-center gap-2">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary"><FlaskConicalIcon className="size-4" /></span>
-              <strong className="text-sm font-medium">{t('onebot-sandbox.title')}</strong>
-            </div>
-            <nav className="flex items-center gap-0.5" aria-label={t('sandbox.nav.label')}>
-              {VIEWS.map(({ id, icon: Icon }) => (
-                <Button
-                  key={id}
-                  variant="ghost"
-                  size="sm"
-                  className={cn(view === id && 'bg-accent text-accent-foreground')}
-                  aria-current={view === id ? 'page' : undefined}
-                  onClick={() => navigate(`/onebot-sandbox/${id}`)}
-                >
-                  <Icon /><span className="max-sm:sr-only">{t(`sandbox.nav.${id}`)}</span>
-                </Button>
-              ))}
-            </nav>
-          </header>
+          {/* 页头用 v2 页面的标题与分段标签，压成一行，把高度留给工作区。 */}
+          <Tabs
+            value={view}
+            className="shrink-0 gap-4 px-6 py-3 data-horizontal:flex-row data-horizontal:items-center"
+            onValueChange={(value) => navigate(`/onebot-sandbox/${String(value)}`)}
+          >
+            <h1 className="shrink-0 text-lg font-semibold">{t('onebot-sandbox.title')}</h1>
+            <TabsList className="min-w-0 max-w-full justify-start overflow-x-auto" aria-label={t('sandbox.nav.label')}>
+              {VIEWS.map((id) => <TabsTrigger key={id} value={id}>{t(`sandbox.nav.${id}`)}</TabsTrigger>)}
+            </TabsList>
+          </Tabs>
           {view === 'settings' ? <SettingsPage /> : viewState.workspace ? (
             <>
               {view === 'messages' && <WebqqView />}

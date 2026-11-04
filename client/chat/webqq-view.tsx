@@ -32,7 +32,7 @@ export function WebqqView() {
 
   return (
     // 强调色由插件设置决定，消息气泡与发送框（`messages.css`、`composer.css`）都从这里继承。
-    <div className="sandbox-webqq flex min-h-0 flex-1" style={{ '--sandbox-accent': workspace.appearance.sandboxAccentColor } as React.CSSProperties}>
+    <div className="sandbox-webqq flex min-h-0 flex-1 border-t border-border" style={{ '--sandbox-accent': workspace.appearance.sandboxAccentColor } as React.CSSProperties}>
       <ChatSidebar
         className={cn(narrow && region !== 'contacts' && 'hidden', narrow && 'w-full')}
         onSelectConversation={(conversationId) => {

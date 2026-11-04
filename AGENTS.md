@@ -27,6 +27,7 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 - 消息列表（`client/chat/message-list.tsx` + `messages.css`）同样逐条移植源插件的 `messages.css`：类名前缀 `sandbox-message-`，连续气泡的 3px 圆角按 `webqq/message-cluster.ts` 的 `is-cluster-*` 类收角，小尖角是列表根 `.has-tail`（设置 `sandboxTimBubbleTail`）下气泡的 `::before`，复用气泡背景。气泡几何不要改回 Tailwind 工具类，尖角与收角都依赖这些类名的选择器。
 - 强调色：WebQQ 不跟随 v2 主题的 `--primary`，取插件设置 `sandboxAccentColor`（默认与源插件同为 `#2563eb`），由 `webqq-view.tsx` 写成根节点 `.sandbox-webqq` 上的 `--sandbox-accent`，消息与发送框的样式都从它继承。
 - 路由（`client/index.ts`）不设 `fullscreen`：v2 的全屏路由脱离 shell 渲染，且不进入侧边栏导航（`packages/ui/client/client/plugins/nav.ts`）。沙盒作为普通页面嵌在 shell 里，根节点用 `h-full min-h-0` 撑满内容区。
+- 页头（`client/app.tsx`）沿用 v2 页面版式（参照 `packages/provider/webui/client/providers.tsx`）：标题「OneBot 沙盒」与 ui-kit 的 `Tabs` 分段标签压在同一行（`py-3`），把高度留给工作区；标签值与路由 `/onebot-sandbox/:view` 同步。标签已给出页名，各工作区不再放自己的 h1，只留说明与操作，左右边距与页头同为 `px-6`。
 - 插件设置在沙盒「设置」页编辑：`src/index.ts` 的 `Settings` 是完整 schema，交给 v2 插件页的 `Config` 是同一组字段全部标 hidden 的副本，插件页只显示一行指向沙盒设置页的标题；配置仍存在 chatluna.yml 的同一条目，loader 照常补默认值。新增配置项写进 `Settings`，`Config` 自动跟随。保存走 `chatluna_config.save`（带文件戳乐观锁），插件随即按新配置重启；实时信号带 `startedAt`，客户端据此识别重启并重读工作区。
 - 预设与模型请求不在沙盒内实现：预设用 v2 自带的 `/presets` 页（沙盒导航不放入口）；模型请求用 v2 自带的 trace 页。
 - 模型请求出处：`src/chatluna/state.ts` 订阅 `chat/receive` 建立「ChatLuna 会话 ID → 机器人 + 会话」映射，`chatluna/agent-step` 记下最近一步的 `turn`/`step`，机器人发消息时写进 `message.chatLuna.trace`，前端链接到 `/traces/<sessionId>?turn=&step=`。v2 回复经异步渲染队列发出，可能晚于 agent 转 idle，所以出处在发消息时标注而不是回合结束时回填；会话出现新的用户消息即清空，命令回复不沿用上一轮。
