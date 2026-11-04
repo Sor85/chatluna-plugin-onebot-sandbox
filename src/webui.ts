@@ -14,6 +14,8 @@ import { SandboxDomainError } from './types'
 export interface SandboxSignal {
   scenes: Record<string, number>
   mcpRunning: boolean
+  /** 本次插件启动的时刻。插件按新设置重启后序号从头计数，客户端靠它识别重启并整体重读。 */
+  startedAt: number
 }
 
 export const SIGNAL_STATE = 'onebot-sandbox.signal'
@@ -29,7 +31,7 @@ function toApiError(error: unknown): unknown {
 
 /** 把 Console 契约接到 ChatLuna WebUI：端点注册为 action，广播折叠进一个实时 state。 */
 export function createWebuiRegistrar(ctx: Context): SandboxConsoleRegistrar {
-  const signal: SandboxSignal = { scenes: {}, mcpRunning: false }
+  const signal: SandboxSignal = { scenes: {}, mcpRunning: false, startedAt: Date.now() }
   let tick = 0
   ctx.chatluna_webui.state(SIGNAL_STATE, { get: () => signal })
   return {

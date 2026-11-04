@@ -1,24 +1,26 @@
 import * as React from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { BugIcon, FlaskConicalIcon, MessageCircleIcon, ServerCogIcon, TerminalSquareIcon } from 'lucide-react'
+import { BugIcon, FlaskConicalIcon, MessageCircleIcon, ServerCogIcon, SettingsIcon, TerminalSquareIcon } from 'lucide-react'
 import { Button, cn, Spinner, TooltipProvider } from '@chatluna/ui-kit'
 import { useLive } from '@chatluna/ui-client/client'
 import { useT } from './i18n'
 import { WebqqView } from './chat/webqq-view'
 import { EnvironmentPage } from './environment/page'
 import { OneBotDebugPage } from './onebot-debug/page'
+import { SettingsPage } from './settings/page'
 import { TestCallPage } from './test-call/page'
 import { SandboxProvider } from './workspace/context'
 import { OverlayHost, useOverlayState } from './workspace/overlay-host'
 import { WorkspaceStore } from './workspace/store'
 
-type View = 'messages' | 'debug' | 'test-calls' | 'environment'
+type View = 'messages' | 'debug' | 'test-calls' | 'environment' | 'settings'
 
 const VIEWS: Array<{ id: View, icon: typeof MessageCircleIcon }> = [
   { id: 'messages', icon: MessageCircleIcon },
   { id: 'debug', icon: BugIcon },
   { id: 'test-calls', icon: TerminalSquareIcon },
   { id: 'environment', icon: ServerCogIcon },
+  { id: 'settings', icon: SettingsIcon },
 ]
 
 /**
@@ -35,6 +37,7 @@ export function SandboxApp() {
   const viewState = React.useSyncExternalStore(store.subscribe, store.getView, store.getView)
   const signal = useLive('onebot-sandbox.signal')
   const tick = signal.data?.scenes['']
+  const startedAt = signal.data?.startedAt
 
   React.useEffect(() => {
     store.activate()
@@ -49,6 +52,17 @@ export function SandboxApp() {
     if (seen.current !== undefined && seen.current !== tick) store.notifySceneChanged()
     seen.current = tick
   }, [tick, store])
+
+  // 保存设置会让插件按新配置重启：启动时刻一变就整体重读，外观等随工作区下发的设置随之生效。
+  const started = React.useRef<number | undefined>(undefined)
+  React.useEffect(() => {
+    if (startedAt === undefined) return
+    if (started.current !== undefined && started.current !== startedAt) {
+      if (store.getView().workspace) store.notifySceneChanged()
+      else void store.load()
+    }
+    started.current = startedAt
+  }, [startedAt, store])
 
   return (
     <TooltipProvider>
@@ -74,7 +88,7 @@ export function SandboxApp() {
               ))}
             </nav>
           </header>
-          {viewState.workspace ? (
+          {view === 'settings' ? <SettingsPage /> : viewState.workspace ? (
             <>
               {view === 'messages' && <WebqqView />}
               {view === 'debug' && <OneBotDebugPage />}

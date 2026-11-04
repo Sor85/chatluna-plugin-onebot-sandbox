@@ -7,6 +7,7 @@ import type {} from '@cordisjs/plugin-database'
 import { resolveBaseDir } from './base-dir'
 import { createWebuiRegistrar } from './webui'
 import { registerConsole } from './console'
+import { registerSettings } from './settings'
 import {
   DEFAULT_SCENE_MESSAGE_LIMIT,
   DEFAULT_SCENE_MESSAGE_MAX_BYTES,
@@ -105,7 +106,12 @@ const protocolSchema = (path: string, enabledDescription: string, pathDescriptio
   path: Schema.string().default(path).description(pathDescription),
 })
 
-export const Config: Schema<Config> = Schema.object({
+/**
+ * 插件设置的完整 schema，由沙盒工作台的「设置」页渲染（`src/settings.ts`）。
+ *
+ * 不写根 description：设置页自带标题，根 description 会在表单顶部多渲染一个同名分组标题。
+ */
+export const Settings: Schema<Config> = Schema.object({
   persistenceMode: Schema.union([
     Schema.const('memory').description('服务端内存'),
     Schema.const('database').description('数据库'),
@@ -151,7 +157,15 @@ export const Config: Schema<Config> = Schema.object({
     // 字段了，给它标题只会得到一个下面什么都没有、紧接着又是一个标题的空标题。配置键仍是
     // `testEndpoint.*`，分组只在页面上消失。
   }),
-}).description('OneBot 沙盒')
+})
+
+/**
+ * 交给 v2 插件页的 schema：字段与 `Settings` 相同但全部标 hidden，插件页只剩一行指向沙盒设置页的标题。
+ * 配置仍存在 chatluna.yml 的同一条插件条目里，loader 照常按它补默认值、传给 `apply`。
+ */
+export const Config = Schema.object(
+  Object.fromEntries(Object.entries(Settings.dict ?? {}).map(([key, field]) => [key, field.hidden()])),
+).description('设置在 OneBot 沙盒工作台的「设置」页编辑') as unknown as Schema<Config>
 
 declare module 'cordis' {
   interface Context {
@@ -278,6 +292,7 @@ export function apply(ctx: Context, config: Config) {
     sandboxMarkRecalledMessages: config.sandboxMarkRecalledMessages,
   }
   registerConsole(createWebuiRegistrar(ctx), control, appearance, endpoint, testSpaces, unattributedModelRequests)
+  registerSettings(ctx, Settings, 'chatluna-plugin-onebot-sandbox')
   onStart(ctx, async () => {
     await control.waitForSceneReady()
     await endpoint?.server.start().catch((error) => ctx.logger.error('%s\n%s', 'test endpoint listener failed to start', errorDetail(error)))

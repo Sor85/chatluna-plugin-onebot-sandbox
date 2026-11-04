@@ -48,6 +48,7 @@
   },
   "peerDependencies": {
     "@chatluna/core": ">=2.0.0-alpha.0",
+    "@chatluna/schema": ">=2.0.0-alpha.0",
     "@chatluna/server": ">=2.0.0-alpha.0",
     "@chatluna/ui-server": ">=2.0.0-alpha.0",
     "cordis": "^4.0.0-rc.12"
@@ -55,9 +56,12 @@
   "devDependencies": {
     "@chatluna/chat": "workspace:*",
     "@chatluna/core": "workspace:*",
+    "@chatluna/runtime-config": "workspace:*",
+    "@chatluna/schema": "workspace:*",
     "@chatluna/server": "workspace:*",
     "@chatluna/ui-client": "workspace:*",
     "@chatluna/ui-kit": "workspace:*",
+    "@chatluna/ui-schema-form": "workspace:*",
     "@chatluna/ui-server": "workspace:*",
     "@chatluna/ui-storage": "workspace:*",
     "@cordisjs/plugin-database": "4.1.1",
@@ -87,6 +91,7 @@
         "chatluna_webui"
       ],
       "optional": [
+        "chatluna_config",
         "database"
       ]
     }
