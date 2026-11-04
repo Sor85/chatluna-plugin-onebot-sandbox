@@ -1,0 +1,259 @@
+/*
+ * 记录工作台的详情面板（records/record-layout.tsx），OneBot 调试与测试调用共用。
+ * 只按 sandbox-record- 类名选择；本文件不分层，压过 ui-kit 在宿主 utilities 层里的工具类。
+ */
+
+/* 正文视口隐藏原生滚动条，由 .sandbox-record-scrollbar 自绘（SCROLLBAR.md）。 */
+.sandbox-record-scroller {
+  scrollbar-width: none;
+}
+
+/* 轨道上端紧贴标题栏下方，下端让出面板的 12px 圆角。 */
+.sandbox-record-scrollbar {
+  top: 4px;
+  bottom: 12px;
+}
+
+/* 列表行（RecordItem）。 */
+.sandbox-record-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.sandbox-record-item:hover {
+  background: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+
+.sandbox-record-item.is-active {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.sandbox-record-item:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.sandbox-record-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 0 3px color-mix(in oklab, #10b981 16%, transparent);
+}
+
+.sandbox-record-dot.is-error {
+  background: var(--destructive);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 16%, transparent);
+}
+
+/* 第二行与名称左缘对齐（圆点 7px + 间距 8px），各项之间以圆点分隔。 */
+.sandbox-record-item-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding-left: 15px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.sandbox-record-item-meta > * + *::before {
+  content: '·';
+  margin: 0 6px;
+  opacity: 0.6;
+}
+
+.sandbox-record-tag {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--muted) 80%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+/* 元信息：小标签在上、值在下的多列网格，列数随面板宽度增减。 */
+.sandbox-record-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+}
+
+.sandbox-record-meta-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sandbox-record-meta-item.is-wide {
+  grid-column: 1 / -1;
+}
+
+.sandbox-record-meta-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+
+.sandbox-record-meta-label svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.sandbox-record-meta-value {
+  margin: 0;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* 关联实体等「键 值」对：等宽小片，键用弱化色。 */
+.sandbox-record-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sandbox-record-chip {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.sandbox-record-chip-key {
+  color: var(--muted-foreground);
+}
+
+/* 提示卡片：错误诊断与会话观察。 */
+.sandbox-record-notice {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.sandbox-record-notice.is-destructive {
+  background: color-mix(in oklab, var(--destructive) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--destructive) 24%, transparent);
+}
+
+.sandbox-record-notice > svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--muted-foreground);
+}
+
+.sandbox-record-notice.is-destructive > svg,
+.sandbox-record-notice.is-destructive .sandbox-record-notice-title {
+  color: var(--destructive);
+}
+
+.sandbox-record-notice-title {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.sandbox-record-notice-body {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+/* JSON 代码块：不设内层滚动，随面板正文一起滚；复制按钮悬停或聚焦时浮现。 */
+.sandbox-record-code {
+  position: relative;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.sandbox-record-code pre {
+  margin: 0;
+  padding: 14px 16px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+
+.sandbox-record-code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.sandbox-record-code:hover .sandbox-record-code-copy,
+.sandbox-record-code:focus-within .sandbox-record-code-copy {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .sandbox-record-code-copy {
+    opacity: 1;
+  }
+}
+
+/* JSON 语法着色：亮色与暗色各取一组同等饱和度的颜色。 */
+.sandbox-json-key { color: #0f5fb8; }
+.sandbox-json-string { color: #13784a; }
+.sandbox-json-number { color: #b0520e; }
+.sandbox-json-literal { color: #8b3fc7; }
+.sandbox-json-punct { color: var(--muted-foreground); }
+
+.dark .sandbox-json-key { color: #7cb7ff; }
+.dark .sandbox-json-string { color: #7fd6a4; }
+.dark .sandbox-json-number { color: #f2a76b; }
+.dark .sandbox-json-literal { color: #c99cf5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sandbox-record-code-copy,
+  .sandbox-record-item {
+    transition: none;
+  }
+}

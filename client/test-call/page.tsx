@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { BoxIcon, BracesIcon, CircleAlertIcon, GlobeIcon, KeyRoundIcon, PlugIcon, TagIcon } from 'lucide-react'
 import {
-  Badge,
   Button,
   Checkbox,
   Input,
@@ -19,12 +18,14 @@ import {
   JsonBlock,
   MetaList,
   MetaRow,
+  RecordDetailHeader,
   RecordDetailPane,
   RecordItem,
   RecordListPane,
+  RecordNotice,
   RecordPage,
   RecordSection,
-  RecordTiming,
+  RecordTag,
   StatusBadge,
   orderByTime,
   useRecordRefresh,
@@ -202,56 +203,57 @@ export function TestCallPage() {
             active={record.id === detail?.id}
             onClick={() => void open(record.id)}
             title={record.tool}
+            status={record.status}
+            tag={record.transport.toUpperCase()}
             time={record.createdAt}
             duration={record.durationMs}
-            extra={<span className="flex items-center gap-1"><PlugIcon className="size-3.5" />{record.transport.toUpperCase()}</span>}
-            badges={(
-              <>
-                <StatusBadge status={record.status} />
-                <Badge variant="outline" className="max-w-32"><span className="truncate">{record.credentialName}</span></Badge>
-              </>
-            )}
+            meta={[record.credentialName]}
           />
         ))}
       </RecordListPane>
-      <RecordDetailPane label={t('sandbox.records.detail')} loading={detailLoading}>
-        {detail && (
-          <>
-            <header className="flex flex-col gap-1">
-              <span className="flex flex-wrap items-center gap-1.5">
-                <strong className="text-sm font-medium">{detail.tool}</strong>
-                <StatusBadge status={detail.status} />
-              </span>
-              <RecordTiming time={detail.createdAt} duration={detail.durationMs} />
-            </header>
-            <MetaList>
-              <MetaRow icon={KeyRoundIcon} label={t('sandbox.testCall.credential')} value={detail.credentialName} />
-              <MetaRow icon={PlugIcon} label={t('sandbox.testCall.transportLabel')} value={transportLabel(detail.transport)} />
-              {detail.sourceIp && <MetaRow icon={GlobeIcon} label={t('sandbox.testCall.sourceIp')} value={detail.sourceIp} />}
-              {detail.spaceId && <MetaRow icon={BoxIcon} label={t('sandbox.testCall.space')} value={detail.spaceId} />}
-              {detail.testRunId && <MetaRow icon={TagIcon} label={t('sandbox.testCall.testRun')} value={detail.testRunId} />}
-            </MetaList>
-            {detail.error && (
-              <RecordSection icon={CircleAlertIcon} title={t('sandbox.records.diagnosis')} tone="destructive">
-                <p className="font-mono text-xs break-all">{detail.error.code} · {detail.error.message}</p>
-              </RecordSection>
-            )}
-            <RecordSection icon={BracesIcon} title={t('sandbox.testCall.arguments')}>
-              <JsonBlock value={detail.arguments} />
-            </RecordSection>
-            {detail.result !== undefined && (
-              <RecordSection icon={BracesIcon} title={t('sandbox.testCall.result')}>
-                <JsonBlock value={detail.result} />
-              </RecordSection>
-            )}
-            {detail.error && (
-              <RecordSection icon={CircleAlertIcon} title={t('sandbox.testCall.error')}>
-                <JsonBlock value={detail.error} />
-              </RecordSection>
-            )}
-          </>
-        )}
+      <RecordDetailPane
+        label={t('sandbox.records.detail')}
+        loading={detailLoading}
+        scrollKey={detail?.id}
+        header={detail && <RecordDetailHeader title={detail.tool} time={detail.createdAt} duration={detail.durationMs} badges={<><StatusBadge status={detail.status} /><RecordTag>{detail.transport.toUpperCase()}</RecordTag></>} />}
+      >
+        {detail && <TestCallDetail record={detail} />}
       </RecordDetailPane>
     </RecordPage>
+  )
+}
+
+/** 详情正文；标题栏由页面交给 `RecordDetailPane` 的 `header`。 */
+export function TestCallDetail({ record }: { record: SandboxTestCallRecord }) {
+  const t = useT()
+  const transportLabel = (value: SandboxTestCallTransport) => t(`sandbox.testCall.transport.${value}`)
+  return (
+    <>
+      {record.error && (
+        <RecordNotice icon={CircleAlertIcon} title={t('sandbox.records.diagnosis')} tone="destructive">
+          <span className="font-mono">{record.error.code}</span> · {record.error.message}
+        </RecordNotice>
+      )}
+      <MetaList>
+        <MetaRow icon={KeyRoundIcon} label={t('sandbox.testCall.credential')} value={record.credentialName} />
+        <MetaRow icon={PlugIcon} label={t('sandbox.testCall.transportLabel')} value={transportLabel(record.transport)} />
+        {record.sourceIp && <MetaRow icon={GlobeIcon} label={t('sandbox.testCall.sourceIp')} value={<span className="font-mono">{record.sourceIp}</span>} />}
+        {record.spaceId && <MetaRow icon={BoxIcon} label={t('sandbox.testCall.space')} value={<span className="font-mono">{record.spaceId}</span>} />}
+        {record.testRunId && <MetaRow icon={TagIcon} label={t('sandbox.testCall.testRun')} value={<span className="font-mono">{record.testRunId}</span>} />}
+      </MetaList>
+      <RecordSection icon={BracesIcon} title={t('sandbox.testCall.arguments')}>
+        <JsonBlock value={record.arguments} />
+      </RecordSection>
+      {record.result !== undefined && (
+        <RecordSection icon={BracesIcon} title={t('sandbox.testCall.result')}>
+          <JsonBlock value={record.result} />
+        </RecordSection>
+      )}
+      {record.error && (
+        <RecordSection icon={CircleAlertIcon} title={t('sandbox.testCall.error')}>
+          <JsonBlock value={record.error} />
+        </RecordSection>
+      )}
+    </>
   )
 }

@@ -11,7 +11,6 @@ import {
   TagIcon,
 } from 'lucide-react'
 import {
-  Badge,
   Button,
   Checkbox,
   Input,
@@ -32,14 +31,17 @@ import { sourceName, useT } from '../i18n'
 import {
   FilterField,
   JsonBlock,
+  MetaChips,
   MetaList,
   MetaRow,
+  RecordDetailHeader,
   RecordDetailPane,
   RecordItem,
   RecordListPane,
+  RecordNotice,
   RecordPage,
   RecordSection,
-  RecordTiming,
+  RecordTag,
   StatusBadge,
   orderByTime,
   useRecordRefresh,
@@ -250,60 +252,65 @@ export function OneBotDebugPage() {
             active={recordKey(record) === selected}
             onClick={() => void open(record)}
             title={record.requestedAction}
+            status={record.status}
+            tag={record.direction.toUpperCase()}
             time={record.createdAt}
             duration={record.durationMs}
-            badges={(
-              <>
-                <StatusBadge status={record.status} />
-                <Badge variant="outline" className="font-mono text-[10px]">{record.direction.toUpperCase()}</Badge>
-                <Badge variant="outline" className="max-w-32"><span className="truncate">{sourceName(t, record.source)}</span></Badge>
-              </>
-            )}
+            meta={[sourceName(t, record.source)]}
           />
         ))}
       </RecordListPane>
-      <RecordDetailPane label={t('sandbox.records.detail')} loading={detailLoading}>
+      <RecordDetailPane
+        label={t('sandbox.records.detail')}
+        loading={detailLoading}
+        scrollKey={selected}
+        header={detail && (
+          <RecordDetailHeader
+            title={detail.requestedAction}
+            time={detail.createdAt}
+            duration={detail.durationMs}
+            badges={<><StatusBadge status={detail.status} /><RecordTag>{detail.direction.toUpperCase()}</RecordTag></>}
+          />
+        )}
+      >
         {detail && <DebugDetail record={detail} botName={botName(detail)} />}
       </RecordDetailPane>
     </RecordPage>
   )
 }
 
-function DebugDetail({ record, botName }: { record: SandboxConsoleOneBotDebugRecord, botName: string }) {
+/** 详情正文；标题栏由页面交给 `RecordDetailPane` 的 `header`。 */
+export function DebugDetail({ record, botName }: { record: SandboxConsoleOneBotDebugRecord, botName: string }) {
   const t = useT()
-  const entities = Object.entries(record.entities).filter((entry) => entry[1]).map(([key, value]) => `${key}=${value}`).join(' · ')
+  const entities = Object.entries(record.entities).filter((entry): entry is [string, string] => Boolean(entry[1]))
   const observation = record.conversationObservation
   const isAction = record.direction === 'action'
   return (
     <>
-      <header className="flex flex-col gap-1">
-        <span className="flex flex-wrap items-center gap-1.5">
-          <strong className="text-sm font-medium">{record.requestedAction}</strong>
-          <StatusBadge status={record.status} />
-          <Badge variant="outline" className="font-mono text-[10px]">{record.direction.toUpperCase()}</Badge>
-        </span>
-        <RecordTiming time={record.createdAt} duration={record.durationMs} />
-      </header>
+      {record.error && (
+        <RecordNotice icon={CircleAlertIcon} title={t('sandbox.records.diagnosis')} tone="destructive">
+          <span className="font-mono">{record.error.code}</span> · {record.error.message}
+          <span className="mt-0.5 block font-mono text-[11px]">trace {record.error.traceId}</span>
+        </RecordNotice>
+      )}
+      {observation && (
+        <RecordNotice icon={GitBranchIcon} title={t(`sandbox.debug.observation.${observation.kind}.title`)}>
+          {t(`sandbox.debug.observation.${observation.kind}.detail`, { event: observation.eventConversationId, actual: observation.conversationId })}
+        </RecordNotice>
+      )}
       <MetaList>
-        <MetaRow icon={BotIcon} label={t('sandbox.debug.bot')} value={`${botName} · ${record.botId}`} />
+        <MetaRow icon={BotIcon} label={t('sandbox.debug.bot')} value={<>{botName} <span className="font-mono font-normal text-muted-foreground">{record.botId}</span></>} />
         <MetaRow icon={BoxIcon} label={t('sandbox.debug.source')} value={sourceName(t, record.source)} />
         <MetaRow icon={CpuIcon} label={t('sandbox.debug.implementation')} value={record.implementation === 'napcat' ? 'NapCat' : 'LLBot'} />
-        <MetaRow icon={LinkIcon} label={t('sandbox.debug.entities')} value={entities || t('sandbox.debug.noEntities')} />
-        {record.action !== record.requestedAction && <MetaRow icon={ArrowRightIcon} label={t('sandbox.debug.action')} value={record.action} />}
-        {record.matchedAlias && <MetaRow icon={TagIcon} label={t('sandbox.debug.alias')} value={record.matchedAlias} />}
+        {record.action !== record.requestedAction && <MetaRow icon={ArrowRightIcon} label={t('sandbox.debug.action')} value={<span className="font-mono">{record.action}</span>} />}
+        {record.matchedAlias && <MetaRow icon={TagIcon} label={t('sandbox.debug.alias')} value={<span className="font-mono">{record.matchedAlias}</span>} />}
+        <MetaRow
+          icon={LinkIcon}
+          label={t('sandbox.debug.entities')}
+          wide
+          value={entities.length ? <MetaChips items={entities} /> : <span className="font-normal text-muted-foreground">{t('sandbox.debug.noEntities')}</span>}
+        />
       </MetaList>
-      {observation && (
-        <RecordSection icon={GitBranchIcon} title={t(`sandbox.debug.observation.${observation.kind}.title`)}>
-          <p className="text-xs leading-5 text-muted-foreground">
-            {t(`sandbox.debug.observation.${observation.kind}.detail`, { event: observation.eventConversationId, actual: observation.conversationId })}
-          </p>
-        </RecordSection>
-      )}
-      {record.error && (
-        <RecordSection icon={CircleAlertIcon} title={t('sandbox.records.diagnosis')} tone="destructive">
-          <p className="font-mono text-xs break-all">{record.error.code} · {record.error.message} · trace {record.error.traceId}</p>
-        </RecordSection>
-      )}
       {record.payload !== undefined && (
         <RecordSection icon={BracesIcon} title={t(isAction ? 'sandbox.debug.input' : 'sandbox.debug.eventData')}>
           <JsonBlock value={record.payload} />
