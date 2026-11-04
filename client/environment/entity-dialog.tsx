@@ -207,7 +207,7 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
 
   return (
     <Dialog open={open} onOpenChange={(next) => next ? onOpenChange(true) : requestClose()}>
-      <DialogContent className={cn('sandbox-glass flex flex-col overflow-hidden', mode === 'edit' && 'sm:max-w-lg')}>
+      <DialogContent className={cn('flex flex-col overflow-hidden', mode === 'edit' && 'sm:max-w-lg')}>
         <DialogHeader>
           <DialogTitle>{t(mode === 'edit' ? 'sandbox.entity.editTitle' : 'sandbox.entity.deleteTitle', { kind: entityLabel })}</DialogTitle>
           <DialogDescription>{t(mode === 'edit' ? 'sandbox.entity.editHint' : 'sandbox.entity.deleteHint')}</DialogDescription>
@@ -404,7 +404,7 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
         )}
         {target && (
           <Dialog open={picking} onOpenChange={setPicking}>
-            <DialogContent className="sandbox-glass flex flex-col overflow-hidden sm:max-w-md">
+            <DialogContent className="flex flex-col overflow-hidden sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>{t('sandbox.avatar.title')}</DialogTitle>
                 <DialogDescription>{t('sandbox.avatar.description')}</DialogDescription>

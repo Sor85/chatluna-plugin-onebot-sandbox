@@ -68,7 +68,7 @@ export function RecordPage({ title, description, loading, error, live, onLiveCha
         {children}
       </div>
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
-        <AlertDialogContent className="sandbox-glass">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{clear.title}</AlertDialogTitle>
             <AlertDialogDescription>{clear.description}</AlertDialogDescription>

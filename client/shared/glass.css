@@ -11,8 +11,9 @@
  */
 
 /*
- * 右键菜单、下拉选择、Popover、对话框。72%：再高会把已模糊的背景盖成近乎实心。
- * ui-kit 的对话框与 Popover 把控件底色 --control 设成不透明的 --popover，输入框、下拉框、描边按钮与
+ * 右键菜单、下拉选择、Popover、资料卡等非模态浮层。模态窗口（Dialog、AlertDialog）不用毛玻璃，保持 ui-kit
+ * 的实心底：表单多、停留久，透出的背景会干扰阅读。72%：再高会把已模糊的背景盖成近乎实心。
+ * ui-kit 的 Popover 把控件底色 --control 设成不透明的 --popover，输入框、下拉框、描边按钮与
  * 勾选框在玻璃上会是一块块实心色；改成半透明，控件靠描边区分。
  */
 .sandbox-glass {
@@ -46,17 +47,6 @@
 
 .sandbox-glass [data-slot='select-scroll-down-button'] {
   background: linear-gradient(to top, color-mix(in oklab, var(--popover) 90%, transparent), transparent);
-}
-
-/*
- * 对话框的吸顶页头、页脚自带不透明 bg-popover，在毛玻璃对话框里会显出两块实心底。改成透明且不再叠模糊：
- * 对话框本身是 Backdrop Root，页头再模糊只会采样到对话框自己的半透明底，叠出一块更白的矩形。
- * 透明的前提是页头、页脚下面没有滚过的内容：沙盒的对话框一律三段式（DialogContent 加
- * `flex flex-col overflow-hidden`，正文容器 `min-h-0 overflow-y-auto`），视口再矮也只有正文收缩滚动。
- */
-.sandbox-glass [data-slot='dialog-header'],
-.sandbox-glass [data-slot='dialog-footer'] {
-  background: transparent;
 }
 
 /*

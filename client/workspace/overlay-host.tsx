@@ -133,7 +133,7 @@ function TextActionDialog({ dialog, onClose }: { dialog?: TextDialog, onClose():
   const kind = shown?.kind ?? 'remark'
   return (
     <Dialog open={!!dialog} onOpenChange={(open) => !open && requestClose()}>
-      <DialogContent className="sandbox-glass">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t(`sandbox.text.${kind}.title`)}</DialogTitle>
           <DialogDescription>{t(`sandbox.text.${kind}.description`)}</DialogDescription>

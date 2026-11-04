@@ -84,7 +84,7 @@ export function ForwardTargetDialog({ open, targets, onOpenChange, onConfirm }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sandbox-glass flex flex-col overflow-hidden sm:max-w-md">
+      <DialogContent className="flex flex-col overflow-hidden sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('sandbox.forward.targetTitle')}</DialogTitle>
           <DialogDescription>{t('sandbox.forward.targetHint')}</DialogDescription>
@@ -167,7 +167,7 @@ function ForwardFrameDialog({ stack, depth, imageOpen, onCloseFrom, onOpenForwar
   const nodeText = (item: SandboxForwardNode) => item.media?.length === 1 && item.content === `[${getMediaLabel(item.media[0]!)}] ${item.media[0]!.name}` ? '' : item.content
   return (
     <Dialog open={!!current} onOpenChange={(open) => !open && !imageOpen && onCloseFrom(depth)}>
-      <DialogContent className="sandbox-glass flex max-h-[80vh] flex-col gap-3 overflow-hidden sm:max-w-lg">
+      <DialogContent className="flex max-h-[80vh] flex-col gap-3 overflow-hidden sm:max-w-lg">
         {/* 右侧留出关闭按钮的位置，长标题截断而不压到 X 上。 */}
         <DialogHeader className="min-w-0 pr-8">
           <DialogTitle className="truncate leading-6">{frame.title || t('sandbox.forward.title')}</DialogTitle>

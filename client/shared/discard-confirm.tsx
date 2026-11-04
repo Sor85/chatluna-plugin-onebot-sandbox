@@ -26,7 +26,7 @@ export function useDiscardConfirm(dirty: boolean, close: () => void) {
   }
   const confirm = (
     <AlertDialog open={asking} onOpenChange={setAsking}>
-      <AlertDialogContent className="sandbox-glass">
+      <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t('sandbox.discard.title')}</AlertDialogTitle>
           <AlertDialogDescription>{t('sandbox.discard.description')}</AlertDialogDescription>
