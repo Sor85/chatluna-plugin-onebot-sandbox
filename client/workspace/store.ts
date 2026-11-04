@@ -130,7 +130,7 @@ export class WorkspaceStore {
     })
   }
 
-  private replaceWorkspace(workspace: SandboxWorkspaceState, preferred: StoredSelection = {}) {
+  private replaceWorkspace(workspace: SandboxWorkspaceState, preferred: StoredSelection = {}, persist = true) {
     const selection = resolveWorkspaceSelection(workspace.snapshot, {
       currentOperatorId: preferred.currentOperatorId ?? this.view.currentOperatorId,
       activeConversationId: preferred.activeConversationId ?? this.view.activeConversationId,
@@ -142,8 +142,16 @@ export class WorkspaceStore {
       activeConversationId: selection.activeConversationId,
       loadError: undefined,
     })
-    this.saveSelection()
+    if (persist) this.saveSelection()
     void this.loadVisibleMedia()
+  }
+
+  /**
+   * 用现成的工作区数据直接填充视图，供 AI 测试空间总览的缩略图使用：沿用该空间上次记住的选择，
+   * 但不回写，缩略图不能改动用户真正进入空间时看到的会话。
+   */
+  seed(workspace: SandboxWorkspaceState) {
+    this.replaceWorkspace(workspace, readSelection(this.spaceId), false)
   }
 
   async load() {

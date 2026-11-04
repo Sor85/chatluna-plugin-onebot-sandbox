@@ -1,0 +1,188 @@
+/*
+ * AI 测试空间样式，逐条移植自 koishi-plugin-chatluna-sandbox 的 `client/test-space/styles.css`。
+ *
+ * 原版的 WebQQ 主题变量映射到 v2 主题 token，强调色 `--sandbox-accent` 由使用方写在根节点上
+ * （插件设置 `sandboxAccentColor`）；类名前缀换成 `sandbox-space-`（总览）与 `sandbox-agent-`（被控视觉）。
+ */
+
+.sandbox-space-overview,
+.sandbox-agent-observe {
+  --sandbox-text: var(--foreground);
+  --sandbox-muted: var(--muted-foreground);
+  --sandbox-border: var(--border);
+  --sandbox-hover: var(--muted);
+  --sandbox-accent-shadow: color-mix(in srgb, var(--sandbox-accent) 24%, transparent);
+}
+
+.sandbox-space-overview {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 12px 24px 24px;
+  color: var(--sandbox-text);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* 退出空间的缩放动画期间放开裁剪，让活动卡片能越过总览边界覆盖整个工作区再缩回网格位。 */
+.sandbox-space-overview.is-zooming { overflow: visible; }
+.sandbox-space-overview.is-zooming .sandbox-space-card { content-visibility: visible; }
+
+.sandbox-space-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.sandbox-space-toolbar p { margin: 0; color: var(--sandbox-muted); font-size: 12px; }
+
+.sandbox-space-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }
+
+.sandbox-space-card {
+  position: relative;
+  display: grid;
+  min-height: 250px;
+  overflow: hidden;
+  border: 1px solid var(--sandbox-border);
+  border-radius: 18px;
+  background: var(--background);
+  color: inherit;
+  text-align: left;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 8%);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+  content-visibility: auto;
+  contain-intrinsic-size: 250px;
+}
+.sandbox-space-card:hover { transform: translateY(-2px); box-shadow: 0 16px 36px rgb(15 23 42 / 12%); }
+.sandbox-space-card:focus-visible { outline: 2px solid var(--sandbox-accent); outline-offset: 2px; }
+
+/* AI 控制中：accent 边框 + 光晕，切换时沿用卡片自身 180ms 过渡。 */
+.sandbox-space-card.is-running { border-color: var(--sandbox-accent); box-shadow: 0 20px 54px var(--sandbox-accent-shadow); }
+.sandbox-space-card.is-running:hover { box-shadow: 0 24px 60px var(--sandbox-accent-shadow); }
+
+.sandbox-space-card footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--sandbox-border); }
+.sandbox-space-card footer strong,
+.sandbox-space-card footer small { display: block; }
+.sandbox-space-card footer strong { font-weight: 500; }
+.sandbox-space-card footer small { display: flex; align-items: center; margin-top: 3px; color: var(--sandbox-muted); font-size: 12px; }
+.sandbox-space-card-actions { display: flex; flex: none; align-items: center; gap: 6px; }
+
+/* 卡片操作（归还/重新激活）与「主环境」徽章同一视觉语言：无边框浅底胶囊。 */
+.sandbox-space-card-pill {
+  height: 22px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--sandbox-muted);
+  background: var(--sandbox-hover);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 22px;
+  white-space: nowrap;
+}
+.sandbox-space-card-pill:hover:not(:disabled) { color: var(--sandbox-text); background: color-mix(in srgb, var(--sandbox-hover) 70%, var(--sandbox-border)); }
+.sandbox-space-card-pill:focus-visible { outline: 2px solid var(--sandbox-accent); outline-offset: 1px; }
+
+.sandbox-space-create { place-items: center; place-content: center; gap: 10px; border-style: dashed; color: var(--sandbox-muted); }
+
+/* 已访问空间克隆离开前的真实工作区 DOM；未访问的空间用固定 1440×760 画布按快照渲染。两者都由 JS 按 contain 居中，卡片比例变化时完整页面不会被裁掉。 */
+.sandbox-space-thumbnail { position: relative; height: 190px; min-height: 190px; overflow: hidden; background: var(--background); pointer-events: none; }
+.sandbox-space-thumbnail-host { position: absolute; inset: 0; overflow: hidden; }
+.sandbox-space-thumbnail-live,
+.sandbox-space-thumbnail-preview { position: absolute; top: 0; left: 0; display: flex; margin: 0; transform-origin: 0 0; }
+.sandbox-space-thumbnail-preview { width: 1440px; height: 760px; }
+
+/* 预览副本只负责绘制；裁掉被控覆盖层、滚动条和发送框之外的浮层，避免缩放副本污染正文交互。 */
+:is(.sandbox-space-thumbnail-live, .sandbox-space-thumbnail-preview) .sandbox-agent-observe { display: none !important; }
+:is(.sandbox-space-thumbnail-live, .sandbox-space-thumbnail-preview) .sandbox-agent-control-orbit { opacity: 0 !important; }
+:is(.sandbox-space-thumbnail-live, .sandbox-space-thumbnail-preview) :is(.sandbox-agent-control-icon-rays, .sandbox-agent-control-orbit-band) { animation: none !important; }
+:is(.sandbox-space-thumbnail-live, .sandbox-space-thumbnail-preview) * { scrollbar-width: none; }
+:is(.sandbox-space-thumbnail-live, .sandbox-space-thumbnail-preview) *::-webkit-scrollbar { display: none; }
+
+/* ==== ego lite agent 视觉复刻（边缘效果与光标动画取自 ego lite Actor Overlay；任务栏按实机截图与 --bg-agent-task-bar: #0009 令牌复刻）==== */
+
+/* agent 光标：JS 每 5.2-9s 随机跳位，移动 easing 与 ego 魔法光标一致；到位后播放 400ms 点击挤压，静止后进入 loading 浮动。 */
+.sandbox-agent-cursor { position: absolute; top: 38%; left: 55%; z-index: 26; pointer-events: none; transition: top 0.9s cubic-bezier(0.6, 0, 0.4, 1), left 0.9s cubic-bezier(0.6, 0, 0.4, 1); }
+.sandbox-agent-cursor-float { display: flex; align-items: flex-start; }
+/* ego #cursorImage 的双层光晕投影；transform-origin 50% 100% 让点击挤压向笔尖下压。 */
+.sandbox-agent-cursor-float svg { flex: none; color: var(--sandbox-accent); transform-origin: 50% 100%; filter: drop-shadow(2px 3px 5px rgb(79 161 255 / 100%)) drop-shadow(-1px -1px 2px rgb(52 107 241 / 100%)); }
+.sandbox-agent-cursor-label { max-width: 240px; margin-top: 14px; margin-left: -4px; overflow: hidden; padding: 3px 10px; border-radius: 999px; color: var(--foreground); background: rgb(255 255 255 / 42%); box-shadow: 0 0 0 1px rgb(0 0 0 / 6%), 0 16px 48px rgb(0 0 0 / 35%); backdrop-filter: blur(10px); font-size: 12px; font-weight: 600; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.dark .sandbox-agent-cursor-label { color: rgb(255 255 255 / 90%); background: rgb(56 56 56 / 42%); }
+/* ego cursor-click：400ms ease-out 挤压（scale 0.85 + 下压 2px），即点击涟漪反馈。 */
+@keyframes sandbox-agent-cursor-click { 0% { transform: scale(1); } 40% { transform: scale(0.85) translateY(2px); } 100% { transform: scale(1); } }
+.sandbox-agent-cursor.is-clicking .sandbox-agent-cursor-float svg { animation: sandbox-agent-cursor-click 400ms ease-out; }
+/* ego loading-intro / loading-loop：闲置时 ±4px 浮动，750ms 进场后 3.2s 循环。 */
+@keyframes sandbox-agent-loading-intro { from { transform: translateY(0); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); } to { transform: translateY(-4px); } }
+@keyframes sandbox-agent-loading-loop { 0%, 3.125% { transform: translateY(-4px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); } 50% { transform: translateY(4px); animation-timing-function: linear; } 53.125% { transform: translateY(4px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); } 100% { transform: translateY(-4px); } }
+@media (prefers-reduced-motion: no-preference) { .sandbox-agent-cursor.is-loading .sandbox-agent-cursor-float { animation: sandbox-agent-loading-intro 750ms forwards, sandbox-agent-loading-loop 3200ms infinite 750ms; } }
+
+/* running 脉冲点：8px 圆点 + 呼吸光晕（4px@16% → 7px@4%，1.6s）。 */
+.sandbox-agent-pulse-dot { display: inline-block; flex: none; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--sandbox-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sandbox-accent) 16%, transparent); animation: sandbox-agent-pulse 1.6s cubic-bezier(0.34, 0.69, 0.1, 1) infinite; }
+@keyframes sandbox-agent-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--sandbox-accent) 4%, transparent); } }
+
+/* 观察被控空间的覆盖层保留状态专属点阵；它不是页面底色，不能被通用纯色背景规范抹除。 */
+.sandbox-agent-observe { position: absolute; inset: 0; z-index: 25; min-width: 0; min-height: 0; pointer-events: none; background: rgb(37 99 235 / 24%); font-size: 13px; line-height: 20px; }
+.sandbox-agent-observe-dots { position: absolute; inset: 0; opacity: 0.5; background-image: radial-gradient(circle, rgb(55 55 55 / 10%) 1px, transparent 1px); background-size: 6px 6px; }
+.dark .sandbox-agent-observe-dots { background-image: radial-gradient(circle, rgb(255 255 255 / 15%) 1px, transparent 1px); }
+.sandbox-agent-observe-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sandbox-agent-observe .sandbox-agent-cursor { z-index: 20; }
+
+/* ego 空间内任务栏（ego 在底部，本项目置顶）：#0009 深色胶囊，白字标题 + 浅蓝状态 + 白色接管 + 红字终止任务。 */
+.sandbox-agent-taskbar { position: absolute; top: 14px; left: 50%; z-index: 25; display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: 999px; color: #fff; background: rgb(0 0 0 / 60%); box-shadow: 0 16px 48px rgb(0 0 0 / 35%); backdrop-filter: blur(10px); pointer-events: auto; transform: translateX(-50%); }
+.sandbox-agent-taskbar-pause { display: inline-flex; flex: none; color: rgb(255 255 255 / 55%); }
+.sandbox-agent-taskbar-control-icon { display: inline-flex; flex: none; overflow: visible; color: #fff; }
+.sandbox-agent-taskbar-text { display: flex; min-width: 0; flex-direction: column; margin-right: 4px; text-align: left; }
+.sandbox-agent-taskbar-title { max-width: 220px; overflow: hidden; font-size: 12px; font-weight: 600; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.sandbox-agent-taskbar-subtitle { color: rgb(193 217 244); font-size: 11px; line-height: 15px; white-space: nowrap; }
+.sandbox-agent-taskbar button { flex: none; padding: 6px 14px; border: 0; border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 18px; }
+.sandbox-agent-taskbar button:disabled { opacity: 0.6; }
+.sandbox-agent-taskbar-takeover { color: #fff; background: rgb(54 50 49); }
+.sandbox-agent-taskbar-takeover:hover { background: rgb(70 65 64); }
+.sandbox-agent-taskbar-terminate { color: #ff5449; background: rgb(54 50 49); }
+.sandbox-agent-taskbar-terminate:hover { background: rgb(70 65 64); }
+
+/* 任务栏控制图标：光标静止，八向射线绕 (8.7, 8.4) 旋转；运行态外套一圈双层反向光带。 */
+.sandbox-agent-control { position: relative; display: inline-flex; width: 20px; height: 20px; flex: none; align-items: center; justify-content: center; overflow: visible; }
+.sandbox-agent-control.is-small { width: 16px; height: 16px; }
+.sandbox-agent-control-icon { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.sandbox-agent-control-rays-layer { z-index: 1; }
+.sandbox-agent-control-pointer { z-index: 2; }
+.sandbox-agent-control-icon-rays { transform-box: fill-box; transform-origin: center; }
+.sandbox-agent-control-orbit { position: absolute; inset: -7px; opacity: 0; pointer-events: none; }
+.sandbox-agent-control.is-small .sandbox-agent-control-orbit { inset: -5px; }
+.sandbox-agent-control.is-running .sandbox-agent-control-orbit { opacity: 1; }
+.sandbox-agent-control-orbit-band {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, currentColor 0deg, color-mix(in srgb, currentColor 42%, transparent) 48deg, transparent 96deg, transparent 264deg, color-mix(in srgb, currentColor 42%, transparent) 312deg, currentColor 360deg);
+  -webkit-mask-image: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 2px));
+  mask-image: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 2px));
+}
+.sandbox-agent-control-orbit-band.is-inner { opacity: 0.92; filter: blur(0.5px); }
+.sandbox-agent-control-orbit-band.is-outer {
+  inset: -3px;
+  opacity: 0.5;
+  filter: blur(2.8px);
+  transform: rotate(180deg);
+  -webkit-mask-image: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 3px));
+  mask-image: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 3px));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sandbox-agent-control.is-running .sandbox-agent-control-icon-rays { animation: sandbox-agent-control-rays 2.4s linear infinite; }
+  .sandbox-agent-control.is-running .sandbox-agent-control-orbit-band.is-inner { animation: sandbox-agent-control-orbit 2.8s linear infinite; }
+  .sandbox-agent-control.is-running .sandbox-agent-control-orbit-band.is-outer { animation: sandbox-agent-control-orbit-reverse 3.6s linear infinite; }
+}
+@keyframes sandbox-agent-control-rays { to { transform: rotate(360deg); } }
+@keyframes sandbox-agent-control-orbit { to { transform: rotate(360deg); } }
+@keyframes sandbox-agent-control-orbit-reverse { from { transform: rotate(180deg); } to { transform: rotate(-180deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sandbox-space-card,
+  .sandbox-agent-cursor { transition: none; }
+  .sandbox-agent-cursor-float svg,
+  .sandbox-agent-pulse-dot,
+  .sandbox-agent-control-icon-rays,
+  .sandbox-agent-control-orbit-band { animation: none; }
+}
+
+@media (max-width: 720px) {
+  .sandbox-space-overview { padding: 12px 16px 16px; }
+  .sandbox-space-grid { grid-template-columns: 1fr; }
+}

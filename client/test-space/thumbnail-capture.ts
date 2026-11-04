@@ -35,13 +35,13 @@ export function instantiateWorkspaceThumbnail(capture: WorkspaceThumbnailCapture
   for (const node of nodes) node.removeAttribute('id')
   element.inert = true
   element.setAttribute('aria-hidden', 'true')
-  element.classList.add('webqq-space-thumbnail-live-workspace')
+  element.classList.add('sandbox-space-thumbnail-live')
   return element
 }
 
 function copyCanvasPixels(sourceRoot: HTMLElement, targetRoot: HTMLElement) {
-  const sourceCanvases = [...sourceRoot.querySelectorAll('canvas')].filter((node) => !node.closest('.webqq-agent-observe'))
-  const targetCanvases = [...targetRoot.querySelectorAll('canvas')].filter((node) => !node.closest('.webqq-agent-observe'))
+  const sourceCanvases = [...sourceRoot.querySelectorAll('canvas')].filter((node) => !node.closest('.sandbox-agent-observe'))
+  const targetCanvases = [...targetRoot.querySelectorAll('canvas')].filter((node) => !node.closest('.sandbox-agent-observe'))
   for (const [index, source] of sourceCanvases.entries()) {
     const target = targetCanvases[index]
     if (!target) continue
@@ -53,7 +53,7 @@ function copyCanvasPixels(sourceRoot: HTMLElement, targetRoot: HTMLElement) {
 }
 
 function stripAgentObserveOverlay(root: HTMLElement) {
-  for (const node of root.querySelectorAll('.webqq-agent-observe')) node.remove()
+  for (const node of root.querySelectorAll('.sandbox-agent-observe')) node.remove()
 }
 
 export function restoreWorkspaceThumbnailScroll(capture: WorkspaceThumbnailCapture, element: HTMLElement) {

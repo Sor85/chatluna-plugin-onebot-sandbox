@@ -15,7 +15,7 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 - `src/webui.ts`：把控制台契约（`console-contract.ts`）注册为 `chatluna_webui` 的 action；场景变更折叠成实时 state `onebot-sandbox.signal`，客户端收到信号后重读工作区。
 - `src/settings.ts`：插件设置的读写（state `onebot-sandbox.settings`、action `onebot-sandbox.settings.save`），经 `chatluna_config.save` 写回 chatluna.yml 中本插件条目。
 - `src/lifecycle.ts`：Cordis 4 没有 `ready`/`dispose` 事件，启动任务推迟到下一轮宏任务，收尾挂在 Fiber effect 上。
-- `client/`：React 前端。`workspace/` 是状态（`store.ts`）与上下文，`chat/` 是 WebQQ 三栏，`environment/` 是实体编辑与环境管理页，`onebot-debug/`、`test-call/` 是两个记录工作台（共用 `records/record-layout.tsx`），`mcp/` 是测试凭证与能力目录，`settings/` 是插件设置页；`webqq/`、`model-request/` 等目录是从源插件原样移植的纯逻辑模块。
+- `client/`：React 前端。`workspace/` 是状态（`store.ts`）与上下文，`chat/` 是 WebQQ 三栏，`environment/` 是实体编辑与环境管理页，`onebot-debug/`、`test-call/` 是两个记录工作台（共用 `records/record-layout.tsx`），`mcp/` 是测试凭证与能力目录，`settings/` 是插件设置页，`test-space/` 是 AI 测试空间（总览、缩略图、被控覆盖层）；`webqq/`、`model-request/` 等目录是从源插件原样移植的纯逻辑模块。
 - `scripts/sync-to-v2.mjs`：把源码同步到 v2 开发仓库的副本。
 - `tests/`：vitest。`helpers/app.ts` 是 Cordis 4 + Koishi 兼容层的测试宿主；`tests/phase2/` 是依赖 ChatLuna v1 内部实现、待按 v2 API 重写的用例，不在默认 include 中。
 
@@ -28,6 +28,7 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 - 强调色：WebQQ 不跟随 v2 主题的 `--primary`，取插件设置 `sandboxAccentColor`（默认与源插件同为 `#2563eb`），由 `webqq-view.tsx` 写成根节点 `.sandbox-webqq` 上的 `--sandbox-accent`，消息与发送框的样式都从它继承。
 - 路由（`client/index.ts`）不设 `fullscreen`：v2 的全屏路由脱离 shell 渲染，且不进入侧边栏导航（`packages/ui/client/client/plugins/nav.ts`）。沙盒作为普通页面嵌在 shell 里，根节点用 `h-full min-h-0` 撑满内容区。
 - 页头（`client/app.tsx`）沿用 v2 页面版式（参照 `packages/provider/webui/client/providers.tsx`）：标题「OneBot 沙盒」与 ui-kit 的 `Tabs` 分段标签压在同一行（`py-3`），把高度留给工作区；标签值与路由 `/onebot-sandbox/:view` 同步。标签已给出页名，各工作区不再放自己的 h1，只留说明与操作，左右边距与页头同为 `px-6`。
+- AI 测试空间：`?space=<id>` 让消息工作区定域到该空间，`app.tsx` 按空间缓存 `WorkspaceStore`，进入前先读好目标 store，工作区首帧就能接住 `test-space/zoom.ts` 的缩放动画。入口与源插件一样是钉在页头右端的图标按钮，不进分段标签，图标随 `signal.mcpRunning`（MCP 服务器活动）转动；空间内部的分段标签只剩「消息」，从其他标签进入一律落在主环境。空间状态不经实时信号推送，`use-space-list.ts` 每 1.5 秒轮询，只在空间、状态或快照修订号变化时替换列表。总览缩略图优先用离开空间时克隆的真实画面（`thumbnail-capture.ts`），没进入过的空间用 `WorkspaceStore.seed` 按快照填充只读 store 渲染 `WebqqView`；`seed` 不回写本地选择。覆盖层类名 `.sandbox-agent-observe` 是克隆时剔除的依据，改名要同步。
 - 插件设置在沙盒「设置」页编辑：`src/index.ts` 的 `Settings` 是完整 schema，交给 v2 插件页的 `Config` 是同一组字段全部标 hidden 的副本，插件页只显示一行指向沙盒设置页的标题；配置仍存在 chatluna.yml 的同一条目，loader 照常补默认值。新增配置项写进 `Settings`，`Config` 自动跟随。保存走 `chatluna_config.save`（带文件戳乐观锁），插件随即按新配置重启；实时信号带 `startedAt`，客户端据此识别重启并重读工作区。
 - 预设与模型请求不在沙盒内实现：预设用 v2 自带的 `/presets` 页（沙盒导航不放入口）；模型请求用 v2 自带的 trace 页。
 - 模型请求出处：`src/chatluna/state.ts` 订阅 `chat/receive` 建立「ChatLuna 会话 ID → 机器人 + 会话」映射，`chatluna/agent-step` 记下最近一步的 `turn`/`step`，机器人发消息时写进 `message.chatLuna.trace`，前端链接到 `/traces/<sessionId>?turn=&step=`。v2 回复经异步渲染队列发出，可能晚于 agent 转 idle，所以出处在发消息时标注而不是回合结束时回填；会话出现新的用户消息即清空，命令回复不沿用上一轮。
@@ -44,5 +45,5 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 
 ## 迁移进度
 
-- 已完成：场景/机器人/投递/持久化/测试空间/MCP 与 HTTP 端点的服务端；WebQQ 聊天界面（会话树、消息、发送框、搜索、多选转发、表情回应、群公告、资料卡、实体编辑）；OneBot 调试、测试调用、环境管理（目录、测试凭证、MCP/HTTP 能力目录）、插件设置页面；等待态、用量与模型请求出处接 v2 agent 事件与 trace 页。
-- 待完成：唤醒规则改读 v2 activation decider；AI 测试空间工作区的 React 界面；`tests/phase2/` 按 v2 重写；测试宿主的定时器清理泄漏（vitest 报 370 个未处理错误，用例本身通过）。
+- 已完成：场景/机器人/投递/持久化/测试空间/MCP 与 HTTP 端点的服务端；WebQQ 聊天界面（会话树、消息、发送框、搜索、多选转发、表情回应、群公告、资料卡、实体编辑）；OneBot 调试、测试调用、环境管理（目录、测试凭证、MCP/HTTP 能力目录）、插件设置页面；AI 测试空间（总览、缩略图、进出缩放、被控覆盖层与任务栏）；等待态、用量与模型请求出处接 v2 agent 事件与 trace 页。
+- 待完成：唤醒规则改读 v2 activation decider；`tests/phase2/` 按 v2 重写；测试宿主的定时器清理泄漏（vitest 报 370 个未处理错误，用例本身通过）。
