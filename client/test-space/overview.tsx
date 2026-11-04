@@ -225,6 +225,9 @@ function SpaceThumbnail({ capture, store, running }: {
     return () => cancelAnimationFrame(frameId)
   }, [capture, scale])
 
+  // 快照预览要等 store 就绪才挂载（刷新后直接落在总览时主环境还没读完），挂上那一刻卡片尺寸不变，
+  // ResizeObserver 不会触发，所以把预览是否在场也作为依赖，挂上后补算一次缩放。
+  const previewMounted = !capture && store !== undefined
   React.useLayoutEffect(() => {
     scale()
     const container = frame.current
@@ -232,7 +235,7 @@ function SpaceThumbnail({ capture, store, running }: {
     const observer = new ResizeObserver(scale)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [scale])
+  }, [scale, previewMounted])
 
   return (
     <div ref={frame} className="sandbox-space-thumbnail" aria-hidden="true">
