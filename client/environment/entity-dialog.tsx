@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -196,7 +197,7 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={mode === 'edit' ? 'sm:max-w-lg' : undefined}>
+      <DialogContent className={cn('sandbox-glass', mode === 'edit' && 'sm:max-w-lg')}>
         {picking && target ? (
           <AvatarPicker kind={target.type} onBack={() => setPicking(false)} onSelect={(avatar) => {
             setDraft((value) => ({ ...value, avatar }))
@@ -253,7 +254,7 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
                           items={['unset', 'unknown', 'male', 'female'].map((value) => ({ value, label: t(`sandbox.sex.${value}`) }))}
                         >
                           <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="sandbox-glass">
                             {['unset', 'unknown', 'male', 'female'].map((value) => <SelectItem key={value} value={value}>{t(`sandbox.sex.${value}`)}</SelectItem>)}
                           </SelectContent>
                         </Select>
@@ -376,7 +377,7 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
                                 items={roleItems}
                               >
                                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="sandbox-glass">
                                   {roleItems.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
                                 </SelectContent>
                               </Select>

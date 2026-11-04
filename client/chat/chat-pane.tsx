@@ -29,6 +29,9 @@ import { ImagePreview } from './image-preview'
 import { MessageList, type MessageListHandle } from './message-list'
 import { MessageSearchPanel } from './search-panel'
 
+// 多选条悬浮在消息区底部（glass.css 的 .sandbox-selection-bar：最小高 48px、距底 16px），再留 16px 间隙。
+const SELECTION_BAR_SPACE = 80
+
 export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridge, className }: {
   detailsVisible: boolean
   /** 信息栏的成员菜单借这条桥把 @ 插进本聊天区的发送框。 */
@@ -151,8 +154,8 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
   }
 
   return (
-    <main className={cn('flex min-h-0 min-w-0 flex-1 flex-col bg-background', className)}>
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+    <main className={cn('sandbox-chat-pane flex min-h-0 min-w-0 flex-1 flex-col bg-background', className)}>
+      <header className="sandbox-chat-header flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
         {onBack && (
           <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label={t('sandbox.chat.back')} onClick={onBack}><ChevronLeftIcon /></Button>
         )}
@@ -192,10 +195,10 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
       </header>
       {conversation ? (
         <>
-          <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="sandbox-chat-stage relative flex min-h-0 flex-1 flex-col">
             <MessageList
               ref={list}
-              bottomSpace={selection.active ? undefined : composerSpace}
+              bottomSpace={selection.active ? SELECTION_BAR_SPACE : composerSpace}
               messages={messages}
               chatLunaStates={chatLunaStates}
               replyMessages={replyMessages}
@@ -249,16 +252,16 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
                 }}
               />
             )}
-          </div>
-          {selection.active && (
-            <div role="toolbar" aria-label={t('sandbox.chat.selectionToolbar')} className="flex items-center justify-between border-t border-border px-4 py-3">
-              <strong className="text-[13px] font-medium">{t('sandbox.chat.selected', { count: selection.messageIds.length })}</strong>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setSelection(exitMessageSelection())}>{t('sandbox.common.cancel')}</Button>
-                <Button disabled={!selection.messageIds.length} onClick={() => setForwardTargetOpen(true)}><Share2Icon />{t('sandbox.forward.send')}</Button>
+            {selection.active && (
+              <div role="toolbar" aria-label={t('sandbox.chat.selectionToolbar')} className="sandbox-selection-bar">
+                <strong className="text-[13px] font-medium">{t('sandbox.chat.selected', { count: selection.messageIds.length })}</strong>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setSelection(exitMessageSelection())}>{t('sandbox.common.cancel')}</Button>
+                  <Button disabled={!selection.messageIds.length} onClick={() => setForwardTargetOpen(true)}><Share2Icon />{t('sandbox.forward.send')}</Button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </>
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">{t('sandbox.chat.pick')}</div>

@@ -38,6 +38,8 @@ function runZoom(element: HTMLElement, fromRect: DOMRect, radius: [string, strin
   element.style.transition = 'none'
   element.style.transformOrigin = '0 0'
   element.style.willChange = 'transform, border-radius'
+  // 工作区平时不裁剪（聊天列要延伸到页头背后），缩放期间按圆角裁剪成卡片形状。
+  element.style.overflow = 'hidden'
   // 先写入初始帧，避免 anime.js 首个 tick 前闪现终态。
   element.style.transform = `translate(${x}px, ${y}px) scale(${scale})`
   element.style.borderRadius = radius[0]
@@ -47,6 +49,7 @@ function runZoom(element: HTMLElement, fromRect: DOMRect, radius: [string, strin
     element.style.transformOrigin = ''
     element.style.willChange = ''
     element.style.borderRadius = ''
+    element.style.overflow = ''
     document.documentElement.classList.remove(ZOOMING_CLASS)
     onCleanup?.()
   }

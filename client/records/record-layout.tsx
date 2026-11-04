@@ -68,7 +68,7 @@ export function RecordPage({ title, description, loading, error, live, onLiveCha
         {children}
       </div>
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
-        <AlertDialogContent>
+        <AlertDialogContent className="sandbox-glass">
           <AlertDialogHeader>
             <AlertDialogTitle>{clear.title}</AlertDialogTitle>
             <AlertDialogDescription>{clear.description}</AlertDialogDescription>
@@ -121,7 +121,7 @@ export function RecordListPane({ label, order, onToggleOrder, filter, loading, e
             )}>
               <FilterIcon />
             </PopoverTrigger>
-            <PopoverContent align="end" className="flex w-72 flex-col gap-3">{filter.content}</PopoverContent>
+            <PopoverContent align="end" className="sandbox-glass flex w-72 flex-col gap-3">{filter.content}</PopoverContent>
           </Popover>
         </div>
       </header>

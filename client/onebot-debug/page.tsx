@@ -207,7 +207,7 @@ export function OneBotDebugPage() {
               <FilterField label={t('sandbox.debug.bot')}>
                 <Select value={filters.botKey} onValueChange={(value) => value && update({ botKey: value })} items={botItems}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="sandbox-glass">
                     <SelectItem value="all">{t('sandbox.debug.allBots')}</SelectItem>
                     {bots.map((bot) => (
                       <SelectItem key={botKey(bot)} value={botKey(bot)}>
@@ -221,7 +221,7 @@ export function OneBotDebugPage() {
               <FilterField label={t('sandbox.debug.directionLabel')}>
                 <Select value={filters.direction} onValueChange={(value) => value && update({ direction: value as Direction })} items={directionItems}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="sandbox-glass">
                     {directionItems.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
                   </SelectContent>
                 </Select>

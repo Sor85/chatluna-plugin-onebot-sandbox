@@ -62,7 +62,9 @@
   box-sizing: border-box;
   border: 1px solid color-mix(in srgb, var(--sandbox-panel) 66%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--sandbox-panel) 94%, transparent);
+  /* 源插件雾化态：62% 底色 + 模糊。模糊放在无后代的伪元素上，胶囊本体不成为 Backdrop Root。 */
+  background: color-mix(in srgb, var(--sandbox-panel) 62%, transparent);
+  backdrop-filter: saturate(180%) blur(22px);
   box-shadow: 0 8px 18px rgb(15 23 42 / 8%);
   content: "";
   pointer-events: none;

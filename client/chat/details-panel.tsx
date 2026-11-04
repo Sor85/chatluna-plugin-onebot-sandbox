@@ -149,7 +149,7 @@ export function DetailsPanel({ onClose, onMention, className }: {
                       {member.role !== 'member' && <span className={`sandbox-message-role-badge is-${member.role}`}>{t(`sandbox.role.${member.role}`)}</span>}
                     </span>
                   </ContextMenuTrigger>
-                  <ContextMenuContent>
+                  <ContextMenuContent className="sandbox-glass">
                     <GroupMemberMenuItems target={member} onMention={onMention} />
                   </ContextMenuContent>
                 </ContextMenu>

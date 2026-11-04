@@ -159,7 +159,7 @@ export function MessageSearchPanel({ adapter, onClose }: { adapter: MessageSearc
           )}>
             <CalendarIcon />
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-auto p-0">
+          <PopoverContent align="end" className="sandbox-glass w-auto p-0">
             <Calendar
               mode="single"
               captionLayout="dropdown"
@@ -189,7 +189,7 @@ export function MessageSearchPanel({ adapter, onClose }: { adapter: MessageSearc
         </Button>
       </div>
       {(query.trim() || date) && (
-        <div className="absolute top-10 right-0 z-30 flex max-h-96 w-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1.5 text-popover-foreground shadow-popup ring-1 ring-border" role="listbox" aria-label={t('sandbox.search.results')}>
+        <div className="absolute top-10 right-0 z-30 flex max-h-96 w-80 flex-col gap-0.5 overflow-y-auto rounded-xl sandbox-search-results p-1.5 text-popover-foreground shadow-popup ring-1 ring-border" role="listbox" aria-label={t('sandbox.search.results')}>
           {status && <p role="status" aria-live="polite" className="px-2 py-3 text-center text-xs text-muted-foreground">{status}</p>}
           {hits.map((hit) => {
             const author = participants[hit.authorId] ?? { name: hit.authorId, isBot: false }

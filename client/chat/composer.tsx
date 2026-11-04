@@ -514,7 +514,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
                         )}>
                           <SandboxAvatar kind={sender.kind} name={sender.name} src={sender.avatar} badge={false} className="sandbox-composer-user-avatar" />
                         </ContextMenuTrigger>
-                        <ContextMenuContent>
+                        <ContextMenuContent className="sandbox-glass">
                           <ContextMenuItem onClick={() => dialogs.openEntity('edit', { type: sender.kind, id: sender.id })}>
                             <PencilIcon />{t('sandbox.menu.editEntity', { kind: t(`sandbox.kind.${sender.kind}`) })}<ExtensionMark />
                           </ContextMenuItem>

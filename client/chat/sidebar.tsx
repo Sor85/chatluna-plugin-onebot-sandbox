@@ -120,7 +120,7 @@ export function ChatSidebar({ onSelectConversation, className }: {
               {pending > 0 && <span className="absolute top-1 right-1 size-2 rounded-full bg-destructive" />}
             </Button>
           )} />
-          <PopoverContent align="end" className="w-80 p-0">
+          <PopoverContent align="end" className="sandbox-glass w-80 p-0">
             <NotificationList requests={notifications} />
           </PopoverContent>
         </Popover>
@@ -180,7 +180,7 @@ export function ChatSidebar({ onSelectConversation, className }: {
                   onClick={() => entry.conversationId && onSelectConversation(entry.conversationId)}
                 />
               )} />
-              <ContextMenuContent>
+              <ContextMenuContent className="sandbox-glass">
                 <ContextMenuItem onClick={() => dialogs.openProfile(entry.id)}><IdCardIcon />{t('sandbox.menu.profile')}</ContextMenuItem>
                 {!entry.isFriend && !entry.pendingOutgoing && !entry.pendingIncoming && (
                   <ContextMenuItem onClick={() => friendAction(t('sandbox.error.friend'), { action: 'request', targetId: entry.id, comment: t('sandbox.friend.requestComment') })}>
@@ -220,7 +220,7 @@ export function ChatSidebar({ onSelectConversation, className }: {
                   onClick={() => entry.conversationId && onSelectConversation(entry.conversationId)}
                 />
               )} />
-              <ContextMenuContent>
+              <ContextMenuContent className="sandbox-glass">
                 {!entry.member && !entry.pending && (
                   <ContextMenuItem onClick={() => groupAction(t('sandbox.error.group'), { action: 'request-join', groupId: entry.id, comment: t('sandbox.group.requestComment') })}>
                     <UserPlusIcon />{t('sandbox.menu.requestJoin')}<ExtensionMark />
@@ -316,7 +316,7 @@ function ConversationNode({ node, activeId, expanded, onToggle, onSelect }: {
             )}
           </div>
         )} />
-        <ContextMenuContent>
+        <ContextMenuContent className="sandbox-glass">
           {node.groupId && <GroupRootItems groupId={node.groupId} role={node.actorRole} />}
           <ContextMenuItem onClick={() => run(t('sandbox.error.createConversation'), () => store.createConversationInstance(node.id))}>
             <PlusIcon />{t('sandbox.menu.newConversation')}
@@ -330,7 +330,7 @@ function ConversationNode({ node, activeId, expanded, onToggle, onSelect }: {
           {node.children.map((child) => (
             <ContextMenu key={child.id}>
               <ContextMenuTrigger render={<InstanceRow row={child} active={child.id === activeId} onClick={() => onSelect(child.id)} />} />
-              <ContextMenuContent>
+              <ContextMenuContent className="sandbox-glass">
                 <ContextMenuItem onClick={() => dialogs.openConversationRename(child.id)}><PencilIcon />{t('sandbox.menu.renameConversation')}</ContextMenuItem>
                 <ContextMenuItem variant="destructive" onClick={() => run(t('sandbox.error.deleteConversation'), () => store.deleteConversationInstance(child.id))}>
                   <Trash2Icon />{t('sandbox.menu.deleteConversation')}

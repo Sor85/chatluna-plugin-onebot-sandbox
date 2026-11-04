@@ -49,7 +49,7 @@ export function EmojiPicker({ open, onOpenChange, onSelect }: {
   )
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sandbox-glass sm:max-w-md">
         <DialogHeader><DialogTitle>{t('sandbox.emoji.title')}</DialogTitle></DialogHeader>
         <Input type="search" value={query} autoFocus placeholder={t('sandbox.emoji.search')} aria-label={t('sandbox.emoji.search')} onChange={(event) => setQuery(event.target.value)} />
         <div className="-mx-1 flex max-h-[55vh] flex-col gap-4 overflow-y-auto px-1">

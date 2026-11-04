@@ -79,7 +79,7 @@ export function ForwardTargetDialog({ open, targets, onOpenChange, onConfirm }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sandbox-glass sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('sandbox.forward.targetTitle')}</DialogTitle>
           <DialogDescription>{t('sandbox.forward.targetHint')}</DialogDescription>
@@ -149,7 +149,7 @@ export function ForwardViewer({ frame, canBack, onBack, onClose, onOpenForward, 
   const nodeText = (item: SandboxForwardNode) => item.media?.length === 1 && item.content === `[${getMediaLabel(item.media[0]!)}] ${item.media[0]!.name}` ? '' : item.content
   return (
     <Dialog open={!!frame} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex max-h-[80vh] flex-col gap-3 sm:max-w-lg">
+      <DialogContent className="sandbox-glass flex max-h-[80vh] flex-col gap-3 sm:max-w-lg">
         <DialogHeader className="flex-row items-center gap-2">
           {canBack && (
             <Button variant="ghost" size="icon-sm" aria-label={t('sandbox.forward.back')} onClick={onBack}><ChevronLeftIcon /></Button>

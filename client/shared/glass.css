@@ -1,0 +1,104 @@
+/*
+ * 毛玻璃，数值逐条取自源插件雾化态（koishi-plugin-chatluna-sandbox 的 webqq-primitives.css、chat.css、
+ * composer.css、message-selection.css）。
+ *
+ * 本文件不进 Tailwind 的任何 @layer：未分层样式压过 ui-kit 组件自带的 `bg-popover`，不必逐个写 `!`。
+ * 只写无前缀 backdrop-filter，构建器会补前缀；手写 -webkit- 前缀对会被合并成只剩前缀版本。
+ *
+ * Backdrop Root：带 filter / backdrop-filter / opacity<1 / mask / clip-path / will-change 的祖先会截断
+ * 后代的模糊采样。工作区与一级区域（侧栏、聊天区、详情栏）不能带这些属性，否则发送框、搜索结果和
+ * 标题栏的模糊都会退化成纯半透明。ui-kit 浮层都经 Portal 挂到 body，不是工作区的后代，模糊直接写在浮层本身。
+ */
+
+/* 右键菜单、下拉选择、Popover、对话框。72%：再高会把已模糊的背景盖成近乎实心。 */
+.sandbox-glass {
+  background: color-mix(in oklab, var(--popover) 72%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* 对话框的吸顶页头自带不透明 bg-popover，滚动时让它只模糊对话框内滚过的内容。 */
+.sandbox-glass [data-slot='dialog-header'] {
+  background: transparent;
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+/*
+ * 消息页的页头与聊天标题栏两层毛玻璃，对应源插件的全局顶栏（rail）与聊天表头（sidebar.css、chat.css）。
+ * 模糊放在无后代的伪元素上，表头本体不成为 Backdrop Root，里面的搜索结果浮层仍能采样消息区。
+ * 背后必须真有内容（源插件 ADR 0071）：聊天列（.sandbox-chat-pane）上移页头高度，消息区（.sandbox-chat-stage）
+ * 再上移标题栏高度（h-14），滚动视口（.sandbox-message-scroller）补回两者之和的顶部内边距，首条消息位置不变，
+ * 消息依次从标题栏和页头后面滚过。页头高度由 app.tsx 测量，写在 .sandbox-stage 上的
+ * --sandbox-page-header-height；总览里的预览缩略图不在 .sandbox-stage 内，取默认 0。
+ */
+.sandbox-page-header,
+.sandbox-chat-header {
+  position: relative;
+  isolation: isolate;
+}
+
+.sandbox-page-header {
+  z-index: 20;
+  border-bottom: 1px solid var(--border);
+}
+
+.sandbox-chat-header {
+  z-index: 10;
+}
+
+.sandbox-page-header::before,
+.sandbox-chat-header::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  backdrop-filter: saturate(180%) blur(32px);
+  content: "";
+  pointer-events: none;
+}
+
+/* 页头已画分隔线；工作区顶边那条会被延伸上来的聊天列挡住一段，去掉。 */
+.sandbox-stage > .sandbox-webqq {
+  border-top-width: 0;
+}
+
+.sandbox-chat-pane {
+  margin-top: calc(-1 * var(--sandbox-page-header-height, 0px));
+  padding-top: var(--sandbox-page-header-height, 0px);
+}
+
+.sandbox-chat-stage {
+  margin-top: calc(-56px - var(--sandbox-page-header-height, 0px));
+}
+
+.sandbox-message-scroller {
+  padding-top: calc(56px + var(--sandbox-page-header-height, 0px));
+  scroll-padding-top: calc(56px + var(--sandbox-page-header-height, 0px));
+}
+
+/* 消息搜索结果：叶子浮层，模糊直接写在元素上。 */
+.sandbox-search-results {
+  background: color-mix(in oklab, var(--popover) 96%, transparent);
+  backdrop-filter: saturate(160%) blur(16px);
+}
+
+/* 多选操作条：悬浮在消息区底部的胶囊，消息列表按 SELECTION_BAR_SPACE（chat-pane.tsx）留出底部空间。 */
+.sandbox-selection-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  min-height: 48px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 8px 7px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card) 78%, transparent);
+  box-shadow: 0 10px 28px rgb(15 23 42 / 12%);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+}

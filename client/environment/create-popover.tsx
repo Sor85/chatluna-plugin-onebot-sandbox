@@ -111,7 +111,7 @@ export function CreateEntityPopover({ type, operator, bots = [], side = 'right',
   return (
     <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger render={trigger} />
-      <PopoverContent side={side} align="start" className="w-80 gap-4 p-4" aria-label={title}>
+      <PopoverContent side={side} align="start" className="sandbox-glass w-80 gap-4 p-4" aria-label={title}>
         {picking ? (
           <AvatarPicker kind={kind} onBack={() => setPicking(false)} onSelect={(avatar) => {
             setDraft((value) => ({ ...value, avatar }))
@@ -140,7 +140,7 @@ export function CreateEntityPopover({ type, operator, bots = [], side = 'right',
                   items={[{ value: 'user', label: t('sandbox.kind.user') }, { value: 'bot', label: t('sandbox.kind.bot') }]}
                 >
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="sandbox-glass">
                     <SelectItem value="user">{t('sandbox.kind.user')}</SelectItem>
                     <SelectItem value="bot">{t('sandbox.kind.bot')}</SelectItem>
                   </SelectContent>
@@ -212,7 +212,7 @@ export function ImplementationSelect({ value, onChange }: {
         items={[{ value: 'napcat', label: 'NapCat' }, { value: 'llbot', label: 'LLBot' }]}
       >
         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-        <SelectContent>
+        <SelectContent className="sandbox-glass">
           <SelectItem value="napcat">NapCat</SelectItem>
           <SelectItem value="llbot">LLBot</SelectItem>
         </SelectContent>

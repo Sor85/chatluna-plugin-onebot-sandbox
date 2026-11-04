@@ -259,7 +259,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
         render={(
           <div
             ref={box}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]"
+            className="sandbox-message-scroller min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]"
             aria-label={t('sandbox.chat.messages')}
             onScroll={handleScroll}
           />
@@ -342,7 +342,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                   >
                     <SandboxAvatar kind={isBot ? 'bot' : 'user'} name={authorName(message.authorId)} src={participants[message.authorId]?.avatar} className="size-8" />
                   </ContextMenuTrigger>
-                  <ContextMenuContent>
+                  <ContextMenuContent className="sandbox-glass">
                     <ContextMenuItem onClick={() => dialogs.openProfile(message.authorId)}><IdCardIcon />{t('sandbox.menu.profile')}</ContextMenuItem>
                     {!outgoing && (
                       <>
@@ -357,7 +357,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                         {hasGroupMemberManagementActions(message.authorId, presentation) && (
                           <ContextMenuSub>
                             <ContextMenuSubTrigger><UsersIcon />{t('sandbox.member.manage')}</ContextMenuSubTrigger>
-                            <ContextMenuSubContent>
+                            <ContextMenuSubContent className="sandbox-glass">
                               <GroupMemberMenuItems target={getCurrentGroupMember(message.authorId, presentation)!} managementOnly />
                             </ContextMenuSubContent>
                           </ContextMenuSub>
@@ -496,7 +496,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                               <ContextMenuTrigger render={<div className="sandbox-message-bubble-trigger" />}>
                                 {bubble}
                               </ContextMenuTrigger>
-                              <ContextMenuContent>
+                              <ContextMenuContent className="sandbox-glass">
                                 {isBot && trace && (
                                   <ContextMenuItem onClick={() => navigate(traceHref(trace))}><ExternalLinkIcon />{t('sandbox.chat.openRequest')}</ContextMenuItem>
                                 )}
@@ -573,7 +573,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
           </ol>
         )}
       </ContextMenuTrigger>
-      <ContextMenuContent>
+      <ContextMenuContent className="sandbox-glass">
         <ContextMenuItem variant="destructive" onClick={props.onClearConversation}><Trash2Icon />{t('sandbox.chat.clear')}</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

@@ -17,6 +17,7 @@ import { captureZoomRect, zoomWorkspaceFromRect } from './test-space/zoom'
 import { SandboxProvider } from './workspace/context'
 import { OverlayHost, useOverlayState } from './workspace/overlay-host'
 import { errorText, invoke, WorkspaceStore } from './workspace/store'
+import './shared/glass.css'
 
 type View = 'messages' | 'debug' | 'test-calls' | 'environment' | 'spaces' | 'settings'
 
@@ -59,6 +60,18 @@ export function SandboxApp() {
   const [captures, setCaptures] = React.useState<Record<string, WorkspaceThumbnailCapture>>({})
   const [spaceBusy, setSpaceBusy] = React.useState(false)
   const stage = React.useRef<HTMLDivElement>(null)
+  // 页头高度：消息页让聊天列延伸到页头背后（glass.css 的 .sandbox-chat-pane），需要准确的像素值。
+  const header = React.useRef<HTMLDivElement>(null)
+  const [headerHeight, setHeaderHeight] = React.useState(0)
+  React.useLayoutEffect(() => {
+    const element = header.current
+    if (!element) return
+    const measure = () => setHeaderHeight(element.getBoundingClientRect().height)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
   const enterZoom = React.useRef<DOMRect | undefined>(undefined)
   const exitZoom = React.useRef<{ key: string, rect: DOMRect } | undefined>(undefined)
   const space = spaceId ? spaces.find(({ id }) => id === spaceId) : undefined
@@ -182,8 +195,9 @@ export function SandboxApp() {
         <div className="flex h-full min-h-0 flex-col bg-background text-sm leading-6 text-foreground">
           {/* 页头用 v2 页面的标题与分段标签，压成一行，把高度留给工作区。 */}
           <Tabs
+            ref={header}
             value={view}
-            className="shrink-0 gap-4 px-6 py-3 data-horizontal:flex-row data-horizontal:items-center"
+            className={cn('shrink-0 gap-4 px-6 py-3 data-horizontal:flex-row data-horizontal:items-center', view === 'messages' && 'sandbox-page-header')}
             onValueChange={(value) => selectView(value as View)}
           >
             <h1 className="shrink-0 text-lg font-semibold">{t('onebot-sandbox.title')}</h1>
@@ -223,8 +237,11 @@ export function SandboxApp() {
               {view === 'messages' && (
                 <div
                   ref={stage}
-                  className="relative flex min-h-0 flex-1 overflow-hidden"
-                  style={{ '--sandbox-accent': viewState.workspace.appearance.sandboxAccentColor } as React.CSSProperties}
+                  className="sandbox-stage relative flex min-h-0 flex-1"
+                  style={{
+                    '--sandbox-accent': viewState.workspace.appearance.sandboxAccentColor,
+                    '--sandbox-page-header-height': `${headerHeight}px`,
+                  } as React.CSSProperties}
                 >
                   <WebqqView />
                   {space?.status === 'running' && (

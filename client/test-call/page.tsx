@@ -173,7 +173,7 @@ export function TestCallPage() {
               <FilterField label={t('sandbox.testCall.transportLabel')}>
                 <Select value={filters.transport} onValueChange={(value) => value && update({ transport: value as Filters['transport'] }, true)} items={transportItems}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="sandbox-glass">
                     {transportItems.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
                   </SelectContent>
                 </Select>

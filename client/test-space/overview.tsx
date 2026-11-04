@@ -82,7 +82,7 @@ export function SpaceOverview({ spaces, mainStore, captures, exitZoom, onEnter, 
         <p>{t('sandbox.spaces.summary', { count: spaces.length })}</p>
         <Select value={filter} onValueChange={(value) => value && setFilter(value as Filter)} items={filterItems}>
           <SelectTrigger className="w-36" aria-label={t('sandbox.spaces.filterLabel')}><SelectValue /></SelectTrigger>
-          <SelectContent>
+          <SelectContent className="sandbox-glass">
             {filterItems.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
           </SelectContent>
         </Select>

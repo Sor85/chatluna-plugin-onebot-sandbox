@@ -156,7 +156,7 @@ export function TestCredentialManager() {
       {!credentials.length && !listError && <p className="py-6 text-center text-xs text-muted-foreground">{t('sandbox.credential.empty')}</p>}
 
       <Dialog open={!!form} onOpenChange={(open) => !open && setForm(undefined)}>
-        <DialogContent>
+        <DialogContent className="sandbox-glass">
           <DialogHeader>
             <DialogTitle>{t(editing ? 'sandbox.credential.viewTitle' : 'sandbox.credential.createTitle')}</DialogTitle>
             <DialogDescription>{t(editing ? 'sandbox.credential.viewDescription' : 'sandbox.credential.createDescription')}</DialogDescription>
@@ -210,7 +210,7 @@ export function TestCredentialManager() {
       </Dialog>
 
       <Dialog open={!!createdToken} onOpenChange={(open) => !open && setCreatedToken('')}>
-        <DialogContent>
+        <DialogContent className="sandbox-glass">
           <DialogHeader>
             <DialogTitle>{t('sandbox.credential.tokenTitle')}</DialogTitle>
             <DialogDescription>{t('sandbox.credential.tokenDescription')}</DialogDescription>
@@ -224,7 +224,7 @@ export function TestCredentialManager() {
       </Dialog>
 
       <AlertDialog open={!!revoking} onOpenChange={(open) => !open && setRevoking(undefined)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="sandbox-glass">
           <AlertDialogHeader>
             <AlertDialogTitle>{t('sandbox.credential.revokeTitle', { name: revoking?.name ?? '' })}</AlertDialogTitle>
             <AlertDialogDescription>{t('sandbox.credential.revokeDescription')}</AlertDialogDescription>
