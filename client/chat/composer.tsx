@@ -269,13 +269,29 @@ export const Composer = React.forwardRef<ComposerHandle, {
     } catch (failure) {
       setError(errorText(failure, t('sandbox.composer.failed')))
     } finally {
+      refocus.current = request
       setSending(false)
-      // 只有请求期间没换会话、没换身份时才把焦点还给输入框，避免抢走用户已经转移的焦点。
-      requestAnimationFrame(() => {
-        if (current.current.conversationId === request.conversationId && current.current.operatorId === request.operatorId) editor.current?.focus()
-      })
     }
   }
+
+  // 发送期间编辑器是 contentEditable=false，focus() 无效，要等 sending 复位的提交完成后再还焦点。
+  // 只有请求期间没换会话、没换身份时才还，避免抢走用户已经转移的焦点。
+  const refocus = React.useRef<{ conversationId?: string, operatorId?: string }>(undefined)
+  React.useLayoutEffect(() => {
+    const request = refocus.current
+    if (sending || !request) return
+    refocus.current = undefined
+    if (current.current.conversationId !== request.conversationId || current.current.operatorId !== request.operatorId) return
+    const root = editor.current
+    if (!root) return
+    root.focus()
+    const range = document.createRange()
+    range.selectNodeContents(root)
+    range.collapse(false)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+  }, [sending])
 
   const senders = orderUsersByActive(
     snapshot.participants.map((participant) => ({ ...participant, avatar: resolveAvatar(participant.avatar) })),
