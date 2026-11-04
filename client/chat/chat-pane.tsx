@@ -33,7 +33,8 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
   detailsVisible: boolean
   /** 信息栏的成员菜单借这条桥把 @ 插进本聊天区的发送框。 */
   mentionBridge?: React.RefObject<(participantId: string) => void>
-  onToggleDetails(): void
+  /** 不传时不显示信息栏按钮（私聊没有信息栏）。 */
+  onToggleDetails?(): void
   onBack?(): void
   className?: string
 }) {
@@ -185,9 +186,11 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
               <SearchIcon />
             </Button>
           )}
-          <Button variant="ghost" size="icon" aria-pressed={detailsVisible} aria-label={t(detailsVisible ? 'sandbox.details.close' : 'sandbox.details.open')} onClick={onToggleDetails}>
-            <EllipsisIcon />
-          </Button>
+          {onToggleDetails && (
+            <Button variant="ghost" size="icon" aria-pressed={detailsVisible} aria-label={t(detailsVisible ? 'sandbox.details.close' : 'sandbox.details.open')} onClick={onToggleDetails}>
+              <EllipsisIcon />
+            </Button>
+          )}
         </div>
       </header>
       {conversation ? (

@@ -16,19 +16,21 @@ const CHAT_MIN_WIDTH = 556
 const NARROW_WIDTH = 640
 
 /**
- * WebQQ 三栏：会话列表、聊天区与会话信息。按沙盒自身宽度而不是视口宽度分档（左侧还有 v2 外壳侧栏）：
+ * WebQQ 三栏：会话列表、聊天区与群聊信息栏（私聊没有信息栏）。按沙盒自身宽度而不是视口宽度分档（左侧还有 v2 外壳侧栏）：
  * 三栏都放下且聊天区不窄于 {@link CHAT_MIN_WIDTH} 时默认展开信息栏；窄于 {@link NARROW_WIDTH} 时三个区域
  * 互斥显示，聊天区提供返回会话列表的入口。
  */
 export function WebqqView() {
   const { store } = useSandbox()
-  const { workspace } = useWorkspace()
+  const { workspace, group } = useWorkspace()
   const [root, width] = useElementWidth<HTMLDivElement>()
   const wide = width >= COLUMN_WIDTH * 2 + CHAT_MIN_WIDTH
   const narrow = width > 0 && width < NARROW_WIDTH
   const [detailsPreference, setDetailsPreference] = React.useState<'auto' | 'open' | 'closed'>('auto')
-  const [region, setRegion] = React.useState<Region>('chat')
-  const detailsVisible = detailsPreference === 'auto' ? wide : detailsPreference === 'open'
+  const [selectedRegion, setRegion] = React.useState<Region>('chat')
+  // 信息栏只有群聊有（群公告与成员）；切到私聊时窄屏落回聊天区，宽屏不渲染第三栏。
+  const region = selectedRegion === 'details' && !group ? 'chat' : selectedRegion
+  const detailsVisible = Boolean(group) && (detailsPreference === 'auto' ? wide : detailsPreference === 'open')
 
   // 跨过宽窄断点时回到该宽度下的默认展开态。
   React.useEffect(() => setDetailsPreference('auto'), [wide])
@@ -52,7 +54,7 @@ export function WebqqView() {
       <ChatPane
         className={cn(narrow && region !== 'chat' && 'hidden', !narrow && !wide && detailsVisible && 'hidden')}
         detailsVisible={narrow ? region === 'details' : detailsVisible}
-        onToggleDetails={toggleDetails}
+        onToggleDetails={group ? toggleDetails : undefined}
         onBack={narrow ? () => setRegion('contacts') : undefined}
         mentionBridge={mention}
       />
