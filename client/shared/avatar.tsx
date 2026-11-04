@@ -20,12 +20,7 @@ export function SandboxAvatar({ kind, name = '', src, className, badge = true }:
   React.useEffect(() => setFailed(false), [usable])
   return (
     <span className={cn('relative inline-flex size-9 shrink-0 select-none', className)}>
-      <span
-        className={cn(
-          'flex size-full items-center justify-center overflow-hidden rounded-full bg-muted text-[13px] font-medium text-muted-foreground',
-          kind === 'group' && 'rounded-[30%]',
-        )}
-      >
+      <span className="flex size-full items-center justify-center overflow-hidden rounded-full bg-muted text-[13px] font-medium text-muted-foreground">
         {usable && !failed
           ? <img src={usable} alt={name} className="size-full object-cover" onError={() => setFailed(true)} />
           : name.trim().slice(0, 1).toUpperCase() || '?'}

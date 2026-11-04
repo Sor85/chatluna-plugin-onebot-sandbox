@@ -148,7 +148,7 @@ export function ChatSidebar({ onSelectConversation, className }: {
               bots={bots}
               trigger={(
                 <button type="button" className="flex items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent">
-                  <span className="flex size-9 items-center justify-center rounded-[30%] border border-dashed border-border text-muted-foreground"><PlusIcon className="size-4" /></span>
+                  <span className="flex size-9 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground"><PlusIcon className="size-4" /></span>
                   <span className="flex min-w-0 flex-col">
                     <strong className="text-[13px] font-medium">{t('sandbox.sidebar.addGroup')}</strong>
                     <small className="text-xs text-muted-foreground">{t('sandbox.sidebar.addGroupHint')}</small>
