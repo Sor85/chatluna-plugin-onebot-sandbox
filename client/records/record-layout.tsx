@@ -60,7 +60,7 @@ export function RecordPage({ title, description, loading, error, live, onLiveCha
             {t('sandbox.records.live')}
           </label>
           <Button variant="outline" size="sm" disabled={loading} onClick={onRefresh}><RefreshCwIcon />{t('sandbox.records.refresh')}</Button>
-          <Button variant="destructive" size="sm" disabled={loading || clear.disabled} onClick={() => setConfirming(true)}><Trash2Icon />{clear.label}</Button>
+          <Button variant="outline" size="sm" className="text-destructive" disabled={loading || clear.disabled} onClick={() => setConfirming(true)}><Trash2Icon />{clear.label}</Button>
         </div>
       </header>
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
