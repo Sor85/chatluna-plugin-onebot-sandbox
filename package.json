@@ -1,0 +1,94 @@
+{
+  "name": "chatluna-plugin-onebot-sandbox",
+  "version": "0.1.0",
+  "description": "Simulated QQ (OneBot v11) environment for verifying ChatLuna behaviour in the WebUI",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "chatluna-plugin",
+    "onebot",
+    "sandbox",
+    "test"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json",
+    "./client": {
+      "types": "./client/index.ts",
+      "default": "./client/index.ts"
+    }
+  },
+  "files": [
+    "lib",
+    "dist",
+    "client",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "sync": "node scripts/sync-to-v2.mjs --once",
+    "sync:watch": "node scripts/sync-to-v2.mjs",
+    "build": "yakumo build",
+    "clean": "yakumo clean",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@satorijs/core": "~4.6.1",
+    "cosmokit": "^1.8.1",
+    "schemastery": "3.18.0",
+    "yaml": "^2.9.1"
+  },
+  "peerDependencies": {
+    "@chatluna/core": ">=2.0.0-alpha.0",
+    "@chatluna/server": ">=2.0.0-alpha.0",
+    "@chatluna/ui-server": ">=2.0.0-alpha.0",
+    "cordis": "^4.0.0-rc.12"
+  },
+  "devDependencies": {
+    "@chatluna/chat": "workspace:*",
+    "@chatluna/core": "workspace:*",
+    "@chatluna/server": "workspace:*",
+    "@chatluna/ui-client": "workspace:*",
+    "@chatluna/ui-kit": "workspace:*",
+    "@chatluna/ui-server": "workspace:*",
+    "@chatluna/ui-storage": "workspace:*",
+    "@cordisjs/plugin-database": "4.1.1",
+    "@cordisjs/plugin-server": "^1.7.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "cordis": "4.0.0-rc.12",
+    "fast-xml-parser": "^5.3.6",
+    "lucide-react": "^1.31.0",
+    "qface": "^1.4.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.3.0",
+    "vitest": "^3.2.4"
+  },
+  "cordis": {
+    "description": {
+      "en": "Simulated QQ (OneBot v11) environment for verifying ChatLuna behaviour",
+      "zh": "在模拟 QQ（OneBot v11）环境中验证 ChatLuna 行为"
+    },
+    "service": {
+      "implements": [
+        "onebot_sandbox"
+      ],
+      "required": [
+        "satori",
+        "chatluna_webui"
+      ],
+      "optional": [
+        "database"
+      ]
+    }
+  }
+}
