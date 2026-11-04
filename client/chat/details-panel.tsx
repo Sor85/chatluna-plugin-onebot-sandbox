@@ -127,14 +127,15 @@ export function DetailsPanel({ onClose, onMention, className }: {
                 <PlusIcon className={cn('transition-transform duration-200 ease-spring', editorOpen && 'rotate-45')} />
               </Button>
             </div>
-            {error && <span role="alert" className="text-xs text-destructive">{error}</span>}
-            {editorOpen && (
-              <form className="flex flex-col gap-2" onSubmit={publish}>
-                <Textarea rows={3} value={draft} placeholder={t('sandbox.details.announcementPlaceholder')} onChange={(event) => setDraft(event.target.value)} />
-                <Button type="submit" size="sm" className="self-end" disabled={sending || !draft.trim()}>{sending ? t('sandbox.details.publishing') : t('sandbox.details.publish')}</Button>
-              </form>
-            )}
+            {/* 提示、发布表单与公告列表同在一个滚动区：面板拖到最矮时发布按钮滚得到，不会被裁掉。 */}
             <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+              {error && <span role="alert" className="text-xs text-destructive">{error}</span>}
+              {editorOpen && (
+                <form className="flex shrink-0 flex-col gap-2" onSubmit={publish}>
+                  <Textarea rows={3} value={draft} placeholder={t('sandbox.details.announcementPlaceholder')} onChange={(event) => setDraft(event.target.value)} />
+                  <Button type="submit" size="sm" className="self-end" disabled={sending || !draft.trim()}>{sending ? t('sandbox.details.publishing') : t('sandbox.details.publish')}</Button>
+                </form>
+              )}
               {!group.announcements.length && <p className="py-2 text-xs text-muted-foreground">{t('sandbox.details.noAnnouncement')}</p>}
               {group.announcements.map((announcement) => (
                 <article key={announcement.id} className="group/notice relative rounded-lg bg-muted/60 p-2.5 pr-8">
@@ -159,7 +160,7 @@ export function DetailsPanel({ onClose, onMention, className }: {
           <ResizableHandle aria-label={t('sandbox.details.resize')} />
           <ResizablePanel id={membersPanelId} minSize={160} className="flex min-h-0 flex-col gap-2 p-4" style={{ overflow: 'hidden' }}>
             <h3 className="text-[13px] font-medium">{t('sandbox.details.members', { count: group.members.length })}</h3>
-            <Input type="search" className="h-8" value={memberQuery} placeholder={t('sandbox.details.memberSearch')} onChange={(event) => setMemberQuery(event.target.value)} />
+            <Input type="search" className="sandbox-search-input h-8" value={memberQuery} placeholder={t('sandbox.details.memberSearch')} onChange={(event) => setMemberQuery(event.target.value)} />
             <div className="-mx-2 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
               {!members.length && <p className="px-2 py-4 text-center text-xs text-muted-foreground">{t('sandbox.details.noMember')}</p>}
               {members.map((member) => (

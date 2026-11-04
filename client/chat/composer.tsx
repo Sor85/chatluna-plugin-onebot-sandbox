@@ -605,7 +605,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
             onKeyUp={() => host.syncCaretFromHost()}
           />
           {mentionOpen && (
-            <div className="absolute right-0 bottom-[calc(100%+8px)] left-0 z-30 flex max-h-[220px] flex-col gap-0.5 overflow-y-auto rounded-[14px] bg-popover p-1.5 text-popover-foreground shadow-popup ring-1 ring-border" role="listbox" aria-label={t('sandbox.composer.mention')}>
+            <div className="sandbox-glass absolute right-0 bottom-[calc(100%+8px)] left-0 z-30 flex max-h-[220px] flex-col gap-0.5 overflow-y-auto rounded-[14px] bg-popover p-1.5 text-popover-foreground shadow-popup ring-1 ring-border" role="listbox" aria-label={t('sandbox.composer.mention')}>
               {mentionList.map((candidate, index) => (
                 <button
                   key={candidate.id}

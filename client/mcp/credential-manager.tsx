@@ -24,6 +24,8 @@ import {
 import { toast } from '@chatluna/ui-client/client'
 import type { SandboxMcpScope, SandboxTestPublicCredential } from '../../src/mcp/types'
 import { useT } from '../i18n'
+import { useDiscardConfirm } from '../shared/discard-confirm'
+import { useRetained } from '../shared/use-retained'
 import { errorText, invoke } from '../workspace/store'
 import { MCP_SCOPES } from './capability-catalog'
 
@@ -117,9 +119,17 @@ export function TestCredentialManager() {
     }
   }
 
+  // 退场动画期间沿用最后一份内容，标题、Token 区与输入框不在淡出时变成空态。
+  const shownForm = useRetained(form)
+  const shownRevoking = useRetained(revoking)
+  const shownToken = useRetained(createdToken || undefined) ?? ''
+  const baseline = form?.editing ? { name: form.editing.name, scopes: form.editing.scopes } : { name: '', scopes: ['read'] }
+  const dirty = !!form && (form.name !== baseline.name || [...form.scopes].sort().join() !== [...baseline.scopes].sort().join())
+  const { requestClose, confirm } = useDiscardConfirm(dirty, () => setForm(undefined))
+
   const scopeText = (scopes: readonly SandboxMcpScope[]) => scopes.map((scope) => t(`sandbox.scope.${scope}`)).join(' · ')
   const time = (value: string) => new Intl.DateTimeFormat(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
-  const editing = form?.editing
+  const editing = shownForm?.editing
 
   return (
     <div className="flex flex-col gap-3 p-4">
@@ -155,57 +165,60 @@ export function TestCredentialManager() {
       ))}
       {!credentials.length && !listError && <p className="py-6 text-center text-xs text-muted-foreground">{t('sandbox.credential.empty')}</p>}
 
-      <Dialog open={!!form} onOpenChange={(open) => !open && setForm(undefined)}>
-        <DialogContent className="sandbox-glass">
+      <Dialog open={!!form} onOpenChange={(open) => !open && requestClose()}>
+        <DialogContent className="sandbox-glass flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>{t(editing ? 'sandbox.credential.viewTitle' : 'sandbox.credential.createTitle')}</DialogTitle>
             <DialogDescription>{t(editing ? 'sandbox.credential.viewDescription' : 'sandbox.credential.createDescription')}</DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="sandbox-credential-name">{t('sandbox.credential.name')}</Label>
-            <Input id="sandbox-credential-name" autoComplete="off" value={form?.name ?? ''} onChange={(event) => setForm((value) => value && { ...value, name: event.target.value })} />
-          </div>
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-sm font-medium">{t('sandbox.credential.scopes')}</legend>
-            <div className="grid grid-cols-2 gap-2">
-              {MCP_SCOPES.map((scope) => (
-                <label key={scope} className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={form?.scopes.includes(scope) ?? false}
-                    onCheckedChange={(checked) => setForm((value) => value && {
-                      ...value,
-                      scopes: checked === true ? [...new Set([...value.scopes, scope])] : value.scopes.filter((item) => item !== scope),
-                    })}
-                  />
-                  {t(`sandbox.scope.${scope}`)}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          {editing && (
+          <div className="-mx-5 flex min-h-0 flex-col gap-4 overflow-y-auto px-5">
             <div className="flex flex-col gap-2">
-              <Label>Token</Label>
-              {editing.token ? (
-                <div className="flex items-center gap-2">
-                  <code className="min-w-0 flex-1 rounded-md bg-muted px-2.5 py-2 font-mono text-xs break-all">{editing.token}</code>
-                  <Button size="icon-sm" variant="ghost" aria-label={t('sandbox.credential.copy')} onClick={() => void copy(editing.token!)}><CopyIcon /></Button>
-                </div>
-              ) : (
-                <p className="text-xs leading-5 text-muted-foreground">{t('sandbox.credential.noPlainToken')}</p>
-              )}
-              <Button size="sm" variant="outline" className="self-start" disabled={saving} onClick={() => void rotate()}>
-                {t(editing.token ? 'sandbox.credential.rotate' : 'sandbox.credential.generate')}
-              </Button>
-              <p className="text-[11px] text-muted-foreground">
-                {t('sandbox.credential.createdAt', { time: time(editing.createdAt) })} · {t(editing.enabled ? 'sandbox.env.enabled' : 'sandbox.env.disabled')}
-              </p>
+              <Label htmlFor="sandbox-credential-name">{t('sandbox.credential.name')}</Label>
+              <Input id="sandbox-credential-name" autoComplete="off" value={shownForm?.name ?? ''} onChange={(event) => setForm((value) => value && { ...value, name: event.target.value })} />
             </div>
-          )}
-          {formError && <p role="alert" className="text-xs text-destructive">{formError}</p>}
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-2 text-sm font-medium">{t('sandbox.credential.scopes')}</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {MCP_SCOPES.map((scope) => (
+                  <label key={scope} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={shownForm?.scopes.includes(scope) ?? false}
+                      onCheckedChange={(checked) => setForm((value) => value && {
+                        ...value,
+                        scopes: checked === true ? [...new Set([...value.scopes, scope])] : value.scopes.filter((item) => item !== scope),
+                      })}
+                    />
+                    {t(`sandbox.scope.${scope}`)}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {editing && (
+              <div className="flex flex-col gap-2">
+                <Label>Token</Label>
+                {editing.token ? (
+                  <div className="flex items-center gap-2">
+                    <code className="min-w-0 flex-1 rounded-md bg-muted px-2.5 py-2 font-mono text-xs break-all">{editing.token}</code>
+                    <Button size="icon-sm" variant="ghost" aria-label={t('sandbox.credential.copy')} onClick={() => void copy(editing.token!)}><CopyIcon /></Button>
+                  </div>
+                ) : (
+                  <p className="text-xs leading-5 text-muted-foreground">{t('sandbox.credential.noPlainToken')}</p>
+                )}
+                <Button size="sm" variant="outline" className="self-start" disabled={saving} onClick={() => void rotate()}>
+                  {t(editing.token ? 'sandbox.credential.rotate' : 'sandbox.credential.generate')}
+                </Button>
+                <p className="text-[11px] text-muted-foreground">
+                  {t('sandbox.credential.createdAt', { time: time(editing.createdAt) })} · {t(editing.enabled ? 'sandbox.env.enabled' : 'sandbox.env.disabled')}
+                </p>
+              </div>
+            )}
+            {formError && <p role="alert" className="text-xs text-destructive">{formError}</p>}
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setForm(undefined)}>{t('sandbox.common.cancel')}</Button>
+            <Button variant="outline" onClick={requestClose}>{t('sandbox.common.cancel')}</Button>
             <Button disabled={saving} onClick={() => void submit()}>{t(editing ? 'sandbox.common.save' : 'sandbox.credential.createAction')}</Button>
           </DialogFooter>
+          {confirm}
         </DialogContent>
       </Dialog>
 
@@ -216,8 +229,8 @@ export function TestCredentialManager() {
             <DialogDescription>{t('sandbox.credential.tokenDescription')}</DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2">
-            <Input readOnly value={createdToken} className="font-mono text-xs!" />
-            <Button size="icon-sm" variant="ghost" aria-label={t('sandbox.credential.copy')} onClick={() => void copy(createdToken)}><CopyIcon /></Button>
+            <Input readOnly value={shownToken} className="font-mono text-xs!" />
+            <Button size="icon-sm" variant="ghost" aria-label={t('sandbox.credential.copy')} onClick={() => void copy(shownToken)}><CopyIcon /></Button>
           </div>
           <DialogFooter><Button onClick={() => setCreatedToken('')}>{t('sandbox.credential.saved')}</Button></DialogFooter>
         </DialogContent>
@@ -226,7 +239,7 @@ export function TestCredentialManager() {
       <AlertDialog open={!!revoking} onOpenChange={(open) => !open && setRevoking(undefined)}>
         <AlertDialogContent className="sandbox-glass">
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('sandbox.credential.revokeTitle', { name: revoking?.name ?? '' })}</AlertDialogTitle>
+            <AlertDialogTitle>{t('sandbox.credential.revokeTitle', { name: shownRevoking?.name ?? '' })}</AlertDialogTitle>
             <AlertDialogDescription>{t('sandbox.credential.revokeDescription')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

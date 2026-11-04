@@ -29,6 +29,9 @@ import {
   PopoverContent,
   PopoverTrigger,
   ScrollArea,
+  Tabs,
+  TabsList,
+  TabsTrigger,
 } from '@chatluna/ui-kit'
 import { getSandboxBots } from '../../src/types'
 import { useT } from '../i18n'
@@ -60,7 +63,8 @@ export function ChatSidebar({ onSelectConversation, className }: {
     conversations: workspace.conversations,
     operatorId,
     resolveAvatar,
-  }), [snapshot, workspace.conversations, operatorId, resolveAvatar])
+    emptyPreview: t('sandbox.chat.emptyPreview'),
+  }), [snapshot, workspace.conversations, operatorId, resolveAvatar, t])
   const notifications = getIncomingNotificationRequests(snapshot, operatorId)
   const pending = notifications.friends.length + notifications.groups.length
   const bots = getSandboxBots(snapshot)
@@ -92,27 +96,23 @@ export function ChatSidebar({ onSelectConversation, className }: {
   return (
     <aside className={cn('flex min-h-0 w-72 shrink-0 flex-col border-r border-border bg-sidebar/40', className)} aria-label={t('sandbox.sidebar.label')}>
       <header className="flex items-center gap-1 px-3 pt-3 pb-2">
-        <div className="flex flex-1 items-center gap-0.5 rounded-lg bg-muted p-0.5" role="tablist" aria-label={t('sandbox.sidebar.tabs')}>
-          {tabs.map(({ id, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              className={cn(
-                'flex h-7 flex-1 items-center justify-center gap-1 rounded-md text-xs text-muted-foreground transition-colors',
-                tab === id ? 'bg-background text-foreground shadow-sm' : 'hover:text-foreground',
-              )}
-              onClick={() => {
-                setTab(id)
-                setQuery('')
-              }}
-            >
-              <Icon className="size-3.5" />
-              {t(`sandbox.sidebar.${id}`)}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          className="min-w-0 flex-1"
+          value={tab}
+          onValueChange={(value) => {
+            setTab(value as SidebarTab)
+            setQuery('')
+          }}
+        >
+          <TabsList className="w-full" aria-label={t('sandbox.sidebar.tabs')}>
+            {tabs.map(({ id, icon: Icon }) => (
+              <TabsTrigger key={id} value={id} className="gap-1 px-1.5 text-xs">
+                <Icon className="size-3.5" />
+                {t(`sandbox.sidebar.${id}`)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <Popover>
           <PopoverTrigger render={(
             <Button variant="ghost" size="icon" className="relative" aria-label={pending ? t('sandbox.notice.labelCount', { count: pending }) : t('sandbox.notice.label')}>
@@ -130,7 +130,7 @@ export function ChatSidebar({ onSelectConversation, className }: {
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
-            className="h-8 pl-8!"
+            className="sandbox-search-input h-8 pl-8!"
             value={query}
             autoComplete="off"
             aria-label={t('sandbox.sidebar.search')}
@@ -173,7 +173,7 @@ export function ChatSidebar({ onSelectConversation, className }: {
                 <DirectoryRow
                   kind={entry.isBot ? 'bot' : 'user'}
                   title={entry.displayName}
-                  subtitle={entry.status}
+                  subtitle={t(entry.statusKey, { name: entry.participantName })}
                   avatar={resolveAvatar(entry.avatar)}
                   active={!!entry.conversationId && entry.conversationId === conversation?.id}
                   status={t(entry.isFriend ? 'sandbox.sidebar.added' : entry.pendingOutgoing || entry.pendingIncoming ? 'sandbox.sidebar.pending' : 'sandbox.sidebar.notAdded')}

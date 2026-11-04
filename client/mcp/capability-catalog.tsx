@@ -72,7 +72,7 @@ function SearchInput({ value, onChange, placeholder }: { value: string, onChange
   return (
     <div className="relative flex-1">
       <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-      <Input type="search" className="h-8 pl-8!" value={value} placeholder={placeholder} aria-label={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <Input type="search" className="sandbox-search-input h-8 pl-8!" value={value} placeholder={placeholder} aria-label={placeholder} onChange={(event) => onChange(event.target.value)} />
     </div>
   )
 }
@@ -108,10 +108,10 @@ export function McpCapabilityCatalog({ catalog, loading, error, onRetry }: {
         { value: catalog.scopes.length, label: t('sandbox.env.mcp.scopes') },
       ]} />
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="mr-1 text-muted-foreground">Server capabilities</span>
-        <Badge variant={flags.tools ? 'secondary' : 'outline'}>Tools</Badge>
-        <Badge variant={flags.resources ? 'secondary' : 'outline'}>Resources</Badge>
-        <Badge variant={flags.prompts ? 'secondary' : 'outline'}>{flags.prompts ? 'Prompts' : t('sandbox.env.mcp.promptsMissing')}</Badge>
+        <span className="mr-1 text-muted-foreground">{t('sandbox.env.mcp.serverCapabilities')}</span>
+        <Badge variant={flags.tools ? 'secondary' : 'outline'}>{t('sandbox.env.mcp.capability.tools')}</Badge>
+        <Badge variant={flags.resources ? 'secondary' : 'outline'}>{t('sandbox.env.mcp.capability.resources')}</Badge>
+        <Badge variant={flags.prompts ? 'secondary' : 'outline'}>{flags.prompts ? t('sandbox.env.mcp.capability.prompts') : t('sandbox.env.mcp.promptsMissing')}</Badge>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput value={query} onChange={setQuery} placeholder={t('sandbox.env.mcp.search')} />

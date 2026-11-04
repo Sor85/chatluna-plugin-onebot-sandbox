@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { CalendarIcon, SearchIcon, XIcon } from 'lucide-react'
-import { Button, Calendar, cn, Popover, PopoverContent, PopoverTrigger } from '@chatluna/ui-kit'
+import { Button, Calendar, cn, InputGroup, InputGroupAddon, InputGroupInput, Popover, PopoverContent, PopoverTrigger } from '@chatluna/ui-kit'
 import type { SandboxMessageSearchHit } from '../../src/types'
 import { useT } from '../i18n'
 import { SandboxAvatar } from '../shared/avatar'
@@ -134,15 +134,16 @@ export function MessageSearchPanel({ adapter, onClose }: { adapter: MessageSearc
   const today = new Date()
 
   return (
-    <section role="search" aria-label={t('sandbox.search.label')} className="relative w-72">
-      <div className="flex h-8 items-center gap-1 rounded-lg border border-input bg-background pr-1 pl-2.5 focus-within:ring-2 focus-within:ring-ring/40">
-        <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
-        <input
+    // 标题栏变窄时搜索框先收缩，不把会话标题挤没。
+    <section role="search" aria-label={t('sandbox.search.label')} className="relative w-72 min-w-36 shrink">
+      <InputGroup className="h-8">
+        <InputGroupAddon><SearchIcon /></InputGroupAddon>
+        <InputGroupInput
           ref={input}
           type="search"
           value={query}
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
+          className="sandbox-search-input text-[13px]!"
           placeholder={t('sandbox.search.placeholder')}
           aria-label={t('sandbox.search.input')}
           onChange={(event) => setQuery(event.target.value)}
@@ -153,41 +154,43 @@ export function MessageSearchPanel({ adapter, onClose }: { adapter: MessageSearc
             onClose()
           }}
         />
-        <Popover open={dateOpen} onOpenChange={setDateOpen}>
-          <PopoverTrigger render={(
-            <Button variant="ghost" size="icon-xs" className={cn(date && 'text-primary')} aria-pressed={!!date} aria-label={date ? t('sandbox.search.dateCurrent', { date }) : t('sandbox.search.date')} />
-          )}>
-            <CalendarIcon />
-          </PopoverTrigger>
-          <PopoverContent align="end" className="sandbox-glass w-auto p-0">
-            <Calendar
-              mode="single"
-              captionLayout="dropdown"
-              startMonth={new Date(today.getFullYear() - 9, 0)}
-              endMonth={today}
-              selected={localDateToCalendarValue(date)}
-              onSelect={(value) => {
-                setDate(calendarValueToLocalDate(value))
-                setDateOpen(false)
-              }}
-            />
-          </PopoverContent>
-        </Popover>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={query || date ? t('sandbox.search.clear') : t('sandbox.search.close')}
-          onClick={() => {
-            if (query || date) {
-              setQuery('')
-              setDate('')
-              input.current?.focus()
-            } else onClose()
-          }}
-        >
-          <XIcon />
-        </Button>
-      </div>
+        <InputGroupAddon align="inline-end" className="gap-0.5">
+          <Popover open={dateOpen} onOpenChange={setDateOpen}>
+            <PopoverTrigger render={(
+              <Button variant="ghost" size="icon-xs" className={cn(date && 'text-primary')} aria-pressed={!!date} aria-label={date ? t('sandbox.search.dateCurrent', { date }) : t('sandbox.search.date')} />
+            )}>
+              <CalendarIcon />
+            </PopoverTrigger>
+            <PopoverContent align="end" className="sandbox-glass w-auto p-0">
+              <Calendar
+                mode="single"
+                captionLayout="dropdown"
+                startMonth={new Date(today.getFullYear() - 9, 0)}
+                endMonth={today}
+                selected={localDateToCalendarValue(date)}
+                onSelect={(value) => {
+                  setDate(calendarValueToLocalDate(value))
+                  setDateOpen(false)
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={query || date ? t('sandbox.search.clear') : t('sandbox.search.close')}
+            onClick={() => {
+              if (query || date) {
+                setQuery('')
+                setDate('')
+                input.current?.focus()
+              } else onClose()
+            }}
+          >
+            <XIcon />
+          </Button>
+        </InputGroupAddon>
+      </InputGroup>
       {(query.trim() || date) && (
         <div className="absolute top-10 right-0 z-30 flex max-h-96 w-80 flex-col gap-0.5 overflow-y-auto rounded-xl sandbox-search-results p-1.5 text-popover-foreground shadow-popup ring-1 ring-border" role="listbox" aria-label={t('sandbox.search.results')}>
           {status && <p role="status" aria-live="polite" className="px-2 py-3 text-center text-xs text-muted-foreground">{status}</p>}

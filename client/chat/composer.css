@@ -34,7 +34,11 @@
 
 .sandbox-composer {
   position: absolute;
-  right: calc(50% - 230px);
+  /*
+   * 宽 460px 时右缘对齐 50% + 230px，胶囊居中。聊天区窄于 556px 时 max-width 把胶囊收窄到 100% - 96px，
+   * 右缘也要跟着收到 48px，左右各留 48px 仍居中；否则右缘固定不动，胶囊右偏并越出聊天区。
+   */
+  right: max(48px, calc(50% - 230px));
   bottom: 0;
   z-index: 1;
   isolation: isolate;

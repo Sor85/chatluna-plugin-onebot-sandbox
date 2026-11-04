@@ -195,14 +195,15 @@ export function StatusBadge({ status }: { status: 'success' | 'error' }) {
 }
 
 export function MetaList({ children }: { children: React.ReactNode }) {
-  return <dl className="flex flex-col gap-1.5 rounded-lg bg-muted/50 p-3 text-xs">{children}</dl>
+  // 标签列取最长标签的宽度：英文标签（如 Implementation）比中文长，固定宽度会压到右侧的值上。
+  return <dl className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-2 gap-y-1.5 rounded-lg bg-muted/50 p-3 text-xs">{children}</dl>
 }
 
 export function MetaRow({ icon: Icon, label, value }: { icon: LucideIcon, label: string, value: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2">
-      <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-      <dt className="w-16 shrink-0 text-muted-foreground">{label}</dt>
+    <div className="contents">
+      <Icon className="mt-0.5 size-3.5 text-muted-foreground" />
+      <dt className="min-w-16 text-muted-foreground">{label}</dt>
       <dd className="min-w-0 break-words">{value}</dd>
     </div>
   )

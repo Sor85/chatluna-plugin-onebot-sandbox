@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { BotIcon, KeyRoundIcon, ServerCogIcon, UserIcon, UsersIcon, WebhookIcon, type LucideIcon } from 'lucide-react'
 import { Badge, Button, cn } from '@chatluna/ui-kit'
-import { useT } from '../i18n'
+import { sourceName, useT } from '../i18n'
 import { HttpCapabilityCatalog, McpCapabilityCatalog, useCatalog } from '../mcp/capability-catalog'
 import { TestCredentialManager } from '../mcp/credential-manager'
 import { SandboxAvatar } from '../shared/avatar'
@@ -42,7 +42,7 @@ export function EnvironmentPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 pt-3 pb-6">
       <p className="text-xs text-muted-foreground">{t('sandbox.env.description')}</p>
       <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 md:grid-cols-[14rem_minmax(0,1fr)] md:grid-rows-1">
-        <nav aria-label={t('sandbox.env.sections')} className="flex gap-0.5 overflow-x-auto rounded-xl p-1.5 ring-1 ring-border md:flex-col md:overflow-x-visible">
+        <nav aria-label={t('sandbox.env.sections')} className="sandbox-scroll-strip flex gap-0.5 overflow-x-auto rounded-xl p-1.5 ring-1 ring-border md:flex-col md:overflow-x-visible">
           {sections.map(({ id, icon: Icon, count }) => (
             <Button
               key={id}
@@ -80,7 +80,7 @@ export function EnvironmentPage() {
                     subtitle={`${bot.id} · ${bot.implementation === 'napcat' ? 'NapCat' : 'LLBot'}`}
                     badges={(
                       <>
-                        <Badge variant="outline" className="max-w-40 truncate">{bot.source.name}</Badge>
+                        <Badge variant="outline" className="max-w-40"><span className="truncate">{sourceName(t, bot.source)}</span></Badge>
                         <Badge variant={bot.enabled ? 'secondary' : 'outline'}>{t(bot.enabled ? 'sandbox.env.enabled' : 'sandbox.env.disabled')}</Badge>
                       </>
                     )}

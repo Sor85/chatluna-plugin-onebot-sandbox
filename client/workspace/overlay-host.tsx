@@ -14,10 +14,12 @@ import {
 import { useT } from '../i18n'
 import { EntityDialog, type EntityDialogTarget } from '../environment/entity-dialog'
 import { SandboxAvatar } from '../shared/avatar'
+import { useDiscardConfirm } from '../shared/discard-confirm'
+import { useRetained } from '../shared/use-retained'
 import { clampFloatingPanelPosition, getFloatingPanelPosition, isFloatingPanelInteractiveTarget } from '../shared/floating-panel'
 import { buildGroupProfileCardModel, buildProfileCardModel, groupProfileCardFields, type ProfileCardModel } from '../webqq/profile-card'
 import type { SandboxDialogs } from './context'
-import type { WorkspaceStore } from './store'
+import { errorText, type WorkspaceStore } from './store'
 import { useSandbox, useWorkspace } from './context'
 
 type TextDialog =
@@ -33,6 +35,7 @@ export interface OverlayState {
 
 /** 二级面的打开意图：工作区把它们收成一份状态，由 {@link OverlayHost} 统一渲染。 */
 export function useOverlayState(store: WorkspaceStore) {
+  const t = useT()
   const [state, setState] = React.useState<OverlayState>({})
   const dialogs = React.useMemo<SandboxDialogs>(() => {
     const anchorOf = (anchor?: { x: number, y: number }) => anchor ?? { x: window.innerWidth / 2 - 160, y: window.innerHeight / 3 }
@@ -61,15 +64,15 @@ export function useOverlayState(store: WorkspaceStore) {
         const view = store.getView()
         const conversation = [...snapshot.conversations, ...(snapshot.conversationInstances ?? [])].find(({ id }) => id === view.activeConversationId)
         const groupId = conversation && 'groupId' in conversation ? conversation.groupId : undefined
-        const card = buildProfileCardModel({ snapshot, participantId, viewerId: view.currentOperatorId, groupId })
+        const card = buildProfileCardModel(t, { snapshot, participantId, viewerId: view.currentOperatorId, groupId })
         if (card) setState((value) => ({ ...value, profile: { card, ...anchorOf(anchor) } }))
       },
       openGroupProfile: (groupId, anchor) => {
         const group = store.snapshot?.groups.find(({ id }) => id === groupId)
-        if (group) setState((value) => ({ ...value, profile: { card: buildGroupProfileCardModel(group), ...anchorOf(anchor) } }))
+        if (group) setState((value) => ({ ...value, profile: { card: buildGroupProfileCardModel(t, group), ...anchorOf(anchor) } }))
       },
     }
-  }, [store])
+  }, [store, t])
   return { state, setState, dialogs }
 }
 
@@ -77,12 +80,13 @@ export function OverlayHost({ state, setState }: {
   state: OverlayState
   setState: React.Dispatch<React.SetStateAction<OverlayState>>
 }) {
+  const entity = useRetained(state.entity)
   return (
     <>
       <EntityDialog
         open={!!state.entity}
-        mode={state.entity?.mode ?? 'edit'}
-        target={state.entity?.target}
+        mode={entity?.mode ?? 'edit'}
+        target={entity?.target}
         onOpenChange={(open) => !open && setState((value) => ({ ...value, entity: undefined }))}
       />
       <TextActionDialog dialog={state.text} onClose={() => setState((value) => ({ ...value, text: undefined }))} />
@@ -98,11 +102,11 @@ function TextActionDialog({ dialog, onClose }: { dialog?: TextDialog, onClose():
   const [value, setValue] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
-  const last = React.useRef(dialog)
-  if (dialog) last.current = dialog
-  const shown = dialog ?? last.current
+  const shown = useRetained(dialog)
+  const { requestClose, confirm } = useDiscardConfirm(!!dialog && value !== dialog.value, onClose)
 
-  React.useEffect(() => {
+  // 布局阶段回填：打开的首帧就是本次的值，不闪出上一次输入的内容。
+  React.useLayoutEffect(() => {
     if (!dialog) return
     setValue(dialog.value)
     setError('')
@@ -120,7 +124,7 @@ function TextActionDialog({ dialog, onClose }: { dialog?: TextDialog, onClose():
       else await store.performGroupAction({ action: 'set-card', groupId: dialog.groupId, targetId: dialog.targetId, card: value })
       onClose()
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : t('sandbox.common.failed'))
+      setError(errorText(failure, t('sandbox.common.failed')))
     } finally {
       setBusy(false)
     }
@@ -128,7 +132,7 @@ function TextActionDialog({ dialog, onClose }: { dialog?: TextDialog, onClose():
 
   const kind = shown?.kind ?? 'remark'
   return (
-    <Dialog open={!!dialog} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={!!dialog} onOpenChange={(open) => !open && requestClose()}>
       <DialogContent className="sandbox-glass">
         <DialogHeader>
           <DialogTitle>{t(`sandbox.text.${kind}.title`)}</DialogTitle>
@@ -145,15 +149,17 @@ function TextActionDialog({ dialog, onClose }: { dialog?: TextDialog, onClose():
         />
         {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('sandbox.common.cancel')}</Button>
+          <Button variant="outline" onClick={requestClose}>{t('sandbox.common.cancel')}</Button>
           <Button disabled={busy} onClick={submit}>{busy ? t('sandbox.common.saving') : t('sandbox.common.save')}</Button>
         </DialogFooter>
+        {confirm}
       </DialogContent>
     </Dialog>
   )
 }
 
 const PROFILE_WIDTH = 320
+/** 首帧定位用的估计高度；挂载后按实际高度重新收进视口。 */
 const PROFILE_HEIGHT = 380
 
 /** 资料卡：在点击位置附近浮出，可拖动标题栏移动，点外部或 Esc 关闭。 */
@@ -164,8 +170,12 @@ function ProfileCard({ card, x, y, onClose }: { card: ProfileCardModel, x: numbe
   const [position, setPosition] = React.useState(() => getFloatingPanelPosition({ x, y }, { width: window.innerWidth, height: window.innerHeight }, { width: PROFILE_WIDTH, height: PROFILE_HEIGHT }))
   const drag = React.useRef<{ id: number, x: number, y: number, left: number, top: number } | undefined>(undefined)
 
-  React.useEffect(() => {
-    setPosition(getFloatingPanelPosition({ x, y }, { width: window.innerWidth, height: window.innerHeight }, { width: PROFILE_WIDTH, height: PROFILE_HEIGHT }))
+  // 资料卡最高 32rem，字段多时比估计高度高；在绘制前按实际尺寸重新定位，下缘不越出视口。
+  React.useLayoutEffect(() => {
+    const size = panel.current
+      ? { width: panel.current.offsetWidth, height: panel.current.offsetHeight }
+      : { width: PROFILE_WIDTH, height: PROFILE_HEIGHT }
+    setPosition(getFloatingPanelPosition({ x, y }, { width: window.innerWidth, height: window.innerHeight }, size))
   }, [card, x, y])
 
   React.useEffect(() => {
@@ -186,12 +196,12 @@ function ProfileCard({ card, x, y, onClose }: { card: ProfileCardModel, x: numbe
     }
   }, [onClose])
 
-  const sections = groupProfileCardFields(card.fields)
+  const sections = groupProfileCardFields(t, card.fields)
   return createPortal(
     <section
       ref={panel}
       aria-label={t('sandbox.profile.title')}
-      className="fixed z-50 flex max-h-[min(32rem,calc(100vh-24px))] w-80 flex-col overflow-hidden rounded-xl bg-popover text-sm leading-6 text-popover-foreground shadow-popup ring-1 ring-border animate-in fade-in-0 zoom-in-95"
+      className="sandbox-glass fixed z-50 flex max-h-[min(32rem,calc(100vh-24px))] w-80 flex-col overflow-hidden rounded-xl bg-popover text-sm leading-6 text-popover-foreground shadow-popup ring-1 ring-border animate-in fade-in-0 zoom-in-95"
       style={{ left: position.x, top: position.y }}
     >
       <header

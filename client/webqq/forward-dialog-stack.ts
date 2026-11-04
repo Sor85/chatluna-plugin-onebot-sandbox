@@ -93,7 +93,8 @@ export async function loadForwardDialogFrame(input: {
   )
 
   return {
-    title: buildForwardPreview(forward).title || '合并转发',
+    // 没有可推断的标题时留空，由界面按当前语言显示「合并转发」。
+    title: buildForwardPreview(forward).title,
     items: forward.nodes.map((node) => ({ ...node })),
     nestedForwards: Object.fromEntries(
       nestedEntries.filter((entry): entry is readonly [string, SandboxForward] => !!entry),

@@ -28,13 +28,15 @@ export function getFriendDirectory(snapshot: SandboxSnapshot, operatorId?: strin
         conversationId,
         avatar: participant.avatar,
         displayName: friendship?.remarks[operatorId] || participant.name,
-        status: friendship
-          ? `${participant.name} · ${isBot ? '机器人好友' : '好友'}`
+        // 文案键，组件按 `{ name: participant.name }` 翻译；纯逻辑模块不持有界面语言。
+        statusKey: friendship
+          ? isBot ? 'sandbox.relation.botFriend' : 'sandbox.relation.friend'
           : pendingOutgoing
-            ? '好友申请待处理'
+            ? 'sandbox.relation.outgoing'
             : pendingIncoming
-              ? '有新的好友申请'
-              : isBot ? '未添加机器人好友' : '未添加好友',
+              ? 'sandbox.relation.incoming'
+              : isBot ? 'sandbox.relation.botMissing' : 'sandbox.relation.missing',
+        participantName: participant.name,
         relation: friendship ? 'added' as const : pendingOutgoing || pendingIncoming ? 'pending' as const : 'missing' as const,
       }
     })

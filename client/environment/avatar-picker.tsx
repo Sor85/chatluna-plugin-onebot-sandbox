@@ -11,10 +11,32 @@ function avatarDataUrl(avatar: BuiltinAvatar) {
   return `data:image/svg+xml;base64,${btoa(binary)}`
 }
 
-/** 头像选择：内置头像或本地图片，选定后以 Data URL 交回，服务端负责导入成受控媒体。 */
+/** 头像选择：内置头像或本地图片，选定后以 Data URL 交回，服务端负责导入成受控媒体。用于浮层内原地切换的二级视图。 */
 export function AvatarPicker({ kind, onBack, onSelect }: {
   kind: BuiltinAvatarKind
   onBack(): void
+  onSelect(avatar: string): void
+}) {
+  const t = useT()
+  return (
+    <section className="flex flex-col gap-4" aria-label={t('sandbox.avatar.title')}>
+      <header className="flex items-start gap-2">
+        <Button type="button" variant="ghost" size="icon-sm" aria-label={t('sandbox.avatar.back')} onClick={onBack}>
+          <ArrowLeftIcon />
+        </Button>
+        <div className="flex flex-col gap-1">
+          <strong className="text-sm font-medium">{t('sandbox.avatar.title')}</strong>
+          <p className="text-xs text-muted-foreground">{t('sandbox.avatar.description')}</p>
+        </div>
+      </header>
+      <AvatarChoices kind={kind} onSelect={onSelect} />
+    </section>
+  )
+}
+
+/** 头像候选：内置头像网格与本地上传入口。弹窗里作为二级窗口的正文，标题与关闭按钮由弹窗提供。 */
+export function AvatarChoices({ kind, onSelect }: {
+  kind: BuiltinAvatarKind
   onSelect(avatar: string): void
 }) {
   const t = useT()
@@ -37,16 +59,7 @@ export function AvatarPicker({ kind, onBack, onSelect }: {
   }
 
   return (
-    <section className="flex flex-col gap-4" aria-label={t('sandbox.avatar.title')}>
-      <header className="flex items-start gap-2">
-        <Button type="button" variant="ghost" size="icon-sm" aria-label={t('sandbox.avatar.back')} onClick={onBack}>
-          <ArrowLeftIcon />
-        </Button>
-        <div className="flex flex-col gap-1">
-          <strong className="text-sm font-medium">{t('sandbox.avatar.title')}</strong>
-          <p className="text-xs text-muted-foreground">{t('sandbox.avatar.description')}</p>
-        </div>
-      </header>
+    <div className="flex flex-col gap-4">
       <div className="grid grid-cols-4 gap-2">
         {BUILTIN_AVATARS[kind].map((avatar) => (
           <button
@@ -74,6 +87,6 @@ export function AvatarPicker({ kind, onBack, onSelect }: {
         <ChevronRightIcon className="size-4 text-muted-foreground" />
       </button>
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-    </section>
+    </div>
   )
 }

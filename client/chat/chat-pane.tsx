@@ -7,11 +7,8 @@ import { buildConversationTree, toRecentForwardTargets } from '../webqq/conversa
 import { getFriendDirectory, getGroupDirectory } from '../webqq/relationship-directory'
 import {
   closeForwardStack,
-  hasParentForwardFrame,
   loadForwardDialogFrame,
-  popForwardFrame,
   pushForwardFrame,
-  readForwardStackTop,
   type ForwardDialogFrame,
 } from '../webqq/forward-dialog-stack'
 import { enterMessageSelection, exitMessageSelection, resolveForwardConfirmation, toggleMessageSelection, type MessageSelectionState } from '../webqq/message-selection'
@@ -87,11 +84,11 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
     }]
   }) ?? [], [group, participants])
   const forwardTargets = React.useMemo<ForwardTargets>(() => ({
-    recent: toRecentForwardTargets(buildConversationTree({ scene: snapshot, conversations: workspace.conversations, operatorId, resolveAvatar })),
+    recent: toRecentForwardTargets(buildConversationTree({ scene: snapshot, conversations: workspace.conversations, operatorId, resolveAvatar, emptyPreview: t('sandbox.chat.emptyPreview') })),
     friends: getFriendDirectory(snapshot, operatorId).filter((entry) => entry.isFriend && entry.conversationId).map((entry) => ({
       conversationId: entry.conversationId!,
       title: entry.displayName,
-      subtitle: entry.status,
+      subtitle: t(entry.statusKey, { name: entry.participantName }),
       avatar: resolveAvatar(entry.avatar),
       avatarKind: entry.isBot ? 'bot' as const : 'user' as const,
     })),
@@ -157,7 +154,7 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
     <main className={cn('sandbox-chat-pane flex min-h-0 min-w-0 flex-1 flex-col bg-background', className)}>
       <header className="sandbox-chat-header flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
         {onBack && (
-          <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label={t('sandbox.chat.back')} onClick={onBack}><ChevronLeftIcon /></Button>
+          <Button variant="ghost" size="icon-sm" aria-label={t('sandbox.chat.back')} onClick={onBack}><ChevronLeftIcon /></Button>
         )}
         <button type="button" className="flex min-w-0 items-center gap-2.5 rounded-lg px-1 py-1 text-left hover:bg-accent/60 disabled:hover:bg-transparent" disabled={!group && !peer} aria-label={t('sandbox.chat.viewProfileOf', { name: title })} onClick={openTitleProfile}>
           <SandboxAvatar kind={avatarKind} name={title} src={resolveAvatar(group?.avatar ?? peer?.avatar)} className="size-8" />
@@ -166,7 +163,7 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
             <span className="truncate text-[11px] text-muted-foreground">{subtitle}</span>
           </span>
         </button>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex min-w-0 items-center gap-1">
           {searchOpen && conversation ? (
             <MessageSearchPanel
               adapter={{
@@ -285,10 +282,9 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
         }}
       />
       <ForwardViewer
-        frame={readForwardStackTop(forwardStack)}
-        canBack={hasParentForwardFrame(forwardStack)}
-        onBack={() => setForwardStack(popForwardFrame)}
-        onClose={() => setForwardStack(closeForwardStack())}
+        stack={forwardStack}
+        imageOpen={!!imageUrl}
+        onCloseFrom={(depth) => setForwardStack((stack) => depth ? stack.slice(0, depth) : closeForwardStack())}
         onOpenForward={(forwardId) => void openForward({ forwardId }, 'push')}
         onOpenImage={setImageUrl}
       />

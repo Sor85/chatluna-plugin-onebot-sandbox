@@ -68,14 +68,15 @@ export interface ConversationTreeInput {
   conversations: readonly ResolvedConversation[]
   operatorId?: string
   resolveAvatar?: (avatar?: string) => string | undefined
+  /** 还没有消息的会话显示的预览，由调用方按界面语言传入。 */
+  emptyPreview?: string
 }
 
 function identity(avatar?: string) {
   return avatar
 }
 
-const EMPTY_PREVIEW = '开始一段新对话'
-const timeFormat = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' })
+const timeFormat = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
 
 /**
  * 侧栏会话树：顶层只有根会话，每个根会话下挂它自己的会话实例。
@@ -129,7 +130,7 @@ function toRow(input: ConversationTreeInput, conversation: ResolvedConversation)
     title: conversation.title ?? group?.name ?? peer?.name ?? conversation.id,
     avatar: resolveAvatar(group?.avatar ?? peer?.avatar),
     avatarKind: group ? 'group' : bot ? 'bot' : 'user',
-    preview: latestMessage ? describeMessage(scene, latestMessage) : EMPTY_PREVIEW,
+    preview: latestMessage ? describeMessage(scene, latestMessage) : input.emptyPreview ?? '',
     time: latestMessage?.createdAt ? timeFormat.format(new Date(latestMessage.createdAt)) : '',
     actorRole: group?.members.find(({ participantId }) => participantId === operatorId)?.role,
     entityTarget: group

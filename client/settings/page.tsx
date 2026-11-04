@@ -80,7 +80,7 @@ export function SettingsPage() {
             </fieldset>
           ) : live.error ? (
             <Alert variant="destructive">
-              <AlertDescription>{t('sandbox.settings.unavailable')}：{live.error}</AlertDescription>
+              <AlertDescription>{t('sandbox.settings.unavailableDetail', { error: live.error })}</AlertDescription>
             </Alert>
           ) : (
             <div className="flex justify-center py-12 text-muted-foreground"><Spinner /></div>

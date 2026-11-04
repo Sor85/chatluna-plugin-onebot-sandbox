@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { ChevronLeftIcon, PaperclipIcon, SearchIcon } from 'lucide-react'
+import { PaperclipIcon, SearchIcon } from 'lucide-react'
 import {
   Button,
   cn,
@@ -10,15 +10,20 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Tabs,
+  TabsList,
+  TabsTrigger,
 } from '@chatluna/ui-kit'
 import type { SandboxForwardNode } from '../../src/types'
 import { useT } from '../i18n'
 import { SandboxAvatar, type AvatarKind } from '../shared/avatar'
+import { useRetained } from '../shared/use-retained'
 import type { ForwardDialogFrame } from '../webqq/forward-dialog-stack'
 import { isMergedForwardNode } from '../webqq/forward-cluster'
 import { buildForwardPreview } from '../webqq/forward-preview'
 import { formatMediaSize, getMediaLabel } from '../webqq/message-presentation'
 import { useWorkspace } from '../workspace/context'
+import { errorText } from '../workspace/store'
 
 export interface ForwardTargetOption {
   conversationId: string
@@ -71,7 +76,7 @@ export function ForwardTargetDialog({ open, targets, onOpenChange, onConfirm }: 
       await onConfirm(selected)
       onOpenChange(false)
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : t('sandbox.forward.failed'))
+      setError(errorText(failure, t('sandbox.forward.failed')))
     } finally {
       setSubmitting(false)
     }
@@ -79,30 +84,24 @@ export function ForwardTargetDialog({ open, targets, onOpenChange, onConfirm }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sandbox-glass sm:max-w-md">
+      <DialogContent className="sandbox-glass flex flex-col overflow-hidden sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('sandbox.forward.targetTitle')}</DialogTitle>
           <DialogDescription>{t('sandbox.forward.targetHint')}</DialogDescription>
         </DialogHeader>
         <div className="relative">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input type="search" className="pl-8!" value={query} placeholder={t('sandbox.forward.search')} aria-label={t('sandbox.forward.search')} onChange={(event) => setQuery(event.target.value)} />
+          <Input type="search" className="sandbox-search-input pl-8!" value={query} placeholder={t('sandbox.forward.search')} aria-label={t('sandbox.forward.search')} onChange={(event) => setQuery(event.target.value)} />
         </div>
-        <div className="flex gap-0.5 rounded-lg bg-muted p-0.5" role="tablist">
-          {(['recent', 'friends', 'groups'] as const).map((id) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              className={cn('h-7 flex-1 rounded-md text-xs text-muted-foreground', tab === id && 'bg-background text-foreground shadow-sm')}
-              onClick={() => setTab(id)}
-            >
-              {t(`sandbox.sidebar.${id}`)}
-            </button>
-          ))}
-        </div>
-        <div className="flex max-h-72 min-h-40 flex-col gap-0.5 overflow-y-auto" role="listbox" aria-label={t('sandbox.forward.targets')}>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as keyof ForwardTargets)}>
+          <TabsList className="w-full">
+            {(['recent', 'friends', 'groups'] as const).map((id) => (
+              <TabsTrigger key={id} value={id} className="text-xs">{t(`sandbox.sidebar.${id}`)}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        {/* 视口很矮时列表先收缩，页头、搜索与页脚保持可见，不从透明的毛玻璃页头下面滚过。 */}
+        <div className="-mx-5 flex max-h-72 min-h-0 flex-col gap-0.5 overflow-y-auto px-5" role="listbox" aria-label={t('sandbox.forward.targets')}>
           {visible.map((target) => (
             <button
               key={target.conversationId}
@@ -135,29 +134,46 @@ export function ForwardTargetDialog({ open, targets, onOpenChange, onConfirm }: 
   )
 }
 
-/** 合并转发详情：可逐层打开嵌套转发，返回上一层或整体关闭。 */
-export function ForwardViewer({ frame, canBack, onBack, onClose, onOpenForward, onOpenImage }: {
-  frame?: ForwardDialogFrame
-  canBack: boolean
-  onBack(): void
-  onClose(): void
+/**
+ * 合并转发详情：每层嵌套转发是叠在上一层之上的二级窗口，右上角关闭只退回上一层，关闭根层一并关闭整条链。
+ * 各层以 React 子树嵌套，Esc 与点遮罩只作用于最上层。
+ */
+export function ForwardViewer({ stack, imageOpen, onCloseFrom, onOpenForward, onOpenImage }: {
+  stack: readonly ForwardDialogFrame[]
+  /** 大图预览开着时：预览挂在 body 下，点它或按 Esc 会被弹窗当成外部关闭，这期间不响应关闭请求。 */
+  imageOpen: boolean
+  /** 关闭第 `depth` 层及其上的全部层。 */
+  onCloseFrom(depth: number): void
+  onOpenForward(forwardId: string): void
+  onOpenImage(url: string): void
+}) {
+  return <ForwardFrameDialog stack={stack} depth={0} imageOpen={imageOpen} onCloseFrom={onCloseFrom} onOpenForward={onOpenForward} onOpenImage={onOpenImage} />
+}
+
+function ForwardFrameDialog({ stack, depth, imageOpen, onCloseFrom, onOpenForward, onOpenImage }: {
+  stack: readonly ForwardDialogFrame[]
+  depth: number
+  imageOpen: boolean
+  onCloseFrom(depth: number): void
   onOpenForward(forwardId: string): void
   onOpenImage(url: string): void
 }) {
   const t = useT()
   const { participants, media, mediaFailures } = useWorkspace()
+  const current = stack[depth]
+  // 退场动画期间保留这一层的内容，不闪成「暂无消息」。
+  const frame = useRetained(current)
+  if (!frame) return null
   const nodeText = (item: SandboxForwardNode) => item.media?.length === 1 && item.content === `[${getMediaLabel(item.media[0]!)}] ${item.media[0]!.name}` ? '' : item.content
   return (
-    <Dialog open={!!frame} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sandbox-glass flex max-h-[80vh] flex-col gap-3 sm:max-w-lg">
-        <DialogHeader className="flex-row items-center gap-2">
-          {canBack && (
-            <Button variant="ghost" size="icon-sm" aria-label={t('sandbox.forward.back')} onClick={onBack}><ChevronLeftIcon /></Button>
-          )}
-          <DialogTitle>{frame?.title || t('sandbox.forward.title')}</DialogTitle>
+    <Dialog open={!!current} onOpenChange={(open) => !open && !imageOpen && onCloseFrom(depth)}>
+      <DialogContent className="sandbox-glass flex max-h-[80vh] flex-col gap-3 overflow-hidden sm:max-w-lg">
+        {/* 右侧留出关闭按钮的位置，长标题截断而不压到 X 上。 */}
+        <DialogHeader className="min-w-0 pr-8">
+          <DialogTitle className="truncate leading-6">{frame.title || t('sandbox.forward.title')}</DialogTitle>
         </DialogHeader>
-        <div className="-mx-1 flex min-h-0 flex-1 flex-col overflow-y-auto px-1">
-          {frame?.items.map((item, index) => {
+        <div className="-mx-5 flex min-h-0 flex-1 flex-col overflow-y-auto px-5">
+          {frame.items.map((item, index) => {
             const merged = isMergedForwardNode(frame.items, index)
             const nested = item.forwardId ? frame.nestedForwards[item.forwardId] : undefined
             const preview = nested ? buildForwardPreview(nested) : undefined
@@ -205,8 +221,9 @@ export function ForwardViewer({ frame, canBack, onBack, onClose, onOpenForward, 
               </article>
             )
           })}
-          {!frame?.items.length && <p className="py-8 text-center text-xs text-muted-foreground">{t('sandbox.forward.noItems')}</p>}
+          {!frame.items.length && <p className="py-8 text-center text-xs text-muted-foreground">{t('sandbox.forward.noItems')}</p>}
         </div>
+        <ForwardFrameDialog stack={stack} depth={depth + 1} imageOpen={imageOpen} onCloseFrom={onCloseFrom} onOpenForward={onOpenForward} onOpenImage={onOpenImage} />
       </DialogContent>
     </Dialog>
   )

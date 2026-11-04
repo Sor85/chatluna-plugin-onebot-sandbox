@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { PauseIcon } from 'lucide-react'
 import { useT } from '../i18n'
 import { mountAgentOverlayEffect } from '../workspace/agent-overlay-effect'
 import { AgentControlIcon, AgentCursor } from './agent-visuals'
@@ -28,10 +29,7 @@ export function AgentObserveOverlay({ spaceName, busy, onTakeOver, onTerminate }
       <AgentCursor />
       <div className="sandbox-agent-taskbar">
         <span className="sandbox-agent-taskbar-pause" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-            <rect x="7" y="5" width="3" height="14" rx="1.2" />
-            <rect x="14" y="5" width="3" height="14" rx="1.2" />
-          </svg>
+          <PauseIcon className="size-3.5" fill="currentColor" />
         </span>
         <span className="sandbox-agent-taskbar-control-icon"><AgentControlIcon running /></span>
         <span className="sandbox-agent-taskbar-text">

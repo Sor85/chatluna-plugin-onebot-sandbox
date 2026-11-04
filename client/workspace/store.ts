@@ -1,4 +1,4 @@
-import { callAction } from '@chatluna/ui-client/client'
+import { callAction, type Translate } from '@chatluna/ui-client/client'
 import { readStored, writeStored } from '@chatluna/ui-storage'
 import {
   includesConversationParticipant,
@@ -31,7 +31,17 @@ export async function invoke<K extends Endpoint>(name: K, input: InputOf<K>): Pr
   }
 }
 
-export function errorText(error: unknown, fallback = '操作失败') {
+/**
+ * 错误兜底文案的翻译：store 与 `invoke` 不在 React 树里，拿不到 `useT`。沙盒根组件每次渲染登记当前语言的
+ * `t`（`app.tsx`），这里的兜底与 store 自己抛出的错误据此按界面语言显示。
+ */
+let translate: Translate = (key) => key
+
+export function bindStoreTranslator(t: Translate) {
+  translate = t
+}
+
+export function errorText(error: unknown, fallback = translate('sandbox.common.failed')) {
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
   return message.trim().split(/\r?\n/, 1)[0]?.replace(/^Error:\s*/, '') || fallback
 }
@@ -119,7 +129,7 @@ export class WorkspaceStore {
 
   requireOperatorId() {
     const operatorId = this.view.currentOperatorId
-    if (!operatorId) throw new Error('当前操作者不可用')
+    if (!operatorId) throw new Error(translate('sandbox.error.noOperator'))
     return operatorId
   }
 
@@ -166,7 +176,7 @@ export class WorkspaceStore {
       }
       this.replaceWorkspace(workspace, stored)
     } catch (error) {
-      this.set({ loadError: errorText(error, '读取工作区失败') })
+      this.set({ loadError: errorText(error, translate('sandbox.error.loadWorkspace')) })
     }
   }
 
@@ -264,7 +274,7 @@ export class WorkspaceStore {
 
   handleRelationshipRequest(requestId: string, approve: boolean) {
     const request = this.snapshot?.requests.find(({ id }) => id === requestId)
-    if (!request) throw new Error('关系申请不存在')
+    if (!request) throw new Error(translate('sandbox.error.requestMissing'))
     return request.type === 'group'
       ? this.performGroupAction({ action: 'handle-request', requestId, approve })
       : this.performFriendAction({ action: 'handle-request', requestId, approve })

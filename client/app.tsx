@@ -16,8 +16,9 @@ import { useSpaceList } from './test-space/use-space-list'
 import { captureZoomRect, zoomWorkspaceFromRect } from './test-space/zoom'
 import { SandboxProvider } from './workspace/context'
 import { OverlayHost, useOverlayState } from './workspace/overlay-host'
-import { errorText, invoke, WorkspaceStore } from './workspace/store'
+import { bindStoreTranslator, errorText, invoke, WorkspaceStore } from './workspace/store'
 import './shared/glass.css'
+import './shared/controls.css'
 
 type View = 'messages' | 'debug' | 'test-calls' | 'environment' | 'spaces' | 'settings'
 
@@ -34,6 +35,7 @@ const SPACE_TAB_VIEWS: View[] = ['messages']
  */
 export function SandboxApp() {
   const t = useT()
+  bindStoreTranslator(t)
   const navigate = useNavigate()
   const params = useParams()
   const [searchParams] = useSearchParams()
@@ -201,10 +203,11 @@ export function SandboxApp() {
             onValueChange={(value) => selectView(value as View)}
           >
             <h1 className="shrink-0 text-lg font-semibold">{t('onebot-sandbox.title')}</h1>
-            <TabsList className="min-w-0 max-w-full justify-start overflow-x-auto" aria-label={t('sandbox.nav.label')}>
+            <TabsList className="sandbox-scroll-strip min-w-0 max-w-full justify-start overflow-x-auto" aria-label={t('sandbox.nav.label')}>
               {(spaceId ? SPACE_TAB_VIEWS : TAB_VIEWS).map((id) => <TabsTrigger key={id} value={id}>{t(`sandbox.nav.${id}`)}</TabsTrigger>)}
             </TabsList>
-            {space && <Badge variant="secondary" className="min-w-0 max-w-60 truncate">{t('sandbox.spaces.current', { name: space.name })}</Badge>}
+            {/* Badge 是 inline-flex，text-overflow 对它无效；省略号要落在内层的块上。 */}
+            {space && <Badge variant="secondary" className="min-w-0 max-w-60"><span className="truncate">{t('sandbox.spaces.current', { name: space.name })}</span></Badge>}
             <Tooltip>
               <TooltipTrigger render={(
                 <Button

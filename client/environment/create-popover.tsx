@@ -17,6 +17,7 @@ import type { ManageSandboxEnvironmentInput, SandboxBotProfile, SandboxImplement
 import { useT } from '../i18n'
 import { SandboxAvatar } from '../shared/avatar'
 import { useSandbox } from '../workspace/context'
+import { errorText } from '../workspace/store'
 import { AvatarPicker } from './avatar-picker'
 
 export type EnvironmentCreateType = 'user' | 'bot' | 'group' | 'participant'
@@ -91,7 +92,7 @@ export function CreateEntityPopover({ type, operator, bots = [], side = 'right',
       await store.manageEnvironment(input)
       changeOpen(false)
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : t('sandbox.create.failed'))
+      setError(errorText(failure, t('sandbox.create.failed')))
     } finally {
       setBusy(false)
     }

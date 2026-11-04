@@ -213,6 +213,10 @@ export function mountAgentOverlayEffect(canvas: HTMLCanvasElement): (() => void)
     disposed = true
     cancelAnimationFrame(frame)
     observer?.disconnect()
-    gl.getExtension('WEBGL_lose_context')?.loseContext()
+    // 只释放本次创建的资源，不调用 loseContext：开发模式的 StrictMode 会在同一个 canvas 上卸载再挂载一次，
+    // 上下文一旦被主动丢弃，第二次 getContext 拿到的是已丢失的上下文，边缘光整个不显示。
+    // canvas 卸载后上下文随元素一起回收。
+    gl.deleteBuffer(buffer)
+    gl.deleteProgram(glow.program)
   }
 }

@@ -28,7 +28,7 @@ import type {
   SandboxEntitySource,
 } from '../../src/types'
 import { buildSandboxBotDirectory } from '../environment/directory-model'
-import { useT } from '../i18n'
+import { sourceName, useT } from '../i18n'
 import {
   FilterField,
   JsonBlock,
@@ -156,7 +156,7 @@ export function OneBotDebugPage() {
   const botName = (record: SandboxConsoleOneBotDebugRecord) => bots.find((bot) => bot.id === record.botId && sourceKey(bot.source) === sourceKey(record.source))?.name ?? record.botId
   const selected = detail ? recordKey(detail) : undefined
 
-  const botItems = [{ value: 'all', label: t('sandbox.debug.allBots') }, ...bots.map((bot) => ({ value: botKey(bot), label: `${bot.name} · ${bot.id} · ${bot.source.name}` }))]
+  const botItems = [{ value: 'all', label: t('sandbox.debug.allBots') }, ...bots.map((bot) => ({ value: botKey(bot), label: `${bot.name} · ${bot.id} · ${sourceName(t, bot.source)}` }))]
   const directionItems = (['all', 'action', 'event'] as const).map((value) => ({ value, label: t(`sandbox.debug.direction.${value}`) }))
 
   return (
@@ -212,7 +212,7 @@ export function OneBotDebugPage() {
                     {bots.map((bot) => (
                       <SelectItem key={botKey(bot)} value={botKey(bot)}>
                         <SandboxAvatar kind="bot" name={bot.name} src={bot.avatar} className="size-5" badge={false} />
-                        <span className="truncate">{bot.name} · {bot.id} · {bot.source.name}</span>
+                        <span className="truncate">{bot.name} · {bot.id} · {sourceName(t, bot.source)}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -256,7 +256,7 @@ export function OneBotDebugPage() {
               <>
                 <StatusBadge status={record.status} />
                 <Badge variant="outline" className="font-mono text-[10px]">{record.direction.toUpperCase()}</Badge>
-                <Badge variant="outline" className="max-w-32 truncate">{record.source.name}</Badge>
+                <Badge variant="outline" className="max-w-32"><span className="truncate">{sourceName(t, record.source)}</span></Badge>
               </>
             )}
           />
@@ -286,7 +286,7 @@ function DebugDetail({ record, botName }: { record: SandboxConsoleOneBotDebugRec
       </header>
       <MetaList>
         <MetaRow icon={BotIcon} label={t('sandbox.debug.bot')} value={`${botName} · ${record.botId}`} />
-        <MetaRow icon={BoxIcon} label={t('sandbox.debug.source')} value={record.source.name} />
+        <MetaRow icon={BoxIcon} label={t('sandbox.debug.source')} value={sourceName(t, record.source)} />
         <MetaRow icon={CpuIcon} label={t('sandbox.debug.implementation')} value={record.implementation === 'napcat' ? 'NapCat' : 'LLBot'} />
         <MetaRow icon={LinkIcon} label={t('sandbox.debug.entities')} value={entities || t('sandbox.debug.noEntities')} />
         {record.action !== record.requestedAction && <MetaRow icon={ArrowRightIcon} label={t('sandbox.debug.action')} value={record.action} />}

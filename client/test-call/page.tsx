@@ -208,7 +208,7 @@ export function TestCallPage() {
             badges={(
               <>
                 <StatusBadge status={record.status} />
-                <Badge variant="outline" className="max-w-32 truncate">{record.credentialName}</Badge>
+                <Badge variant="outline" className="max-w-32"><span className="truncate">{record.credentialName}</span></Badge>
               </>
             )}
           />

@@ -1,5 +1,7 @@
 import * as React from 'react'
 import {
+  ArrowDownToLineIcon,
+  ArrowUpToLineIcon,
   AtSignIcon,
   BellIcon,
   CheckIcon,
@@ -37,6 +39,7 @@ import { isRecalledMessage, type SandboxMessage, type SandboxMessageTraceReferen
 import { useT } from '../i18n'
 import { SandboxAvatar } from '../shared/avatar'
 import { formatSandboxTimeOfDay } from '../shared/format-time'
+import { OverlayScrollbar } from '../shared/overlay-scrollbar'
 import { getMessageClusterClass, isMergedMessage } from '../webqq/message-cluster'
 import {
   formatMediaSize,
@@ -254,349 +257,343 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
   })
 
   return (
-    <ContextMenu disabled={props.selectionMode || !conversation}>
-      <ContextMenuTrigger
-        render={(
-          <div
-            ref={box}
-            className="sandbox-message-scroller min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]"
-            aria-label={t('sandbox.chat.messages')}
-            onScroll={handleScroll}
-          />
-        )}
-      >
-        {empty ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center" style={{ paddingBottom: props.bottomSpace }}>
-            <SandboxAvatar kind={peerKind} name={conversation?.title ?? group?.name ?? peer?.name} src={resolveAvatar(group?.avatar ?? peer?.avatar)} className="size-14" />
-            {peerKind === 'bot' ? (
-              <>
-                <h2 className="mt-2 text-sm font-medium">{t('sandbox.chat.emptyBotTitle')}</h2>
-                <p className="text-xs text-muted-foreground">{t('sandbox.chat.emptyBotHint')}</p>
-              </>
-            ) : (
-              <p className="text-xs text-muted-foreground">{t('sandbox.chat.emptyHint')}</p>
-            )}
-          </div>
-        ) : (
-          <ol
-            ref={content}
-            className={cn('sandbox-message-list', bubbleTail && 'has-tail', props.selectionMode && 'is-selecting')}
-            style={{ paddingBottom: props.bottomSpace }}
-          >
-            {props.hasMoreMessages && (
-              <li className="sandbox-message-history-row">
-                <button type="button" className="sandbox-message-history" disabled={historyLoading} onClick={loadEarlier}>
-                  {historyLoading ? t('sandbox.common.loading') : t('sandbox.chat.earlier')}
-                </button>
-              </li>
-            )}
-            {props.messages.map((message, index) => {
-              const outgoing = message.authorId === operatorId
-              const direction = outgoing ? 'is-outgoing' : 'is-incoming'
-              const capabilities = readMessageCapabilities(message, presentation)
-              const merged = isMergedMessage(props.messages, index, operatorId)
-              const cluster = getMessageClusterClass(props.messages, index, operatorId)
-              const recalled = isRecalledMessage(message)
-              const inherited = isInheritedMessage(message, presentation)
-              const selected = props.selectedIds.includes(message.id)
-              const selectable = props.selectionMode && capabilities.forward
-              const reply = getReplyMessage(message, presentation)
-              const forward = getForwardPreview(message, presentation)
-              const text = getMessageText(message, presentation)
-              const badge = getMessageRoleBadge(message.authorId, presentation)
-              const isBot = participants[message.authorId]?.isBot
-              const thinking = shouldShowThinking(message, presentation) ? getMessageThinking(message) : undefined
-              const usage = !thinking && shouldShowUsage(message, presentation) ? getMessageUsage(message)?.usage : undefined
-              const boundary = isForkBoundary(props.messages, index, presentation)
+    <>
+      <ContextMenu disabled={props.selectionMode || !conversation}>
+        <ContextMenuTrigger
+          render={(
+            <div
+              ref={box}
+              className="sandbox-message-scroller min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]"
+              aria-label={t('sandbox.chat.messages')}
+              onScroll={handleScroll}
+            />
+          )}
+        >
+          {empty ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center" style={{ paddingBottom: props.bottomSpace }}>
+              <SandboxAvatar kind={peerKind} name={conversation?.title ?? group?.name ?? peer?.name} src={resolveAvatar(group?.avatar ?? peer?.avatar)} className="size-14" />
+              {peerKind === 'bot' ? (
+                <>
+                  <h2 className="mt-2 text-sm font-medium">{t('sandbox.chat.emptyBotTitle')}</h2>
+                  <p className="text-xs text-muted-foreground">{t('sandbox.chat.emptyBotHint')}</p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t('sandbox.chat.emptyHint')}</p>
+              )}
+            </div>
+          ) : (
+            <ol
+              ref={content}
+              className={cn('sandbox-message-list', bubbleTail && 'has-tail', props.selectionMode && 'is-selecting')}
+              style={{ paddingBottom: props.bottomSpace }}
+            >
+              {props.hasMoreMessages && (
+                <li className="sandbox-message-history-row">
+                  <button type="button" className="sandbox-message-history" disabled={historyLoading} onClick={loadEarlier}>
+                    {historyLoading ? t('sandbox.common.loading') : t('sandbox.chat.earlier')}
+                  </button>
+                </li>
+              )}
+              {props.messages.map((message, index) => {
+                const outgoing = message.authorId === operatorId
+                const direction = outgoing ? 'is-outgoing' : 'is-incoming'
+                const capabilities = readMessageCapabilities(message, presentation)
+                const merged = isMergedMessage(props.messages, index, operatorId)
+                const cluster = getMessageClusterClass(props.messages, index, operatorId)
+                const recalled = isRecalledMessage(message)
+                const inherited = isInheritedMessage(message, presentation)
+                const selected = props.selectedIds.includes(message.id)
+                const selectable = props.selectionMode && capabilities.forward
+                const reply = getReplyMessage(message, presentation)
+                const forward = getForwardPreview(message, presentation)
+                const text = getMessageText(message, presentation)
+                const badge = getMessageRoleBadge(message.authorId, presentation)
+                const isBot = participants[message.authorId]?.isBot
+                const thinking = shouldShowThinking(message, presentation) ? getMessageThinking(message) : undefined
+                const usage = !thinking && shouldShowUsage(message, presentation) ? getMessageUsage(message)?.usage : undefined
+                const boundary = isForkBoundary(props.messages, index, presentation)
 
-              const header = boundary && (
-                <li key={`${message.id}:boundary`} className="sandbox-message-fork-boundary">{t('sandbox.chat.forkBoundary')}</li>
-              )
-              if (shouldRenderAsEvent(message, presentation)) {
+                const header = boundary && (
+                  <li key={`${message.id}:boundary`} className="sandbox-message-fork-boundary">{t('sandbox.chat.forkBoundary')}</li>
+                )
+                if (shouldRenderAsEvent(message, presentation)) {
+                  return (
+                    <React.Fragment key={message.id}>
+                      {header}
+                      <li data-message-id={message.id} className="sandbox-message-event">
+                        {getEventMessageText(message, authorName)}
+                      </li>
+                    </React.Fragment>
+                  )
+                }
+
+                const avatarMenu = (
+                  <ContextMenu disabled={props.selectionMode}>
+                    <ContextMenuTrigger
+                      render={(
+                        <button
+                          type="button"
+                          className="sandbox-message-avatar-wrap"
+                          aria-label={t('sandbox.chat.viewProfileOf', { name: authorName(message.authorId) })}
+                          onClick={(event) => {
+                            if (props.selectionMode) return
+                            event.stopPropagation()
+                            dialogs.openProfile(message.authorId, { x: event.clientX, y: event.clientY })
+                          }}
+                          onContextMenu={(event) => event.stopPropagation()}
+                        />
+                      )}
+                    >
+                      <SandboxAvatar kind={isBot ? 'bot' : 'user'} name={authorName(message.authorId)} src={participants[message.authorId]?.avatar} className="size-8" />
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="sandbox-glass">
+                      <ContextMenuItem onClick={() => dialogs.openProfile(message.authorId)}><IdCardIcon />{t('sandbox.menu.profile')}</ContextMenuItem>
+                      {!outgoing && (
+                        <>
+                          {getMessageGroupMemberActions(message.authorId, presentation).includes('mention') && (
+                            <ContextMenuItem onClick={() => props.onMention(message.authorId)}><AtSignIcon />{t('sandbox.member.mention')}</ContextMenuItem>
+                          )}
+                          {group && conversation && getMessageGroupMemberActions(message.authorId, presentation).includes('poke') && (
+                            <ContextMenuItem onClick={() => run(t('sandbox.error.group'), () => store.performGroupAction({ action: 'poke', groupId: group.id, targetId: message.authorId, conversationId: conversation.id }))}>
+                              <HandIcon />{t('sandbox.member.poke')}
+                            </ContextMenuItem>
+                          )}
+                          {hasGroupMemberManagementActions(message.authorId, presentation) && (
+                            <ContextMenuSub>
+                              <ContextMenuSubTrigger><UsersIcon />{t('sandbox.member.manage')}</ContextMenuSubTrigger>
+                              <ContextMenuSubContent className="sandbox-glass">
+                                <GroupMemberMenuItems target={getCurrentGroupMember(message.authorId, presentation)!} managementOnly />
+                              </ContextMenuSubContent>
+                            </ContextMenuSub>
+                          )}
+                          {getChatFriendActions(message.authorId, presentation).includes('request') ? (
+                            <ContextMenuItem onClick={() => friendAction({ action: 'request', targetId: message.authorId, comment: t('sandbox.friend.requestComment') })}>
+                              <UserPlusIcon />{t('sandbox.menu.requestFriend')}<ExtensionMark />
+                            </ContextMenuItem>
+                          ) : getFriendMenuStateOf(message.authorId, presentation).pendingOutgoing ? (
+                            <ContextMenuItem disabled><ClockIcon />{t('sandbox.menu.waitingPeer')}</ContextMenuItem>
+                          ) : getFriendMenuStateOf(message.authorId, presentation).pendingIncoming ? (
+                            <ContextMenuItem disabled><BellIcon />{t('sandbox.menu.handleInNotice')}</ContextMenuItem>
+                          ) : null}
+                          {!group && conversation && getChatFriendActions(message.authorId, presentation).includes('poke') && (
+                            <ContextMenuItem onClick={() => friendAction({ action: 'poke', targetId: message.authorId, conversationId: conversation.id })}><HandIcon />{t('sandbox.member.poke')}</ContextMenuItem>
+                          )}
+                          {!group && getChatFriendActions(message.authorId, presentation).includes('remark') && (
+                            <ContextMenuItem onClick={() => dialogs.openRemark(message.authorId)}><TagIcon />{t('sandbox.menu.remark')}<ExtensionMark /></ContextMenuItem>
+                          )}
+                          {!group && getChatFriendActions(message.authorId, presentation).includes('delete') && (
+                            <ContextMenuItem variant="destructive" onClick={() => friendAction({ action: 'delete', targetId: message.authorId })}><UserMinusIcon />{t('sandbox.menu.deleteFriend')}</ContextMenuItem>
+                          )}
+                        </>
+                      )}
+                    </ContextMenuContent>
+                  </ContextMenu>
+                )
+
+                const bubble = (
+                  <div
+                    className="sandbox-message-bubble"
+                    onClickCapture={(event) => {
+                      if (!props.selectionMode || !selectable) return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      props.onToggleSelection(message.id)
+                    }}
+                    onContextMenu={(event) => event.stopPropagation()}
+                  >
+                    {reply && (
+                      <button
+                        type="button"
+                        className="sandbox-message-quote"
+                        aria-label={t('sandbox.chat.jumpToQuote')}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          revealMessage(reply.id)
+                        }}
+                      >
+                        <strong className="sandbox-message-quote-title">{authorName(reply.authorId)}</strong>
+                        <span>{getMessageText(reply, presentation)}</span>
+                      </button>
+                    )}
+                    {message.forwardId ? (
+                      <button
+                        type="button"
+                        className="sandbox-message-quote sandbox-message-forward"
+                        disabled={!forward}
+                        aria-label={t('sandbox.forward.open')}
+                        onClick={(event) => {
+                          if (props.selectionMode || !forward || !message.forwardId) return
+                          event.stopPropagation()
+                          props.onOpenForward({ messageId: message.id, forwardId: message.forwardId })
+                        }}
+                      >
+                        <strong className="sandbox-message-quote-title">{forward?.title || t('sandbox.forward.title')}</strong>
+                        {forward ? (
+                          <>
+                            {forward.lines.map((line, lineIndex) => <span key={lineIndex}>{line}</span>)}
+                            <span className="sandbox-message-forward-entry">{t('sandbox.forward.total', { count: forward.total })}<ChevronRightIcon className="size-4" /></span>
+                          </>
+                        ) : <span>{text || t('sandbox.forward.placeholder')}</span>}
+                      </button>
+                    ) : (
+                      <>
+                        {renderMedia(message)}
+                        {text && <span className="sandbox-message-text">{text}</span>}
+                      </>
+                    )}
+                    {recalled && <span className="sandbox-message-recalled-label">{t('sandbox.chat.recalled')}</span>}
+                    {!!message.reactions?.length && (
+                      <MessageReactions
+                        reactions={message.reactions}
+                        readonly={!capabilities.react}
+                        onToggle={(emojiId) => {
+                          const toggle = resolveReactionToggle(message, emojiId, presentation)
+                          if (toggle) props.onReact(toggle.messageId, toggle.emojiId, toggle.enabled)
+                        }}
+                      />
+                    )}
+                  </div>
+                )
+
+                const trace = message.chatLuna?.trace
+                const thinkingExpanded = !!expandedThinking[message.id]
                 return (
                   <React.Fragment key={message.id}>
                     {header}
-                    <li data-message-id={message.id} className="sandbox-message-event">
-                      {getEventMessageText(message, authorName)}
-                    </li>
-                  </React.Fragment>
-                )
-              }
-
-              const avatarMenu = (
-                <ContextMenu disabled={props.selectionMode}>
-                  <ContextMenuTrigger
-                    render={(
-                      <button
-                        type="button"
-                        className="sandbox-message-avatar-wrap"
-                        aria-label={t('sandbox.chat.viewProfileOf', { name: authorName(message.authorId) })}
-                        onClick={(event) => {
-                          if (props.selectionMode) return
-                          event.stopPropagation()
-                          dialogs.openProfile(message.authorId, { x: event.clientX, y: event.clientY })
-                        }}
-                        onContextMenu={(event) => event.stopPropagation()}
-                      />
-                    )}
-                  >
-                    <SandboxAvatar kind={isBot ? 'bot' : 'user'} name={authorName(message.authorId)} src={participants[message.authorId]?.avatar} className="size-8" />
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="sandbox-glass">
-                    <ContextMenuItem onClick={() => dialogs.openProfile(message.authorId)}><IdCardIcon />{t('sandbox.menu.profile')}</ContextMenuItem>
-                    {!outgoing && (
-                      <>
-                        {getMessageGroupMemberActions(message.authorId, presentation).includes('mention') && (
-                          <ContextMenuItem onClick={() => props.onMention(message.authorId)}><AtSignIcon />{t('sandbox.member.mention')}</ContextMenuItem>
-                        )}
-                        {group && conversation && getMessageGroupMemberActions(message.authorId, presentation).includes('poke') && (
-                          <ContextMenuItem onClick={() => run(t('sandbox.error.group'), () => store.performGroupAction({ action: 'poke', groupId: group.id, targetId: message.authorId, conversationId: conversation.id }))}>
-                            <HandIcon />{t('sandbox.member.poke')}
-                          </ContextMenuItem>
-                        )}
-                        {hasGroupMemberManagementActions(message.authorId, presentation) && (
-                          <ContextMenuSub>
-                            <ContextMenuSubTrigger><UsersIcon />{t('sandbox.member.manage')}</ContextMenuSubTrigger>
-                            <ContextMenuSubContent className="sandbox-glass">
-                              <GroupMemberMenuItems target={getCurrentGroupMember(message.authorId, presentation)!} managementOnly />
-                            </ContextMenuSubContent>
-                          </ContextMenuSub>
-                        )}
-                        {getChatFriendActions(message.authorId, presentation).includes('request') ? (
-                          <ContextMenuItem onClick={() => friendAction({ action: 'request', targetId: message.authorId, comment: t('sandbox.friend.requestComment') })}>
-                            <UserPlusIcon />{t('sandbox.menu.requestFriend')}<ExtensionMark />
-                          </ContextMenuItem>
-                        ) : getFriendMenuStateOf(message.authorId, presentation).pendingOutgoing ? (
-                          <ContextMenuItem disabled><ClockIcon />{t('sandbox.menu.waitingPeer')}</ContextMenuItem>
-                        ) : getFriendMenuStateOf(message.authorId, presentation).pendingIncoming ? (
-                          <ContextMenuItem disabled><BellIcon />{t('sandbox.menu.handleInNotice')}</ContextMenuItem>
-                        ) : null}
-                        {!group && conversation && getChatFriendActions(message.authorId, presentation).includes('poke') && (
-                          <ContextMenuItem onClick={() => friendAction({ action: 'poke', targetId: message.authorId, conversationId: conversation.id })}><HandIcon />{t('sandbox.member.poke')}</ContextMenuItem>
-                        )}
-                        {!group && getChatFriendActions(message.authorId, presentation).includes('remark') && (
-                          <ContextMenuItem onClick={() => dialogs.openRemark(message.authorId)}><TagIcon />{t('sandbox.menu.remark')}<ExtensionMark /></ContextMenuItem>
-                        )}
-                        {!group && getChatFriendActions(message.authorId, presentation).includes('delete') && (
-                          <ContextMenuItem variant="destructive" onClick={() => friendAction({ action: 'delete', targetId: message.authorId })}><UserMinusIcon />{t('sandbox.menu.deleteFriend')}</ContextMenuItem>
-                        )}
-                      </>
-                    )}
-                  </ContextMenuContent>
-                </ContextMenu>
-              )
-
-              const bubble = (
-                <div
-                  className="sandbox-message-bubble"
-                  onClickCapture={(event) => {
-                    if (!props.selectionMode || !selectable) return
-                    event.preventDefault()
-                    event.stopPropagation()
-                    props.onToggleSelection(message.id)
-                  }}
-                  onContextMenu={(event) => event.stopPropagation()}
-                >
-                  {reply && (
-                    <button
-                      type="button"
-                      className="sandbox-message-quote"
-                      aria-label={t('sandbox.chat.jumpToQuote')}
+                    <li
+                      data-message-id={message.id}
+                      aria-selected={props.selectionMode ? selected : undefined}
+                      className={cn(
+                        'sandbox-message-row',
+                        direction,
+                        cluster,
+                        merged && 'is-merged',
+                        highlighted === message.id && 'is-quote-target',
+                        recalled && 'is-recalled',
+                        inherited && 'is-inherited',
+                        props.selectionMode && 'is-selecting',
+                        selectable && 'is-selectable',
+                      )}
                       onClick={(event) => {
-                        event.stopPropagation()
-                        revealMessage(reply.id)
+                        if (!selectable) return
+                        if ((event.target as HTMLElement).closest('a,button,audio,video')) return
+                        props.onToggleSelection(message.id)
                       }}
                     >
-                      <strong className="sandbox-message-quote-title">{authorName(reply.authorId)}</strong>
-                      <span>{getMessageText(reply, presentation)}</span>
-                    </button>
-                  )}
-                  {message.forwardId ? (
-                    <button
-                      type="button"
-                      className="sandbox-message-quote sandbox-message-forward"
-                      disabled={!forward}
-                      aria-label={t('sandbox.forward.open')}
-                      onClick={(event) => {
-                        if (props.selectionMode || !forward || !message.forwardId) return
-                        event.stopPropagation()
-                        props.onOpenForward({ messageId: message.id, forwardId: message.forwardId })
-                      }}
-                    >
-                      <strong className="sandbox-message-quote-title">{forward?.title || t('sandbox.forward.title')}</strong>
-                      {forward ? (
-                        <>
-                          {forward.lines.map((line, lineIndex) => <span key={lineIndex}>{line}</span>)}
-                          <span className="sandbox-message-forward-entry">{t('sandbox.forward.total', { count: forward.total })}<ChevronRightIcon className="size-4" /></span>
-                        </>
-                      ) : <span>{text || t('sandbox.forward.placeholder')}</span>}
-                    </button>
-                  ) : (
-                    <>
-                      {renderMedia(message)}
-                      {text && <span className="sandbox-message-text">{text}</span>}
-                    </>
-                  )}
-                  {recalled && <span className="sandbox-message-recalled-label">{t('sandbox.chat.recalled')}</span>}
-                  {!!message.reactions?.length && (
-                    <MessageReactions
-                      reactions={message.reactions}
-                      readonly={!capabilities.react}
-                      onToggle={(emojiId) => {
-                        const toggle = resolveReactionToggle(message, emojiId, presentation)
-                        if (toggle) props.onReact(toggle.messageId, toggle.emojiId, toggle.enabled)
-                      }}
-                    />
-                  )}
-                </div>
-              )
-
-              const trace = message.chatLuna?.trace
-              const thinkingExpanded = !!expandedThinking[message.id]
-              return (
-                <React.Fragment key={message.id}>
-                  {header}
-                  <li
-                    data-message-id={message.id}
-                    aria-selected={props.selectionMode ? selected : undefined}
-                    className={cn(
-                      'sandbox-message-row',
-                      direction,
-                      cluster,
-                      merged && 'is-merged',
-                      highlighted === message.id && 'is-quote-target',
-                      recalled && 'is-recalled',
-                      inherited && 'is-inherited',
-                      props.selectionMode && 'is-selecting',
-                      selectable && 'is-selectable',
-                    )}
-                    onClick={(event) => {
-                      if (!selectable) return
-                      if ((event.target as HTMLElement).closest('a,button,audio,video')) return
-                      props.onToggleSelection(message.id)
-                    }}
-                  >
-                    {selectable && (
-                      <span className={cn('sandbox-message-select-marker', selected && 'is-checked')} aria-hidden>
-                        <CheckIcon className="size-3" strokeWidth={3} />
-                      </span>
-                    )}
-                    <div className="sandbox-message-select-body">
-                      {avatarMenu}
-                      <div className="sandbox-message-content">
-                        {!merged && (
-                          <div className="sandbox-message-sender-line">
-                            <span>{authorName(message.authorId)}</span>
-                            {badge && <span className={cn('sandbox-message-role-badge', `is-${badge.kind}`)}>{badge.text}</span>}
+                      {selectable && (
+                        <span className={cn('sandbox-message-select-marker', selected && 'is-checked')} aria-hidden>
+                          <CheckIcon className="size-3" strokeWidth={3} />
+                        </span>
+                      )}
+                      <div className="sandbox-message-select-body">
+                        {avatarMenu}
+                        <div className="sandbox-message-content">
+                          {!merged && (
+                            <div className="sandbox-message-sender-line">
+                              <span>{authorName(message.authorId)}</span>
+                              {badge && <span className={cn('sandbox-message-role-badge', `is-${badge.kind}`)}>{badge.text}</span>}
+                            </div>
+                          )}
+                          <div className="sandbox-message-body">
+                            <div className="sandbox-message-stack">
+                              <ContextMenu disabled={recalled || props.selectionMode}>
+                                <ContextMenuTrigger render={<div className="sandbox-message-bubble-trigger" />}>
+                                  {bubble}
+                                </ContextMenuTrigger>
+                                <ContextMenuContent className="sandbox-glass">
+                                  {isBot && trace && (
+                                    <ContextMenuItem onClick={() => navigate(traceHref(trace))}><ExternalLinkIcon />{t('sandbox.chat.openRequest')}</ContextMenuItem>
+                                  )}
+                                  {capabilities.reply && <ContextMenuItem onClick={() => props.onReply(message.id)}><ReplyIcon />{t('sandbox.chat.reply')}</ContextMenuItem>}
+                                  {capabilities.branch && <ContextMenuItem onClick={() => props.onBranch(message.id)}><GitBranchIcon />{t('sandbox.chat.branch')}</ContextMenuItem>}
+                                  {capabilities.react && <ContextMenuItem onClick={() => props.onOpenReactionPicker(message.id)}><SmilePlusIcon />{t('sandbox.chat.react')}</ContextMenuItem>}
+                                  {capabilities.forward && <ContextMenuItem onClick={() => props.onEnterSelection(message.id)}><ListChecksIcon />{t('sandbox.chat.multiSelect')}</ContextMenuItem>}
+                                  {capabilities.recall && (
+                                    <>
+                                      <ContextMenuSeparator />
+                                      <ContextMenuItem variant="destructive" onClick={() => props.onRecall(message.id)}><CornerUpLeftIcon />{t('sandbox.chat.recall')}</ContextMenuItem>
+                                    </>
+                                  )}
+                                </ContextMenuContent>
+                              </ContextMenu>
+                            </div>
+                            <time className="sandbox-message-time">{formatSandboxTimeOfDay(message.createdAt)}</time>
                           </div>
-                        )}
-                        <div className="sandbox-message-body">
-                          <div className="sandbox-message-stack">
-                            <ContextMenu disabled={recalled || props.selectionMode}>
-                              <ContextMenuTrigger render={<div className="sandbox-message-bubble-trigger" />}>
-                                {bubble}
-                              </ContextMenuTrigger>
-                              <ContextMenuContent className="sandbox-glass">
-                                {isBot && trace && (
-                                  <ContextMenuItem onClick={() => navigate(traceHref(trace))}><ExternalLinkIcon />{t('sandbox.chat.openRequest')}</ContextMenuItem>
-                                )}
-                                {capabilities.reply && <ContextMenuItem onClick={() => props.onReply(message.id)}><ReplyIcon />{t('sandbox.chat.reply')}</ContextMenuItem>}
-                                {capabilities.branch && <ContextMenuItem onClick={() => props.onBranch(message.id)}><GitBranchIcon />{t('sandbox.chat.branch')}</ContextMenuItem>}
-                                {capabilities.react && <ContextMenuItem onClick={() => props.onOpenReactionPicker(message.id)}><SmilePlusIcon />{t('sandbox.chat.react')}</ContextMenuItem>}
-                                {capabilities.forward && <ContextMenuItem onClick={() => props.onEnterSelection(message.id)}><ListChecksIcon />{t('sandbox.chat.multiSelect')}</ContextMenuItem>}
-                                {capabilities.recall && (
-                                  <>
-                                    <ContextMenuSeparator />
-                                    <ContextMenuItem variant="destructive" onClick={() => props.onRecall(message.id)}><CornerUpLeftIcon />{t('sandbox.chat.recall')}</ContextMenuItem>
-                                  </>
-                                )}
-                              </ContextMenuContent>
-                            </ContextMenu>
-                          </div>
-                          <time className="sandbox-message-time">{formatSandboxTimeOfDay(message.createdAt)}</time>
                         </div>
                       </div>
+                    </li>
+                    {thinking ? (
+                      <li className={cn('sandbox-message-thinking-row', direction, recalled && 'is-recalled')}>
+                        <button
+                          type="button"
+                          className="sandbox-message-thinking-toggle"
+                          aria-expanded={thinkingExpanded}
+                          onClick={() => setExpandedThinking((value) => ({ ...value, [message.id]: !value[message.id] }))}
+                        >
+                          {thinking.usage && <UsageMetrics input={thinking.usage.inputTokens} output={thinking.usage.outputTokens} />}
+                          <span className="sandbox-message-thinking-duration">{formatThinkingDuration(thinking.thoughtDurationMs)}</span>
+                          <ChevronRightIcon className={cn('sandbox-message-thinking-chevron', thinkingExpanded && 'is-expanded')} aria-hidden />
+                        </button>
+                        {thinkingExpanded && (
+                          <div className="sandbox-message-thinking-panel">
+                            <div className="sandbox-message-thinking-content">{thinking.thought}</div>
+                          </div>
+                        )}
+                      </li>
+                    ) : usage && (
+                      <li className={cn('sandbox-message-thinking-row is-usage-only', direction, recalled && 'is-recalled')}>
+                        <UsageMetrics input={usage.inputTokens} output={usage.outputTokens} />
+                      </li>
+                    )}
+                  </React.Fragment>
+                )
+              })}
+              {thinkingStates.map((state) => (
+                <li
+                  key={`${state.botParticipantId}:${state.conversationId}`}
+                  className={cn('sandbox-message-row', state.botParticipantId === operatorId ? 'is-outgoing' : 'is-incoming')}
+                >
+                  <span className="sandbox-message-avatar-wrap">
+                    <SandboxAvatar kind="bot" name={participants[state.botParticipantId]?.name} src={participants[state.botParticipantId]?.avatar} className="size-8" />
+                  </span>
+                  <div className="sandbox-message-content">
+                    {/* 等待气泡复用普通消息的 sender-line + body 结构：少了包裹层会丢掉两者之间的 6px 间距，
+                        被替换成真实消息时会整体下跳。 */}
+                    <div className="sandbox-message-sender-line">
+                      <span>{participants[state.botParticipantId]?.name ?? state.botParticipantId}</span>
                     </div>
-                  </li>
-                  {thinking ? (
-                    <li className={cn('sandbox-message-thinking-row', direction, recalled && 'is-recalled')}>
-                      <button
-                        type="button"
-                        className="sandbox-message-thinking-toggle"
-                        aria-expanded={thinkingExpanded}
-                        onClick={() => setExpandedThinking((value) => ({ ...value, [message.id]: !value[message.id] }))}
-                      >
-                        {thinking.usage && <UsageMetrics input={thinking.usage.inputTokens} output={thinking.usage.outputTokens} />}
-                        <span className="sandbox-message-thinking-duration">{formatThinkingDuration(thinking.thoughtDurationMs)}</span>
-                        <svg className={cn('sandbox-message-thinking-chevron', thinkingExpanded && 'is-expanded')} viewBox="0 0 16 16" aria-hidden>
-                          <path d="M6 3.5 10.5 8 6 12.5" />
-                        </svg>
-                      </button>
-                      {thinkingExpanded && (
-                        <div className="sandbox-message-thinking-panel">
-                          <div className="sandbox-message-thinking-content">{thinking.thought}</div>
-                        </div>
-                      )}
-                    </li>
-                  ) : usage && (
-                    <li className={cn('sandbox-message-thinking-row is-usage-only', direction, recalled && 'is-recalled')}>
-                      <UsageMetrics input={usage.inputTokens} output={usage.outputTokens} />
-                    </li>
-                  )}
-                </React.Fragment>
-              )
-            })}
-            {thinkingStates.map((state) => (
-              <li
-                key={`${state.botParticipantId}:${state.conversationId}`}
-                className={cn('sandbox-message-row', state.botParticipantId === operatorId ? 'is-outgoing' : 'is-incoming')}
-              >
-                <span className="sandbox-message-avatar-wrap">
-                  <SandboxAvatar kind="bot" name={participants[state.botParticipantId]?.name} src={participants[state.botParticipantId]?.avatar} className="size-8" />
-                </span>
-                <div className="sandbox-message-content">
-                  {/* 等待气泡复用普通消息的 sender-line + body 结构：少了包裹层会丢掉两者之间的 6px 间距，
-                      被替换成真实消息时会整体下跳。 */}
-                  <div className="sandbox-message-sender-line">
-                    <span>{participants[state.botParticipantId]?.name ?? state.botParticipantId}</span>
-                  </div>
-                  <div className="sandbox-message-body">
-                    <div className="sandbox-message-bubble" aria-label={t('sandbox.chat.thinking')}>
-                      <span className="sandbox-message-thinking-dots">
-                        {[0, 1, 2].map((dot) => <span key={dot} className="sandbox-message-thinking-dot" />)}
-                      </span>
+                    <div className="sandbox-message-body">
+                      <div className="sandbox-message-bubble" aria-label={t('sandbox.chat.thinking')}>
+                        <span className="sandbox-message-thinking-dots">
+                          {[0, 1, 2].map((dot) => <span key={dot} className="sandbox-message-thinking-dot" />)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </ContextMenuTrigger>
-      <ContextMenuContent className="sandbox-glass">
-        <ContextMenuItem variant="destructive" onClick={props.onClearConversation}><Trash2Icon />{t('sandbox.chat.clear')}</ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+                </li>
+              ))}
+            </ol>
+          )}
+        </ContextMenuTrigger>
+        <ContextMenuContent className="sandbox-glass">
+          <ContextMenuItem variant="destructive" onClick={props.onClearConversation}><Trash2Icon />{t('sandbox.chat.clear')}</ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      {/* 视口从两层毛玻璃表头后面开始；原生轨道也从顶端开始，滚到顶时滑块藏在表头后面，所以隐藏原生条改画这一条。 */}
+      <OverlayScrollbar target={box} className="sandbox-message-scrollbar" />
+    </>
   )
 })
 
-/** ChatLuna 调用的输入、输出 Token 数；图标与源插件一致，用自绘 SVG 而不是箭头字形。 */
+/** ChatLuna 调用的输入、输出 Token 数；图标取 lucide 的到顶、到底箭头，与源插件的自绘图形一致。 */
 function UsageMetrics({ input, output }: { input?: number, output?: number }) {
   const t = useT()
   return (
     <span className="sandbox-message-thinking-usage" aria-label={t('sandbox.chat.usage')}>
       <span className="sandbox-message-thinking-usage-group">
-        <svg className="sandbox-message-thinking-usage-icon" viewBox="0 0 24 24" aria-hidden>
-          <path d="M12 20V8" />
-          <path d="m7 13 5-5 5 5" />
-          <path d="M5 4h14" />
-        </svg>
+        <ArrowUpToLineIcon className="sandbox-message-thinking-usage-icon" aria-hidden />
         <span>{input ?? '-'}</span>
-        <svg className="sandbox-message-thinking-usage-icon is-output" viewBox="0 0 24 24" aria-hidden>
-          <path d="M12 4v12" />
-          <path d="m7 11 5 5 5-5" />
-          <path d="M5 20h14" />
-        </svg>
+        <ArrowDownToLineIcon className="sandbox-message-thinking-usage-icon is-output" aria-hidden />
         <span>{output ?? '-'}</span>
       </span>
     </span>

@@ -10,16 +10,53 @@
  * 标题栏的模糊都会退化成纯半透明。ui-kit 浮层都经 Portal 挂到 body，不是工作区的后代，模糊直接写在浮层本身。
  */
 
-/* 右键菜单、下拉选择、Popover、对话框。72%：再高会把已模糊的背景盖成近乎实心。 */
+/*
+ * 右键菜单、下拉选择、Popover、对话框。72%：再高会把已模糊的背景盖成近乎实心。
+ * ui-kit 的对话框与 Popover 把控件底色 --control 设成不透明的 --popover，输入框、下拉框、描边按钮与
+ * 勾选框在玻璃上会是一块块实心色；改成半透明，控件靠描边区分。
+ */
 .sandbox-glass {
+  --control: color-mix(in oklab, var(--background) 45%, transparent);
   background: color-mix(in oklab, var(--popover) 72%, transparent);
   backdrop-filter: saturate(180%) blur(20px);
 }
 
-/* 对话框的吸顶页头自带不透明 bg-popover，滚动时让它只模糊对话框内滚过的内容。 */
-.sandbox-glass [data-slot='dialog-header'] {
+/* 禁用的输入框（如不可修改的账号 ID）自带实心 bg-muted。 */
+.sandbox-glass :is(input, textarea):disabled {
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+}
+
+/* 分段标签的底槽与选中块，同为实心 bg-muted / bg-background。 */
+.sandbox-glass [data-slot='tabs-list'] {
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+}
+
+.sandbox-glass [data-slot='tabs-indicator'] {
+  background: color-mix(in oklab, var(--background) 75%, transparent);
+}
+
+.dark .sandbox-glass [data-slot='tabs-indicator'] {
+  background: color-mix(in oklab, var(--accent) 75%, transparent);
+}
+
+/* 选项超出高度时的上下滚动箭头自带实心 bg-popover，改成向列表内渐隐，压在选项上也不显出色块。 */
+.sandbox-glass [data-slot='select-scroll-up-button'] {
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--popover) 90%, transparent), transparent);
+}
+
+.sandbox-glass [data-slot='select-scroll-down-button'] {
+  background: linear-gradient(to top, color-mix(in oklab, var(--popover) 90%, transparent), transparent);
+}
+
+/*
+ * 对话框的吸顶页头、页脚自带不透明 bg-popover，在毛玻璃对话框里会显出两块实心底。改成透明且不再叠模糊：
+ * 对话框本身是 Backdrop Root，页头再模糊只会采样到对话框自己的半透明底，叠出一块更白的矩形。
+ * 透明的前提是页头、页脚下面没有滚过的内容：沙盒的对话框一律三段式（DialogContent 加
+ * `flex flex-col overflow-hidden`，正文容器 `min-h-0 overflow-y-auto`），视口再矮也只有正文收缩滚动。
+ */
+.sandbox-glass [data-slot='dialog-header'],
+.sandbox-glass [data-slot='dialog-footer'] {
   background: transparent;
-  backdrop-filter: saturate(180%) blur(20px);
 }
 
 /*
@@ -73,6 +110,14 @@
 .sandbox-message-scroller {
   padding-top: calc(56px + var(--sandbox-page-header-height, 0px));
   scroll-padding-top: calc(56px + var(--sandbox-page-header-height, 0px));
+  /* 原生轨道从视口顶端开始，会藏在两层表头后面；隐藏后由 .sandbox-message-scrollbar 自绘。 */
+  scrollbar-width: none;
+}
+
+/* 自绘滚动条的轨道从两层表头下方开始，上下各留 4px。 */
+.sandbox-message-scrollbar {
+  top: calc(56px + var(--sandbox-page-header-height, 0px) + 4px);
+  bottom: 4px;
 }
 
 /* 消息搜索结果：叶子浮层，模糊直接写在元素上。 */

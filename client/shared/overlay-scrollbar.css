@@ -1,0 +1,45 @@
+/*
+ * 自绘纵向滚动条（overlay-scrollbar.tsx），规格见全局 SCROLLBAR.md：
+ * 轨道透明、整条 16px 宽可点；滑块贴外侧离边 1px，默认 5px，悬停轨道或拖动时 7px，粗细只向内长。
+ */
+.sandbox-overlay-scrollbar {
+  position: absolute;
+  right: 0;
+  z-index: 5;
+  display: none;
+  width: 16px;
+  touch-action: none;
+}
+
+.sandbox-overlay-scrollbar.is-visible {
+  display: block;
+}
+
+.sandbox-overlay-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  width: 5px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 22%, transparent);
+  opacity: 0;
+  transition: width 0.15s ease, background-color 0.15s ease, opacity 0.2s ease;
+}
+
+/* 滚动中、悬停轨道或拖动时显示，空闲时淡出。 */
+.sandbox-overlay-scrollbar.is-active .sandbox-overlay-scrollbar-thumb,
+.sandbox-overlay-scrollbar:hover .sandbox-overlay-scrollbar-thumb {
+  opacity: 1;
+}
+
+.sandbox-overlay-scrollbar:hover .sandbox-overlay-scrollbar-thumb,
+.sandbox-overlay-scrollbar.is-dragging .sandbox-overlay-scrollbar-thumb {
+  width: 7px;
+  background: color-mix(in oklab, var(--foreground) 36%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sandbox-overlay-scrollbar-thumb {
+    transition: none;
+  }
+}

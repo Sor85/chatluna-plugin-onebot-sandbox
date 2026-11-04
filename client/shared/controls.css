@@ -1,0 +1,17 @@
+/*
+ * 沙盒内的表单控件细节。只按 sandbox- 类名选择，不波及 v2 宿主的其他页面。
+ *
+ * 搜索框：Chrome 给 type="search" 画一个原生清除按钮，Firefox 没有；消息搜索还自带一个清除按钮，
+ * Chrome 下会出现两个。统一去掉原生按钮，两种浏览器表现一致。
+ */
+.sandbox-search-input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+/*
+ * 窄屏时横向滑动的一排标签（页头分段标签、环境管理的分区导航）：30px 高的标签条里冒出原生横向
+ * 滚动条会压住标签。隐藏滚动条，仍可用触控板横滑、滚轮与方向键切换（选中项会滚入视野）。
+ */
+.sandbox-scroll-strip {
+  scrollbar-width: none;
+}
