@@ -817,16 +817,17 @@
   white-space: nowrap;
 }
 
+/* 与消息时间一致：悬停消息行或指标所在行时显示。指标行是消息行之后的兄弟 li，用相邻选择器联动。 */
 .sandbox-message-thinking-toggle:hover .sandbox-message-thinking-usage,
-.sandbox-message-thinking-toggle:focus-visible .sandbox-message-thinking-usage {
+.sandbox-message-thinking-toggle:focus-visible .sandbox-message-thinking-usage,
+.sandbox-message-row:hover + .sandbox-message-thinking-row .sandbox-message-thinking-usage,
+.sandbox-message-thinking-row.is-usage-only:hover .sandbox-message-thinking-usage {
   opacity: 1;
   visibility: visible;
 }
 
 .sandbox-message-thinking-row.is-usage-only .sandbox-message-thinking-usage {
   margin-right: 0;
-  opacity: 1;
-  visibility: visible;
 }
 
 .sandbox-message-thinking-row.is-usage-only.is-incoming .sandbox-message-thinking-usage {
