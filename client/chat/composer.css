@@ -1,0 +1,629 @@
+/*
+ * 发送框样式，逐条移植自 koishi-plugin-chatluna-sandbox 的 `client/webqq/composer.css`。
+ *
+ * 头像堆叠的折叠与展开靠 CSS 变量驱动的 right/width 过渡，切换发送者时的重排由 Anime.js FLIP
+ * 接管（`composer.tsx`）；几何常量与 `client/webqq/user-stack.ts` 一一对应，改一处要同时改另一处。
+ * 原版的 WebQQ 主题变量在这里映射到 v2 主题 token，类名前缀换成 `sandbox-composer-`。
+ */
+
+@property --sandbox-user-avatar-overlap-center {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 39px;
+}
+
+.sandbox-composer-layout-root {
+  --sandbox-accent: var(--primary);
+  --sandbox-accent-foreground: var(--primary-foreground);
+  --sandbox-panel: var(--card);
+  --sandbox-text: var(--foreground);
+  --sandbox-muted: var(--muted-foreground);
+  --sandbox-border: var(--border);
+  --sandbox-hover: var(--accent);
+
+  position: absolute;
+  right: 0;
+  bottom: 20px;
+  left: 0;
+  z-index: 3;
+  height: 44px;
+  font-size: 13px;
+  line-height: 20px;
+  pointer-events: none;
+}
+
+.sandbox-composer {
+  position: absolute;
+  right: calc(50% - 230px);
+  bottom: 0;
+  z-index: 1;
+  isolation: isolate;
+  display: flex;
+  width: 460px;
+  max-width: calc(100% - 96px);
+  min-height: 44px;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--sandbox-text);
+  background: transparent;
+  pointer-events: auto;
+}
+
+.sandbox-composer::before {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  bottom: -1px;
+  left: calc(-1px - var(--sandbox-composer-visual-extension, 0px));
+  z-index: -1;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--sandbox-panel) 66%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sandbox-panel) 94%, transparent);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 8%);
+  content: "";
+  pointer-events: none;
+  transition: left 0.18s ease;
+}
+
+.dark .sandbox-composer::before {
+  border-color: var(--sandbox-border);
+  box-shadow: 0 8px 18px rgb(0 0 0 / 28%);
+}
+
+.sandbox-composer-context {
+  position: absolute;
+  right: 14px;
+  bottom: calc(100% + 8px);
+  left: 14px;
+  display: flex;
+  box-sizing: border-box;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.sandbox-composer-reply {
+  display: flex;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--sandbox-border);
+  border-radius: 12px;
+  color: var(--sandbox-muted);
+  background: var(--sandbox-panel);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 8%);
+  font-size: 12px;
+}
+
+.sandbox-composer-reply span {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-composer-reply button {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: transparent;
+}
+
+.sandbox-composer-reply button:hover,
+.sandbox-composer-reply button:focus-visible {
+  color: var(--sandbox-text);
+  outline: none;
+  background: var(--sandbox-hover);
+}
+
+/* 待发附件与回复条共享同一 wrap 容器；附件作为直接子项，保证回复始终是第一行最左项。 */
+.sandbox-composer-attachment-file {
+  display: inline-flex;
+  min-width: 96px;
+  max-width: 180px;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--sandbox-border);
+  border-radius: 999px;
+  color: var(--sandbox-text);
+  background: var(--sandbox-panel);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 8%);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.sandbox-composer-attachment-file > svg {
+  flex: none;
+}
+
+/* baseName 弹性截断、扩展名永不截断，长文件名显示为 "很长的名字….zip"。 */
+.sandbox-composer-attachment-name {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.sandbox-composer-attachment-base {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sandbox-composer-attachment-name span:last-child {
+  flex: none;
+}
+
+.sandbox-composer-attachment-file button {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: transparent;
+}
+
+.sandbox-composer-attachment-file button:hover,
+.sandbox-composer-attachment-file button:focus-visible {
+  outline: none;
+  background: var(--sandbox-hover);
+}
+
+.sandbox-composer-attachment-image {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  padding: 4px;
+  border: 1px solid var(--sandbox-border);
+  border-radius: 14px;
+  background: var(--sandbox-panel);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 8%);
+}
+
+.sandbox-composer-attachment-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--sandbox-hover);
+}
+
+.sandbox-composer-attachment-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sandbox-composer-attachment-remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 90%);
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(15 23 42 / 72%);
+}
+
+.sandbox-composer-user-layout-root {
+  position: relative;
+  display: inline-flex;
+  width: var(--sandbox-user-layout-width, 36px);
+  height: 36px;
+  flex: 0 0 auto;
+}
+
+.sandbox-composer-user-capsule {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  display: inline-flex;
+  width: var(--sandbox-user-capsule-collapsed-width, 36px);
+  height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0;
+  box-sizing: border-box;
+  pointer-events: auto;
+  transition: width 0.18s ease;
+}
+
+.sandbox-composer-user-capsule.is-expanded {
+  width: var(--sandbox-user-capsule-expanded-width, var(--sandbox-user-capsule-collapsed-width, 36px));
+}
+
+.sandbox-composer-user-avatar {
+  position: relative;
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.sandbox-composer-user-stack {
+  position: relative;
+  z-index: 2;
+  width: var(--sandbox-user-stack-collapsed-width, 36px);
+  height: 36px;
+  flex: 0 0 auto;
+  margin: 0;
+  pointer-events: auto;
+  transition: width 0.18s ease;
+}
+
+.sandbox-composer-user-stack.is-expanded {
+  width: var(--sandbox-user-stack-expanded-width, var(--sandbox-user-stack-collapsed-width, 36px));
+}
+
+.sandbox-composer-user-stack.is-expanded .sandbox-composer-user-switch {
+  right: var(--sandbox-user-expanded-right, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sandbox-composer-user-stack.is-expanded .sandbox-composer-user-overflow {
+  right: var(--sandbox-user-overflow-expanded-right, var(--sandbox-user-overflow-right, 0));
+  opacity: 0;
+}
+
+.sandbox-composer-user-stack.is-expanded .sandbox-composer-user-add {
+  right: var(--sandbox-user-add-expanded-right, var(--sandbox-user-add-collapsed-right, 0));
+}
+
+.sandbox-composer-user-switch {
+  position: absolute;
+  top: 0;
+  right: var(--sandbox-user-collapsed-right, 0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: transparent;
+  transition: right 0.18s ease, opacity 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sandbox-composer-user-button {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 折叠时只能用透明度隐藏额外头像；display/visibility 会让 Anime.js FLIP
+   把节点当作进入或离开元素，导致头像跟随胶囊位移并留下重影。 */
+.sandbox-composer-user-switch.is-collapsed-extra {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sandbox-composer-user-button:focus-visible {
+  z-index: 20 !important;
+  outline: 2px solid var(--sandbox-accent);
+  outline-offset: 3px;
+}
+
+.sandbox-composer-user-add {
+  position: absolute;
+  top: 0;
+  right: var(--sandbox-user-add-collapsed-right, 0);
+  z-index: 0;
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed color-mix(in srgb, var(--sandbox-accent) 52%, transparent);
+  border-radius: 50%;
+  color: var(--sandbox-accent);
+  background: color-mix(in srgb, var(--sandbox-accent) 11%, var(--sandbox-panel));
+  box-shadow: 0 0 0 2px var(--sandbox-panel);
+  pointer-events: auto;
+  transition: right 0.18s ease, opacity 0.12s ease, background-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sandbox-composer-user-add.is-collapsed-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sandbox-composer-user-add:hover {
+  background: color-mix(in srgb, var(--sandbox-accent) 18%, var(--sandbox-panel));
+}
+
+.sandbox-composer-user-add:focus-visible {
+  z-index: 20;
+  outline: 2px solid var(--sandbox-accent);
+  outline-offset: 3px;
+}
+
+.sandbox-composer-user-stack.is-expanded .sandbox-composer-user-switch.is-collapsed-extra {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 后方头像挖掉与前方头像重叠的圆形区域，由发送胶囊的真实表面形成分隔。
+   折叠与展开分别需要 39px/45px 圆心；使用与头像位移相同的 180ms 缓动连续过渡，
+   避免状态类先切换、头像仍在移动时出现瞬时宽缝。 */
+.sandbox-composer-user-switch.is-overlapped .sandbox-composer-user-avatar {
+  --sandbox-user-avatar-overlap-center: 39px;
+  --sandbox-user-avatar-overlap-cutout: radial-gradient(circle 20px at var(--sandbox-user-avatar-overlap-center) 18px, transparent 98%, #000 100%);
+  box-shadow: none;
+  transition: --sandbox-user-avatar-overlap-center 0.18s ease;
+  -webkit-mask-image: var(--sandbox-user-avatar-overlap-cutout);
+  mask-image: var(--sandbox-user-avatar-overlap-cutout);
+}
+
+.sandbox-composer-user-stack.is-expanded .sandbox-composer-user-switch.is-overlapped .sandbox-composer-user-avatar {
+  --sandbox-user-avatar-overlap-center: 45px;
+}
+
+.sandbox-composer-user-overflow {
+  --sandbox-user-avatar-overlap-center: 39px;
+  --sandbox-user-avatar-overlap-cutout: radial-gradient(circle 20px at var(--sandbox-user-avatar-overlap-center) 18px, transparent 98%, #000 100%);
+
+  position: absolute;
+  top: 0;
+  right: var(--sandbox-user-overflow-right, 0);
+  z-index: var(--sandbox-user-overflow-z-index, 0);
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding-right: 15px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  color: var(--sandbox-text);
+  background: color-mix(in srgb, var(--sandbox-accent) 16%, var(--sandbox-panel) 84%);
+  box-shadow: none;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: left;
+  pointer-events: none;
+  transition: right 0.18s ease, opacity 0.12s ease;
+  will-change: opacity;
+  -webkit-mask-image: var(--sandbox-user-avatar-overlap-cutout);
+  mask-image: var(--sandbox-user-avatar-overlap-cutout);
+}
+
+.sandbox-composer-user-overflow-avatar,
+.sandbox-composer-user-overflow-label {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+}
+
+.sandbox-composer-user-overflow-avatar {
+  opacity: 0;
+  clip-path: inset(0 100% 0 0 round 999px);
+}
+
+.sandbox-composer-user-overflow-label {
+  padding-right: 15px;
+  box-sizing: border-box;
+  background: inherit;
+  clip-path: inset(0 0 0 0 round 999px);
+}
+
+.sandbox-composer-user-overflow-plus,
+.sandbox-composer-user-overflow-count {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.sandbox-composer-user-stack.is-overflow-expanding .sandbox-composer-user-overflow {
+  opacity: 1;
+}
+
+.sandbox-composer-user-stack.is-overflow-expanding .sandbox-composer-user-switch.is-collapsed-extra,
+.sandbox-composer-user-stack.is-overflow-collapsing .sandbox-composer-user-switch.is-collapsed-extra {
+  opacity: 1;
+  pointer-events: none;
+}
+
+.sandbox-composer-user-stack.is-overflow-collapsing .sandbox-composer-user-overflow {
+  opacity: 1;
+}
+
+.sandbox-composer-user-stack.is-overflow-collapsing .sandbox-composer-user-overflow-avatar {
+  animation: sandbox-user-overflow-avatar-erase 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sandbox-composer-user-stack.is-overflow-collapsing .sandbox-composer-user-overflow-label {
+  animation: sandbox-user-overflow-label-reveal 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sandbox-user-overflow-avatar-erase {
+  0% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 999px);
+  }
+
+  100% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0 round 999px);
+  }
+}
+
+@keyframes sandbox-user-overflow-label-reveal {
+  0% {
+    clip-path: inset(0 0 0 100% round 999px);
+  }
+
+  100% {
+    clip-path: inset(0 0 0 0 round 999px);
+  }
+}
+
+.sandbox-composer-main {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.sandbox-composer-editor {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  max-height: 92px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 0;
+  padding: 6px 2px;
+  outline: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: 20px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sandbox-composer-editor[aria-disabled="true"] {
+  /* 发送中仍保留文本光标语义，不用 not-allowed 表达禁用。 */
+  opacity: 0.45;
+}
+
+.sandbox-composer-placeholder {
+  position: absolute;
+  top: 6px;
+  right: 2px;
+  bottom: 6px;
+  left: 2px;
+  overflow: hidden;
+  color: var(--sandbox-muted);
+  font: inherit;
+  line-height: 20px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* mention 作为行内原子节点，复用 onebot-webqq 的紧凑胶囊视觉，不额外创建换行。 */
+.sandbox-composer-mention {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 2px;
+  margin: 0 1px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--sandbox-accent);
+  background: color-mix(in srgb, var(--sandbox-accent) 14%, transparent);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  vertical-align: 1px;
+  user-select: none;
+}
+
+.sandbox-composer-action {
+  display: inline-flex;
+  width: 32px;
+  min-height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--sandbox-accent);
+  background: transparent;
+}
+
+.sandbox-composer-action.is-primary {
+  width: 36px;
+  min-height: 36px;
+  color: var(--sandbox-accent-foreground);
+  background: var(--sandbox-accent);
+}
+
+.sandbox-composer-action:disabled {
+  /* 禁用态靠 disabled 与透明度表达，避免禁止光标打断连续输入节奏。 */
+  opacity: 0.45;
+}
+
+.sandbox-composer-error {
+  position: absolute;
+  right: 8px;
+  bottom: calc(100% + 8px);
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--destructive);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dark .sandbox-composer-user-add {
+  border-color: var(--sandbox-accent);
+  color: var(--sandbox-accent);
+  background: var(--secondary);
+  box-shadow: 0 0 0 2px var(--sandbox-panel);
+}
+
+.dark .sandbox-composer-user-add:hover {
+  background: var(--sandbox-hover);
+}

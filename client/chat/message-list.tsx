@@ -88,6 +88,8 @@ export interface MessageListProps {
   friendMenuStates: Record<string, FriendMenuState>
   hasMoreMessages: boolean
   scrollKey: string
+  /** 悬浮发送框占住的底部高度；内容区按它留白，置底时末条消息不被发送框遮住。 */
+  bottomSpace?: number
   selectionMode: boolean
   selectedIds: string[]
   onReply(messageId: string): void
@@ -266,7 +268,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
         )}
       >
         {empty ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center" style={{ paddingBottom: props.bottomSpace }}>
             <SandboxAvatar kind={peerKind} name={conversation?.title} src={undefined} className="size-14" />
             {peerKind === 'bot' ? (
               <>
@@ -278,7 +280,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
             )}
           </div>
         ) : (
-          <ol ref={content} className="mx-auto flex max-w-4xl flex-col px-4 py-4">
+          <ol ref={content} className="mx-auto flex max-w-4xl flex-col px-4 py-4" style={{ paddingBottom: props.bottomSpace }}>
             {props.hasMoreMessages && (
               <li className="flex justify-center pb-3">
                 <button type="button" className="rounded-full px-3 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50" disabled={historyLoading} onClick={loadEarlier}>

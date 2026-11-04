@@ -49,6 +49,8 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
   const [forwardTargetOpen, setForwardTargetOpen] = React.useState(false)
   const [forwardStack, setForwardStack] = React.useState<ForwardDialogFrame[]>([])
   const [imageUrl, setImageUrl] = React.useState('')
+  // 悬浮发送框回报的占位高度，初值按单行胶囊估算（44 + 28），首帧不至于让末条消息被遮住。
+  const [composerSpace, setComposerSpace] = React.useState(72)
   const [searchOpen, setSearchOpen] = React.useState(false)
 
   const messages = React.useMemo(() => conversationMessagesOf(snapshot, conversation?.id), [snapshot, conversation?.id])
@@ -190,41 +192,65 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
       </header>
       {conversation ? (
         <>
-          <MessageList
-            ref={list}
-            messages={messages}
-            chatLunaStates={chatLunaStates}
-            replyMessages={replyMessages}
-            forwardPreviews={forwardPreviews}
-            capabilities={capabilities}
-            friendMenuStates={friendMenuStates}
-            hasMoreMessages={!!conversation.hasMoreMessages}
-            scrollKey={`${store.spaceId ?? 'main'}:${conversation.id}`}
-            selectionMode={selection.active}
-            selectedIds={[...selection.messageIds]}
-            onReply={(id) => {
-              setReplyTo(id)
-              requestAnimationFrame(() => composer.current?.focus())
-            }}
-            onBranch={(messageId) => run(t('sandbox.error.branch'), () => store.branchConversationInstance({ conversationId: conversation.id, messageId }))}
-            onRecall={(messageId) => run(t('sandbox.error.recall'), () => store.recallMessage({ conversationId: conversation.id, messageId }))}
-            onReact={(messageId, emojiId, enabled) => run(t('sandbox.error.react'), () => store.setMessageReaction({ conversationId: conversation.id, messageId, emojiId, enabled }))}
-            onOpenReactionPicker={(id) => !selection.active && setReactionTarget(id)}
-            onEnterSelection={(id) => {
-              const next = enterMessageSelection(id, selectionContext)
-              if (!next) return
-              setReplyTo('')
-              setSearchOpen(false)
-              setSelection(next)
-            }}
-            onToggleSelection={(id) => setSelection((state) => toggleMessageSelection(state, id, selectionContext))}
-            onOpenForward={(input) => void openForward(input, 'replace')}
-            onOpenImage={setImageUrl}
-            onLoadHistory={() => store.loadEarlierMessages(conversation.id)}
-            onClearConversation={() => run(t('sandbox.error.clear'), () => store.clearConversationMessages({ conversationId: conversation.id }))}
-            onMention={mentionMember}
-          />
-          {selection.active ? (
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <MessageList
+              ref={list}
+              bottomSpace={selection.active ? undefined : composerSpace}
+              messages={messages}
+              chatLunaStates={chatLunaStates}
+              replyMessages={replyMessages}
+              forwardPreviews={forwardPreviews}
+              capabilities={capabilities}
+              friendMenuStates={friendMenuStates}
+              hasMoreMessages={!!conversation.hasMoreMessages}
+              scrollKey={`${store.spaceId ?? 'main'}:${conversation.id}`}
+              selectionMode={selection.active}
+              selectedIds={[...selection.messageIds]}
+              onReply={(id) => {
+                setReplyTo(id)
+                requestAnimationFrame(() => composer.current?.focus())
+              }}
+              onBranch={(messageId) => run(t('sandbox.error.branch'), () => store.branchConversationInstance({ conversationId: conversation.id, messageId }))}
+              onRecall={(messageId) => run(t('sandbox.error.recall'), () => store.recallMessage({ conversationId: conversation.id, messageId }))}
+              onReact={(messageId, emojiId, enabled) => run(t('sandbox.error.react'), () => store.setMessageReaction({ conversationId: conversation.id, messageId, emojiId, enabled }))}
+              onOpenReactionPicker={(id) => !selection.active && setReactionTarget(id)}
+              onEnterSelection={(id) => {
+                const next = enterMessageSelection(id, selectionContext)
+                if (!next) return
+                setReplyTo('')
+                setSearchOpen(false)
+                setSelection(next)
+              }}
+              onToggleSelection={(id) => setSelection((state) => toggleMessageSelection(state, id, selectionContext))}
+              onOpenForward={(input) => void openForward(input, 'replace')}
+              onOpenImage={setImageUrl}
+              onLoadHistory={() => store.loadEarlierMessages(conversation.id)}
+              onClearConversation={() => run(t('sandbox.error.clear'), () => store.clearConversationMessages({ conversationId: conversation.id }))}
+              onMention={mentionMember}
+            />
+            {!selection.active && (
+              <Composer
+                ref={composer}
+                replyingTo={replyMessage ? {
+                  id: replyMessage.id,
+                  authorName: participantNames[replyMessage.authorId] ?? replyMessage.authorId,
+                  content: formatMentionContent(replyMessage.content, participantNames),
+                } : undefined}
+                mentionCandidates={mentionCandidates}
+                onClearReply={() => setReplyTo('')}
+                onOpenImage={setImageUrl}
+                onSpaceChange={setComposerSpace}
+                onSend={async (intent) => {
+                  if (intent.media?.length) {
+                    await store.sendMediaMessage({ conversationId: intent.conversationId, media: intent.media, content: intent.content || undefined, replyToMessageId: intent.replyToMessageId })
+                  } else {
+                    await store.sendMessage({ conversationId: intent.conversationId, content: intent.content, replyToMessageId: intent.replyToMessageId })
+                  }
+                }}
+              />
+            )}
+          </div>
+          {selection.active && (
             <div role="toolbar" aria-label={t('sandbox.chat.selectionToolbar')} className="flex items-center justify-between border-t border-border px-4 py-3">
               <strong className="text-[13px] font-medium">{t('sandbox.chat.selected', { count: selection.messageIds.length })}</strong>
               <div className="flex gap-2">
@@ -232,24 +258,6 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
                 <Button disabled={!selection.messageIds.length} onClick={() => setForwardTargetOpen(true)}><Share2Icon />{t('sandbox.forward.send')}</Button>
               </div>
             </div>
-          ) : (
-            <Composer
-              ref={composer}
-              replyingTo={replyMessage ? {
-                id: replyMessage.id,
-                authorName: participantNames[replyMessage.authorId] ?? replyMessage.authorId,
-                content: formatMentionContent(replyMessage.content, participantNames),
-              } : undefined}
-              mentionCandidates={mentionCandidates}
-              onClearReply={() => setReplyTo('')}
-              onSend={async (intent) => {
-                if (intent.media?.length) {
-                  await store.sendMediaMessage({ conversationId: intent.conversationId, media: intent.media, content: intent.content || undefined, replyToMessageId: intent.replyToMessageId })
-                } else {
-                  await store.sendMessage({ conversationId: intent.conversationId, content: intent.content, replyToMessageId: intent.replyToMessageId })
-                }
-              }}
-            />
           )}
         </>
       ) : (
