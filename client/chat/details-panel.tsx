@@ -7,8 +7,13 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
   Input,
+  ResizableHandle,
+  type ResizableLayout,
+  ResizablePanel,
+  ResizablePanelGroup,
   Textarea,
 } from '@chatluna/ui-kit'
+import { readStored, writeStored } from '@chatluna/ui-storage'
 import { useT } from '../i18n'
 import { SandboxAvatar } from '../shared/avatar'
 import { getGroupMemberDisplayName } from '../webqq/group-display'
@@ -17,6 +22,21 @@ import { useSandbox, useWorkspace } from '../workspace/context'
 import { GroupMemberMenuItems } from './member-menu'
 // 群主/管理员/头衔标签复用消息列表的 `sandbox-message-role-badge`，与聊天页保持同一套样式。
 import './messages.css'
+
+const layoutStorageKey = 'chatluna.onebot-sandbox.details-layout'
+const announcementsPanelId = 'announcements'
+const membersPanelId = 'members'
+
+/** 群公告与群成员的分隔比例（百分比），拖动分隔线后存进浏览器。 */
+function loadDetailsLayout(): ResizableLayout | undefined {
+  const stored = readStored(layoutStorageKey)
+  if (!stored || typeof stored !== 'object') return undefined
+  const record = stored as Record<string, unknown>
+  const announcements = record[announcementsPanelId]
+  const members = record[membersPanelId]
+  if (typeof announcements !== 'number' || typeof members !== 'number') return undefined
+  return { [announcementsPanelId]: announcements, [membersPanelId]: members }
+}
 
 /** 会话信息栏：群聊显示群公告与成员，私聊显示对方资料与当前环境状态。 */
 export function DetailsPanel({ onClose, onMention, className }: {
@@ -33,6 +53,7 @@ export function DetailsPanel({ onClose, onMention, className }: {
   const [sending, setSending] = React.useState(false)
   const [deleting, setDeleting] = React.useState('')
   const [error, setError] = React.useState('')
+  const [defaultLayout] = React.useState(loadDetailsLayout)
 
   React.useEffect(() => {
     setMemberQuery('')
@@ -88,8 +109,14 @@ export function DetailsPanel({ onClose, onMention, className }: {
         <Button variant="ghost" size="icon-sm" aria-label={t('sandbox.details.close')} onClick={onClose}><XIcon /></Button>
       </header>
       {group ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <section className="flex max-h-[45%] min-h-0 flex-col gap-2 border-b border-border p-4">
+        // 面板内层默认 overflow:auto，这里交给公告与成员列表各自滚动。
+        <ResizablePanelGroup
+          orientation="vertical"
+          className="min-h-0 flex-1"
+          defaultLayout={defaultLayout}
+          onLayoutChanged={(layout) => writeStored(layoutStorageKey, layout)}
+        >
+          <ResizablePanel id={announcementsPanelId} defaultSize="40" minSize={96} maxSize="75" className="flex min-h-0 flex-col gap-2 p-4" style={{ overflow: 'hidden' }}>
             <div className="flex items-center justify-between">
               <h3 className="text-[13px] font-medium">{t('sandbox.details.announcements')}</h3>
               <Button variant="ghost" size="icon-xs" aria-label={t(editorOpen ? 'sandbox.details.cancelAnnouncement' : 'sandbox.details.addAnnouncement')} onClick={() => {
@@ -107,7 +134,7 @@ export function DetailsPanel({ onClose, onMention, className }: {
                 <Button type="submit" size="sm" className="self-end" disabled={sending || !draft.trim()}>{sending ? t('sandbox.details.publishing') : t('sandbox.details.publish')}</Button>
               </form>
             )}
-            <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
               {!group.announcements.length && <p className="py-2 text-xs text-muted-foreground">{t('sandbox.details.noAnnouncement')}</p>}
               {group.announcements.map((announcement) => (
                 <article key={announcement.id} className="group/notice relative rounded-lg bg-muted/60 p-2.5 pr-8">
@@ -128,8 +155,9 @@ export function DetailsPanel({ onClose, onMention, className }: {
                 </article>
               ))}
             </div>
-          </section>
-          <section className="flex min-h-0 flex-1 flex-col gap-2 p-4">
+          </ResizablePanel>
+          <ResizableHandle aria-label={t('sandbox.details.resize')} />
+          <ResizablePanel id={membersPanelId} minSize={160} className="flex min-h-0 flex-col gap-2 p-4" style={{ overflow: 'hidden' }}>
             <h3 className="text-[13px] font-medium">{t('sandbox.details.members', { count: group.members.length })}</h3>
             <Input type="search" className="h-8" value={memberQuery} placeholder={t('sandbox.details.memberSearch')} onChange={(event) => setMemberQuery(event.target.value)} />
             <div className="-mx-2 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
@@ -155,8 +183,8 @@ export function DetailsPanel({ onClose, onMention, className }: {
                 </ContextMenu>
               ))}
             </div>
-          </section>
-        </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
           <div className="flex flex-col items-center gap-2 pt-4 text-center">
