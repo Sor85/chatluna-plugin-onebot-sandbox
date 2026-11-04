@@ -33,15 +33,15 @@ export function EnvironmentPage() {
     { id: 'users', icon: UserIcon, count: directory.users.length },
     { id: 'bots', icon: BotIcon, count: directory.bots.length },
     { id: 'groups', icon: UsersIcon, count: directory.groups.length },
-    { id: 'credentials', icon: KeyRoundIcon },
     { id: 'mcp', icon: ServerCogIcon, count: mcp.catalog?.tools.length },
     { id: 'http', icon: WebhookIcon, count: http.catalog?.routes.length },
+    { id: 'credentials', icon: KeyRoundIcon },
   ]
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 pt-3 pb-6">
       <p className="text-xs text-muted-foreground">{t('sandbox.env.description')}</p>
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 md:grid-cols-[14rem_minmax(0,1fr)] md:grid-rows-1">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 md:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)] md:grid-rows-1">
         <nav aria-label={t('sandbox.env.sections')} className="sandbox-scroll-strip flex gap-0.5 overflow-x-auto rounded-xl p-1.5 ring-1 ring-border md:flex-col md:overflow-x-visible">
           {sections.map(({ id, icon: Icon, count }) => (
             <Button
