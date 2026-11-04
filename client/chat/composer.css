@@ -3,7 +3,8 @@
  *
  * 头像堆叠的折叠与展开靠 CSS 变量驱动的 right/width 过渡，切换发送者时的重排由 Anime.js FLIP
  * 接管（`composer.tsx`）；几何常量与 `client/webqq/user-stack.ts` 一一对应，改一处要同时改另一处。
- * 原版的 WebQQ 主题变量在这里映射到 v2 主题 token，类名前缀换成 `sandbox-composer-`。
+ * 原版的 WebQQ 主题变量在这里映射到 v2 主题 token，强调色 `--sandbox-accent` 继承自 `.sandbox-webqq`
+ * （插件设置 `sandboxAccentColor`），类名前缀换成 `sandbox-composer-`。
  */
 
 @property --sandbox-user-avatar-overlap-center {
@@ -13,8 +14,7 @@
 }
 
 .sandbox-composer-layout-root {
-  --sandbox-accent: var(--primary);
-  --sandbox-accent-foreground: var(--primary-foreground);
+  --sandbox-accent-foreground: #fff;
   --sandbox-panel: var(--card);
   --sandbox-text: var(--foreground);
   --sandbox-muted: var(--muted-foreground);

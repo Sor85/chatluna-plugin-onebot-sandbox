@@ -117,6 +117,7 @@ export const Settings: Schema<Config> = Schema.object({
     Schema.const('database').description('数据库'),
   ]).default('database').role('radio').description('模拟 QQ 环境状态存储方式'),
   sandboxTimBubbleTail: Schema.boolean().default(true).description('显示气泡小尖角'),
+  sandboxAccentColor: Schema.string().default('#2563eb').role('color').description('Sandbox 强调色'),
   sandboxMarkRecalledMessages: Schema.boolean().default(true).description('仅影响 Sandbox 展示：开启时保留撤回气泡并显示撤回线，关闭时只显示撤回事件'),
   modelRequestRecordLimit: Schema.number().min(1).step(1).default(500)
     .description('每个空间保留的模型请求记录条数上限。超出后从最旧记录开始丢弃，与体积上限同时生效'),
@@ -289,6 +290,7 @@ export function apply(ctx: Context, config: Config) {
   }
   const appearance: SandboxAppearance = {
     sandboxTimBubbleTail: config.sandboxTimBubbleTail,
+    sandboxAccentColor: config.sandboxAccentColor,
     sandboxMarkRecalledMessages: config.sandboxMarkRecalledMessages,
   }
   registerConsole(createWebuiRegistrar(ctx), control, appearance, endpoint, testSpaces, unattributedModelRequests)

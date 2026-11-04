@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { cn } from '@chatluna/ui-kit'
 import { useMediaQuery } from '../shared/use-media-query'
-import { useSandbox } from '../workspace/context'
+import { useSandbox, useWorkspace } from '../workspace/context'
 import { ChatPane } from './chat-pane'
 import { DetailsPanel } from './details-panel'
 import { ChatSidebar } from './sidebar'
@@ -14,6 +14,7 @@ type Region = 'contacts' | 'chat' | 'details'
  */
 export function WebqqView() {
   const { store } = useSandbox()
+  const { workspace } = useWorkspace()
   const wide = useMediaQuery('(min-width: 1180px)')
   const narrow = useMediaQuery('(max-width: 767px)')
   const [detailsPreference, setDetailsPreference] = React.useState<'auto' | 'open' | 'closed'>('auto')
@@ -30,7 +31,8 @@ export function WebqqView() {
   const mention = React.useRef<(participantId: string) => void>(() => {})
 
   return (
-    <div className="flex min-h-0 flex-1">
+    // 强调色由插件设置决定，消息气泡与发送框（`messages.css`、`composer.css`）都从这里继承。
+    <div className="sandbox-webqq flex min-h-0 flex-1" style={{ '--sandbox-accent': workspace.appearance.sandboxAccentColor } as React.CSSProperties}>
       <ChatSidebar
         className={cn(narrow && region !== 'contacts' && 'hidden', narrow && 'w-full')}
         onSelectConversation={(conversationId) => {

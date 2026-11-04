@@ -23,7 +23,9 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 
 - 服务端日志：Cordis 4 的 Logger 会把 Error 参数格式化成 `{}`，统一写成 `logger.error('%s\n%s', message, errorDetail(error))`（`src/error-detail.ts`）。
 - 前端：组件取自 `@chatluna/ui-kit`，图标用 `lucide-react`，浏览器偏好经 `@chatluna/ui-storage` 读写；文案走 `client/locales/{zh,en}.yml`，键前缀 `sandbox.`。
-- 发送框（`client/chat/composer.tsx` + `composer.css`）逐条对齐源插件：悬浮胶囊、头像堆叠的折叠与展开用 CSS 变量驱动的过渡，切换发送者的重排用 `animejs`（与源插件同为 4.5.0）的 `createLayout` FLIP，在 `useLayoutEffect` 里于新顺序提交后补间。几何常量在 `client/webqq/user-stack.ts`，与 CSS 里的 36/21/27px 一一对应；原版主题变量映射到 v2 token（强调色取 `--primary`）。折叠的头像只能用透明度隐藏，`display`/`visibility` 会让 FLIP 把它当作进出元素。
+- 发送框（`client/chat/composer.tsx` + `composer.css`）逐条对齐源插件：悬浮胶囊、头像堆叠的折叠与展开用 CSS 变量驱动的过渡，切换发送者的重排用 `animejs`（与源插件同为 4.5.0）的 `createLayout` FLIP，在 `useLayoutEffect` 里于新顺序提交后补间。几何常量在 `client/webqq/user-stack.ts`，与 CSS 里的 36/21/27px 一一对应；原版主题变量映射到 v2 token。折叠的头像只能用透明度隐藏，`display`/`visibility` 会让 FLIP 把它当作进出元素。
+- 消息列表（`client/chat/message-list.tsx` + `messages.css`）同样逐条移植源插件的 `messages.css`：类名前缀 `sandbox-message-`，连续气泡的 3px 圆角按 `webqq/message-cluster.ts` 的 `is-cluster-*` 类收角，小尖角是列表根 `.has-tail`（设置 `sandboxTimBubbleTail`）下气泡的 `::before`，复用气泡背景。气泡几何不要改回 Tailwind 工具类，尖角与收角都依赖这些类名的选择器。
+- 强调色：WebQQ 不跟随 v2 主题的 `--primary`，取插件设置 `sandboxAccentColor`（默认与源插件同为 `#2563eb`），由 `webqq-view.tsx` 写成根节点 `.sandbox-webqq` 上的 `--sandbox-accent`，消息与发送框的样式都从它继承。
 - 路由（`client/index.ts`）不设 `fullscreen`：v2 的全屏路由脱离 shell 渲染，且不进入侧边栏导航（`packages/ui/client/client/plugins/nav.ts`）。沙盒作为普通页面嵌在 shell 里，根节点用 `h-full min-h-0` 撑满内容区。
 - 插件设置在沙盒「设置」页编辑：`src/index.ts` 的 `Settings` 是完整 schema，交给 v2 插件页的 `Config` 是同一组字段全部标 hidden 的副本，插件页只显示一行指向沙盒设置页的标题；配置仍存在 chatluna.yml 的同一条目，loader 照常补默认值。新增配置项写进 `Settings`，`Config` 自动跟随。保存走 `chatluna_config.save`（带文件戳乐观锁），插件随即按新配置重启；实时信号带 `startedAt`，客户端据此识别重启并重读工作区。
 - 预设与模型请求不在沙盒内实现：预设用 v2 自带的 `/presets` 页（沙盒导航不放入口）；模型请求用 v2 自带的 trace 页。

@@ -875,6 +875,8 @@ export interface PerformGroupActionResult {
 
 export interface SandboxAppearance {
   sandboxTimBubbleTail: boolean
+  // WebQQ 的强调色：出站气泡、发送框、选中态都取它，不跟随 v2 主题的 primary。
+  sandboxAccentColor: string
   // 只控制 WebQQ 呈现；关闭时隐藏原气泡并显示撤回事件，底层数据仍保留。
   sandboxMarkRecalledMessages: boolean
 }

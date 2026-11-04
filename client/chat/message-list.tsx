@@ -1,7 +1,5 @@
 import * as React from 'react'
 import {
-  ArrowDownIcon,
-  ArrowUpIcon,
   AtSignIcon,
   BellIcon,
   CheckIcon,
@@ -34,7 +32,7 @@ import {
   ContextMenuTrigger,
 } from '@chatluna/ui-kit'
 import type { MessageCapabilities } from '../../src/message-capabilities'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { isRecalledMessage, type SandboxMessage, type SandboxMessageTraceReference } from '../../src/types'
 import { useT } from '../i18n'
 import { SandboxAvatar } from '../shared/avatar'
@@ -74,6 +72,7 @@ import { useSandbox, useWorkspace } from '../workspace/context'
 import { ExtensionMark } from './extension-mark'
 import { GroupMemberMenuItems } from './member-menu'
 import { MessageReactions } from './reactions'
+import './messages.css'
 
 export interface MessageListHandle {
   revealMessage(messageId: string): boolean
@@ -228,30 +227,29 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
 
   const renderMedia = (message: SandboxMessage) => message.media?.map((item) => {
     const source = media[item.id]
-    if (!source) {
-      return <span key={item.id} className="text-xs opacity-70">{mediaFailures[item.id] ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
-    }
-    if (item.type === 'image') {
-      return (
-        <button key={item.id} type="button" className="block overflow-hidden rounded-lg" aria-label={t('sandbox.media.viewImage')} onClick={(event) => {
-          if (props.selectionMode) return
-          event.stopPropagation()
-          props.onOpenImage(source)
-        }}>
-          <img src={source} alt={item.name} className="max-h-64 max-w-60 object-cover" />
-        </button>
-      )
-    }
-    if (item.type === 'audio') return <audio key={item.id} src={source} controls preload="metadata" className="max-w-64" />
-    if (item.type === 'video') return <video key={item.id} src={source} controls preload="metadata" className="max-h-64 max-w-72 rounded-lg" />
     return (
-      <a key={item.id} href={source} download={item.name} className="flex items-center gap-2 rounded-lg bg-background/60 px-3 py-2 text-foreground">
-        <PaperclipIcon className="size-4 shrink-0" />
-        <span className="flex min-w-0 flex-col">
-          <strong className="truncate text-[13px] font-medium">{item.name}</strong>
-          <small className="text-[11px] text-muted-foreground">{formatMediaSize(item.size)}</small>
-        </span>
-      </a>
+      <div key={item.id} className="sandbox-message-media">
+        {!source ? (
+          <span className="sandbox-message-media-loading">{mediaFailures[item.id] ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
+        ) : item.type === 'image' ? (
+          <button type="button" className="sandbox-message-image" aria-label={t('sandbox.media.viewImage')} onClick={(event) => {
+            if (props.selectionMode) return
+            event.stopPropagation()
+            props.onOpenImage(source)
+          }}>
+            <img src={source} alt={item.name} />
+          </button>
+        ) : item.type === 'audio' ? (
+          <audio src={source} controls preload="metadata" />
+        ) : item.type === 'video' ? (
+          <video src={source} controls preload="metadata" />
+        ) : (
+          <a href={source} download={item.name} className="sandbox-message-file">
+            <PaperclipIcon className="size-[18px]" />
+            <span><strong>{item.name}</strong><small>{formatMediaSize(item.size)}</small></span>
+          </a>
+        )}
+      </div>
     )
   })
 
@@ -261,7 +259,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
         render={(
           <div
             ref={box}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]"
             aria-label={t('sandbox.chat.messages')}
             onScroll={handleScroll}
           />
@@ -280,16 +278,21 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
             )}
           </div>
         ) : (
-          <ol ref={content} className="mx-auto flex max-w-4xl flex-col px-4 py-4" style={{ paddingBottom: props.bottomSpace }}>
+          <ol
+            ref={content}
+            className={cn('sandbox-message-list', bubbleTail && 'has-tail', props.selectionMode && 'is-selecting')}
+            style={{ paddingBottom: props.bottomSpace }}
+          >
             {props.hasMoreMessages && (
-              <li className="flex justify-center pb-3">
-                <button type="button" className="rounded-full px-3 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50" disabled={historyLoading} onClick={loadEarlier}>
+              <li className="sandbox-message-history-row">
+                <button type="button" className="sandbox-message-history" disabled={historyLoading} onClick={loadEarlier}>
                   {historyLoading ? t('sandbox.common.loading') : t('sandbox.chat.earlier')}
                 </button>
               </li>
             )}
             {props.messages.map((message, index) => {
               const outgoing = message.authorId === operatorId
+              const direction = outgoing ? 'is-outgoing' : 'is-incoming'
               const capabilities = readMessageCapabilities(message, presentation)
               const merged = isMergedMessage(props.messages, index, operatorId)
               const cluster = getMessageClusterClass(props.messages, index, operatorId)
@@ -307,15 +310,13 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
               const boundary = isForkBoundary(props.messages, index, presentation)
 
               const header = boundary && (
-                <li key={`${message.id}:boundary`} className="my-3 flex items-center gap-3 text-[11px] text-muted-foreground">
-                  <span className="h-px flex-1 bg-border" />{t('sandbox.chat.forkBoundary')}<span className="h-px flex-1 bg-border" />
-                </li>
+                <li key={`${message.id}:boundary`} className="sandbox-message-fork-boundary">{t('sandbox.chat.forkBoundary')}</li>
               )
               if (shouldRenderAsEvent(message, presentation)) {
                 return (
                   <React.Fragment key={message.id}>
                     {header}
-                    <li data-message-id={message.id} className="my-2 self-center rounded-full bg-muted/70 px-3 py-1 text-[11px] text-muted-foreground">
+                    <li data-message-id={message.id} className="sandbox-message-event">
                       {getEventMessageText(message, authorName)}
                     </li>
                   </React.Fragment>
@@ -328,7 +329,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                     render={(
                       <button
                         type="button"
-                        className="shrink-0 self-start rounded-full"
+                        className="sandbox-message-avatar-wrap"
                         aria-label={t('sandbox.chat.viewProfileOf', { name: authorName(message.authorId) })}
                         onClick={(event) => {
                           if (props.selectionMode) return
@@ -339,7 +340,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                       />
                     )}
                   >
-                    <SandboxAvatar kind={isBot ? 'bot' : 'user'} name={authorName(message.authorId)} src={participants[message.authorId]?.avatar} />
+                    <SandboxAvatar kind={isBot ? 'bot' : 'user'} name={authorName(message.authorId)} src={participants[message.authorId]?.avatar} className="size-8" />
                   </ContextMenuTrigger>
                   <ContextMenuContent>
                     <ContextMenuItem onClick={() => dialogs.openProfile(message.authorId)}><IdCardIcon />{t('sandbox.menu.profile')}</ContextMenuItem>
@@ -387,15 +388,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
 
               const bubble = (
                 <div
-                  className={cn(
-                    'relative flex max-w-full flex-col gap-1.5 rounded-2xl px-3 py-2 text-[13.5px] leading-6 break-words whitespace-pre-wrap',
-                    outgoing ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
-                    bubbleTail && !merged && (outgoing ? 'rounded-tr-md' : 'rounded-tl-md'),
-                    !bubbleTail && cluster === 'is-cluster-middle' && (outgoing ? 'rounded-r-md' : 'rounded-l-md'),
-                    forward && 'bg-card text-card-foreground ring-1 ring-border',
-                    recalled && 'opacity-55',
-                    highlighted === message.id && 'ring-2 ring-ring ring-offset-2 ring-offset-background',
-                  )}
+                  className="sandbox-message-bubble"
                   onClickCapture={(event) => {
                     if (!props.selectionMode || !selectable) return
                     event.preventDefault()
@@ -407,21 +400,21 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                   {reply && (
                     <button
                       type="button"
-                      className={cn('flex flex-col rounded-lg border-l-2 px-2 py-1 text-left text-xs', outgoing ? 'border-primary-foreground/50 bg-primary-foreground/10' : 'border-primary/50 bg-background/60')}
+                      className="sandbox-message-quote"
                       aria-label={t('sandbox.chat.jumpToQuote')}
                       onClick={(event) => {
                         event.stopPropagation()
                         revealMessage(reply.id)
                       }}
                     >
-                      <strong className="font-medium">{authorName(reply.authorId)}</strong>
-                      <span className="line-clamp-2 opacity-80">{getMessageText(reply, presentation)}</span>
+                      <strong className="sandbox-message-quote-title">{authorName(reply.authorId)}</strong>
+                      <span>{getMessageText(reply, presentation)}</span>
                     </button>
                   )}
                   {message.forwardId ? (
                     <button
                       type="button"
-                      className="flex w-60 flex-col gap-0.5 text-left disabled:opacity-60"
+                      className="sandbox-message-quote sandbox-message-forward"
                       disabled={!forward}
                       aria-label={t('sandbox.forward.open')}
                       onClick={(event) => {
@@ -430,21 +423,21 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                         props.onOpenForward({ messageId: message.id, forwardId: message.forwardId })
                       }}
                     >
-                      <strong className="text-[13px] font-medium">{forward?.title || t('sandbox.forward.title')}</strong>
+                      <strong className="sandbox-message-quote-title">{forward?.title || t('sandbox.forward.title')}</strong>
                       {forward ? (
                         <>
-                          {forward.lines.map((line, lineIndex) => <span key={lineIndex} className="truncate text-xs text-muted-foreground">{line}</span>)}
-                          <span className="mt-1 border-t border-border pt-1 text-[11px] text-muted-foreground">{t('sandbox.forward.total', { count: forward.total })}</span>
+                          {forward.lines.map((line, lineIndex) => <span key={lineIndex}>{line}</span>)}
+                          <span className="sandbox-message-forward-entry">{t('sandbox.forward.total', { count: forward.total })}<ChevronRightIcon className="size-4" /></span>
                         </>
-                      ) : <span className="text-xs text-muted-foreground">{text || t('sandbox.forward.placeholder')}</span>}
+                      ) : <span>{text || t('sandbox.forward.placeholder')}</span>}
                     </button>
                   ) : (
                     <>
                       {renderMedia(message)}
-                      {text && <span>{text}</span>}
+                      {text && <span className="sandbox-message-text">{text}</span>}
                     </>
                   )}
-                  {recalled && <span className="text-[11px] italic opacity-80">{t('sandbox.chat.recalled')}</span>}
+                  {recalled && <span className="sandbox-message-recalled-label">{t('sandbox.chat.recalled')}</span>}
                   {!!message.reactions?.length && (
                     <MessageReactions
                       reactions={message.reactions}
@@ -459,6 +452,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
               )
 
               const trace = message.chatLuna?.trace
+              const thinkingExpanded = !!expandedThinking[message.id]
               return (
                 <React.Fragment key={message.id}>
                   {header}
@@ -466,12 +460,15 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                     data-message-id={message.id}
                     aria-selected={props.selectionMode ? selected : undefined}
                     className={cn(
-                      'group/row relative flex gap-2.5 rounded-xl px-1 transition-colors',
-                      outgoing && 'flex-row-reverse',
-                      merged ? 'mt-1' : 'mt-3',
-                      inherited && 'opacity-75',
-                      selectable && 'hover:bg-accent/40',
-                      selected && 'bg-accent/60',
+                      'sandbox-message-row',
+                      direction,
+                      cluster,
+                      merged && 'is-merged',
+                      highlighted === message.id && 'is-quote-target',
+                      recalled && 'is-recalled',
+                      inherited && 'is-inherited',
+                      props.selectionMode && 'is-selecting',
+                      selectable && 'is-selectable',
                     )}
                     onClick={(event) => {
                       if (!selectable) return
@@ -479,104 +476,96 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                       props.onToggleSelection(message.id)
                     }}
                   >
-                    {props.selectionMode && (
-                      <span
-                        className={cn(
-                          'mt-2 flex size-4 shrink-0 items-center justify-center rounded-full border border-input',
-                          selected && 'border-primary bg-primary text-primary-foreground',
-                          !selectable && 'invisible',
-                        )}
-                        aria-hidden
-                      >
-                        {selected && <CheckIcon className="size-3" strokeWidth={3} />}
+                    {selectable && (
+                      <span className={cn('sandbox-message-select-marker', selected && 'is-checked')} aria-hidden>
+                        <CheckIcon className="size-3" strokeWidth={3} />
                       </span>
                     )}
-                    {merged ? <span className="w-9 shrink-0" aria-hidden /> : avatarMenu}
-                    <div className={cn('flex min-w-0 max-w-[min(72%,40rem)] flex-col gap-1', outgoing && 'items-end')}>
-                      {!merged && (
-                        <div className={cn('flex items-center gap-1.5 text-[11px] text-muted-foreground', outgoing && 'flex-row-reverse')}>
-                          <span>{authorName(message.authorId)}</span>
-                          {badge && (
-                            <span className={cn(
-                              'rounded px-1 text-[10px] leading-4',
-                              badge.kind === 'owner' ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                                : badge.kind === 'admin' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                  : 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
-                            )}>{badge.text}</span>
-                          )}
+                    <div className="sandbox-message-select-body">
+                      {avatarMenu}
+                      <div className="sandbox-message-content">
+                        {!merged && (
+                          <div className="sandbox-message-sender-line">
+                            <span>{authorName(message.authorId)}</span>
+                            {badge && <span className={cn('sandbox-message-role-badge', `is-${badge.kind}`)}>{badge.text}</span>}
+                          </div>
+                        )}
+                        <div className="sandbox-message-body">
+                          <div className="sandbox-message-stack">
+                            <ContextMenu disabled={recalled || props.selectionMode}>
+                              <ContextMenuTrigger render={<div className="sandbox-message-bubble-trigger" />}>
+                                {bubble}
+                              </ContextMenuTrigger>
+                              <ContextMenuContent>
+                                {isBot && trace && (
+                                  <ContextMenuItem onClick={() => navigate(traceHref(trace))}><ExternalLinkIcon />{t('sandbox.chat.openRequest')}</ContextMenuItem>
+                                )}
+                                {capabilities.reply && <ContextMenuItem onClick={() => props.onReply(message.id)}><ReplyIcon />{t('sandbox.chat.reply')}</ContextMenuItem>}
+                                {capabilities.branch && <ContextMenuItem onClick={() => props.onBranch(message.id)}><GitBranchIcon />{t('sandbox.chat.branch')}</ContextMenuItem>}
+                                {capabilities.react && <ContextMenuItem onClick={() => props.onOpenReactionPicker(message.id)}><SmilePlusIcon />{t('sandbox.chat.react')}</ContextMenuItem>}
+                                {capabilities.forward && <ContextMenuItem onClick={() => props.onEnterSelection(message.id)}><ListChecksIcon />{t('sandbox.chat.multiSelect')}</ContextMenuItem>}
+                                {capabilities.recall && (
+                                  <>
+                                    <ContextMenuSeparator />
+                                    <ContextMenuItem variant="destructive" onClick={() => props.onRecall(message.id)}><CornerUpLeftIcon />{t('sandbox.chat.recall')}</ContextMenuItem>
+                                  </>
+                                )}
+                              </ContextMenuContent>
+                            </ContextMenu>
+                          </div>
+                          <time className="sandbox-message-time">{formatSandboxTimeOfDay(message.createdAt)}</time>
                         </div>
-                      )}
-                      <div className={cn('flex items-end gap-2', outgoing && 'flex-row-reverse')}>
-                        <ContextMenu disabled={recalled || props.selectionMode}>
-                          <ContextMenuTrigger render={<div className="min-w-0" />}>
-                            {bubble}
-                          </ContextMenuTrigger>
-                          <ContextMenuContent>
-                            {isBot && trace && (
-                              <ContextMenuItem onClick={() => navigate(traceHref(trace))}><ExternalLinkIcon />{t('sandbox.chat.openRequest')}</ContextMenuItem>
-                            )}
-                            {capabilities.reply && <ContextMenuItem onClick={() => props.onReply(message.id)}><ReplyIcon />{t('sandbox.chat.reply')}</ContextMenuItem>}
-                            {capabilities.branch && <ContextMenuItem onClick={() => props.onBranch(message.id)}><GitBranchIcon />{t('sandbox.chat.branch')}</ContextMenuItem>}
-                            {capabilities.react && <ContextMenuItem onClick={() => props.onOpenReactionPicker(message.id)}><SmilePlusIcon />{t('sandbox.chat.react')}</ContextMenuItem>}
-                            {capabilities.forward && <ContextMenuItem onClick={() => props.onEnterSelection(message.id)}><ListChecksIcon />{t('sandbox.chat.multiSelect')}</ContextMenuItem>}
-                            {capabilities.recall && (
-                              <>
-                                <ContextMenuSeparator />
-                                <ContextMenuItem variant="destructive" onClick={() => props.onRecall(message.id)}><CornerUpLeftIcon />{t('sandbox.chat.recall')}</ContextMenuItem>
-                              </>
-                            )}
-                          </ContextMenuContent>
-                        </ContextMenu>
-                        <time className="shrink-0 pb-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100">
-                          {formatSandboxTimeOfDay(message.createdAt)}
-                        </time>
                       </div>
-                      {thinking && (
-                        <div className={cn('flex w-full max-w-md flex-col', outgoing && 'items-end', recalled && 'opacity-55')}>
-                          <button
-                            type="button"
-                            className="flex items-center gap-2 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
-                            aria-expanded={!!expandedThinking[message.id]}
-                            onClick={() => setExpandedThinking((value) => ({ ...value, [message.id]: !value[message.id] }))}
-                          >
-                            {thinking.usage && <UsageBadge input={thinking.usage.inputTokens} output={thinking.usage.outputTokens} />}
-                            <span>{formatThinkingDuration(thinking.thoughtDurationMs)}</span>
-                            <ChevronRightIcon className={cn('size-3 transition-transform duration-200 ease-spring', expandedThinking[message.id] && 'rotate-90')} />
-                          </button>
-                          {expandedThinking[message.id] && (
-                            <div className="mt-1 max-h-80 w-full overflow-y-auto rounded-lg border-l-2 border-border bg-muted/40 px-3 py-2 text-xs leading-5 whitespace-pre-wrap text-muted-foreground animate-in fade-in-0 slide-in-from-top-1">
-                              {thinking.thought}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {(usage || (isBot && trace && !recalled)) && (
-                        <div className={cn('flex items-center gap-3 px-1.5 text-[11px] text-muted-foreground', outgoing && 'flex-row-reverse', recalled && 'opacity-55')}>
-                          {usage && <UsageBadge input={usage.inputTokens} output={usage.outputTokens} />}
-                          {isBot && trace && !recalled && (
-                            <Link
-                              to={traceHref(trace)}
-                              className="inline-flex items-center gap-1 rounded-sm opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-foreground focus-visible:opacity-100"
-                            >
-                              <ExternalLinkIcon className="size-3" />{t('sandbox.chat.openRequest')}
-                            </Link>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </li>
+                  {thinking ? (
+                    <li className={cn('sandbox-message-thinking-row', direction, recalled && 'is-recalled')}>
+                      <button
+                        type="button"
+                        className="sandbox-message-thinking-toggle"
+                        aria-expanded={thinkingExpanded}
+                        onClick={() => setExpandedThinking((value) => ({ ...value, [message.id]: !value[message.id] }))}
+                      >
+                        {thinking.usage && <UsageMetrics input={thinking.usage.inputTokens} output={thinking.usage.outputTokens} />}
+                        <span className="sandbox-message-thinking-duration">{formatThinkingDuration(thinking.thoughtDurationMs)}</span>
+                        <svg className={cn('sandbox-message-thinking-chevron', thinkingExpanded && 'is-expanded')} viewBox="0 0 16 16" aria-hidden>
+                          <path d="M6 3.5 10.5 8 6 12.5" />
+                        </svg>
+                      </button>
+                      {thinkingExpanded && (
+                        <div className="sandbox-message-thinking-panel">
+                          <div className="sandbox-message-thinking-content">{thinking.thought}</div>
+                        </div>
+                      )}
+                    </li>
+                  ) : usage && (
+                    <li className={cn('sandbox-message-thinking-row is-usage-only', direction, recalled && 'is-recalled')}>
+                      <UsageMetrics input={usage.inputTokens} output={usage.outputTokens} />
+                    </li>
+                  )}
                 </React.Fragment>
               )
             })}
             {thinkingStates.map((state) => (
-              <li key={`${state.botParticipantId}:${state.conversationId}`} className={cn('mt-3 flex gap-2.5 px-1', state.botParticipantId === operatorId && 'flex-row-reverse')}>
-                <SandboxAvatar kind="bot" name={participants[state.botParticipantId]?.name} src={participants[state.botParticipantId]?.avatar} />
-                <div className="flex flex-col gap-1">
-                  <span className="text-[11px] text-muted-foreground">{participants[state.botParticipantId]?.name ?? state.botParticipantId}</span>
-                  <div className="flex h-9 items-center gap-1 rounded-2xl rounded-tl-md bg-muted px-4" aria-label={t('sandbox.chat.thinking')}>
-                    {[0, 1, 2].map((dot) => (
-                      <span key={dot} className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 motion-reduce:animate-none" style={{ animationDelay: `${dot * 150}ms` }} />
-                    ))}
+              <li
+                key={`${state.botParticipantId}:${state.conversationId}`}
+                className={cn('sandbox-message-row', state.botParticipantId === operatorId ? 'is-outgoing' : 'is-incoming')}
+              >
+                <span className="sandbox-message-avatar-wrap">
+                  <SandboxAvatar kind="bot" name={participants[state.botParticipantId]?.name} src={participants[state.botParticipantId]?.avatar} className="size-8" />
+                </span>
+                <div className="sandbox-message-content">
+                  {/* 等待气泡复用普通消息的 sender-line + body 结构：少了包裹层会丢掉两者之间的 6px 间距，
+                      被替换成真实消息时会整体下跳。 */}
+                  <div className="sandbox-message-sender-line">
+                    <span>{participants[state.botParticipantId]?.name ?? state.botParticipantId}</span>
+                  </div>
+                  <div className="sandbox-message-body">
+                    <div className="sandbox-message-bubble" aria-label={t('sandbox.chat.thinking')}>
+                      <span className="sandbox-message-thinking-dots">
+                        {[0, 1, 2].map((dot) => <span key={dot} className="sandbox-message-thinking-dot" />)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </li>
@@ -591,12 +580,25 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
   )
 })
 
-function UsageBadge({ input, output }: { input?: number, output?: number }) {
+/** ChatLuna 调用的输入、输出 Token 数；图标与源插件一致，用自绘 SVG 而不是箭头字形。 */
+function UsageMetrics({ input, output }: { input?: number, output?: number }) {
   const t = useT()
   return (
-    <span className="inline-flex items-center gap-1.5 tabular-nums" aria-label={t('sandbox.chat.usage')}>
-      <span className="inline-flex items-center"><ArrowUpIcon className="size-3" />{input ?? '-'}</span>
-      <span className="inline-flex items-center"><ArrowDownIcon className="size-3" />{output ?? '-'}</span>
+    <span className="sandbox-message-thinking-usage" aria-label={t('sandbox.chat.usage')}>
+      <span className="sandbox-message-thinking-usage-group">
+        <svg className="sandbox-message-thinking-usage-icon" viewBox="0 0 24 24" aria-hidden>
+          <path d="M12 20V8" />
+          <path d="m7 13 5-5 5 5" />
+          <path d="M5 4h14" />
+        </svg>
+        <span>{input ?? '-'}</span>
+        <svg className="sandbox-message-thinking-usage-icon is-output" viewBox="0 0 24 24" aria-hidden>
+          <path d="M12 4v12" />
+          <path d="m7 11 5 5 5-5" />
+          <path d="M5 20h14" />
+        </svg>
+        <span>{output ?? '-'}</span>
+      </span>
     </span>
   )
 }

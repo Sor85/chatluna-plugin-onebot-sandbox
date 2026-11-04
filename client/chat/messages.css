@@ -1,0 +1,947 @@
+/*
+ * 消息列表样式，逐条移植自 koishi-plugin-chatluna-sandbox 的 `client/webqq/messages.css` 与
+ * `message-selection.css` 中的消息行部分。
+ *
+ * 类名前缀由 `chatluna-sandbox-message-` 换成 `sandbox-message-`；原版的 WebQQ 主题变量映射到 v2 主题
+ * token，强调色取插件设置 `sandboxAccentColor`（`webqq-view.tsx` 写在 `.sandbox-webqq` 上）。
+ * 气泡小尖角由列表根上的 `.has-tail` 打开，对应设置 `sandboxTimBubbleTail`。
+ */
+
+.sandbox-webqq {
+  --sandbox-accent: #2563eb;
+}
+
+.sandbox-message-list {
+  --sandbox-text: var(--foreground);
+  --sandbox-muted: var(--muted-foreground);
+  --sandbox-border: var(--border);
+  --sandbox-panel: var(--card);
+
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 20px 22px;
+  list-style: none;
+  color: var(--sandbox-text);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.sandbox-message-event {
+  align-self: center;
+  width: fit-content;
+  max-width: 74%;
+  margin: 0 auto 16px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--sandbox-text) 58%, transparent);
+  background: rgb(148 163 184 / 14%);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.sandbox-message-event:last-child {
+  margin-bottom: 0;
+}
+
+/* 分支的继承前缀整段弱化，与自有消息拉开层级。 */
+.sandbox-message-row.is-inherited {
+  opacity: 0.68;
+}
+
+/* 分叉点分界：继承前缀与自有消息之间的一条说明线，画在自有消息一侧。 */
+.sandbox-message-fork-boundary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  color: color-mix(in srgb, var(--sandbox-text) 46%, transparent);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.sandbox-message-fork-boundary::before,
+.sandbox-message-fork-boundary::after {
+  height: 1px;
+  flex: 1;
+  background: color-mix(in srgb, var(--sandbox-border) 70%, transparent);
+  content: "";
+}
+
+.sandbox-message-history-row {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 12px;
+}
+
+.sandbox-message-history {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: var(--sandbox-muted);
+  background: color-mix(in srgb, var(--sandbox-panel) 82%, transparent);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.sandbox-message-history:hover:not(:disabled),
+.sandbox-message-history:focus-visible {
+  color: var(--sandbox-accent);
+  outline: none;
+  background: color-mix(in srgb, var(--sandbox-accent) 10%, var(--sandbox-panel));
+}
+
+.sandbox-message-history:disabled {
+  opacity: 0.6;
+}
+
+/* 撤回只弱化气泡内容；文字和媒体分别覆盖撤回线，避免媒体仍被误认成可操作内容。 */
+.sandbox-message-row.is-recalled .sandbox-message-bubble,
+.sandbox-message-thinking-row.is-recalled {
+  opacity: 0.62;
+}
+
+.sandbox-message-row.is-recalled .sandbox-message-text {
+  text-decoration-line: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-skip-ink: none;
+}
+
+.sandbox-message-row.is-recalled .sandbox-message-media img,
+.sandbox-message-row.is-recalled .sandbox-message-media audio,
+.sandbox-message-row.is-recalled .sandbox-message-media video,
+.sandbox-message-row.is-recalled .sandbox-message-file {
+  opacity: 0.72;
+  filter: grayscale(0.15);
+}
+
+.sandbox-message-row.is-recalled .sandbox-message-media {
+  position: relative;
+}
+
+.sandbox-message-row.is-recalled .sandbox-message-media::after {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: currentColor;
+  content: "";
+  opacity: 0.72;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.sandbox-message-recalled-label {
+  align-self: flex-end;
+  color: var(--sandbox-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-recalled-label {
+  color: rgb(255 255 255 / 78%);
+}
+
+.sandbox-message-row {
+  max-width: 74%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* 置底时末条消息不再叠加 16px 行距，避免与发送框之间的间隙翻倍。 */
+.sandbox-message-row:last-child {
+  margin-bottom: 0;
+}
+
+.sandbox-message-row.is-outgoing {
+  margin-left: auto;
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.sandbox-message-row.is-merged {
+  margin-top: -14px;
+}
+
+.sandbox-message-avatar-wrap {
+  position: relative;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: transparent;
+}
+
+.sandbox-message-row.is-merged .sandbox-message-avatar-wrap {
+  visibility: hidden;
+}
+
+.sandbox-message-content {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.sandbox-message-body {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-content {
+  align-items: flex-end;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-body {
+  flex-direction: row-reverse;
+}
+
+.sandbox-message-sender-line {
+  display: flex;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-sender-line {
+  justify-content: flex-end;
+  flex-direction: row-reverse;
+}
+
+.sandbox-message-sender-line + .sandbox-message-body {
+  margin-top: 6px;
+}
+
+.sandbox-message-time {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  color: var(--sandbox-muted);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.sandbox-message-row:hover .sandbox-message-time {
+  opacity: 1;
+}
+
+.sandbox-message-role-badge {
+  max-width: 120px;
+  overflow: hidden;
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sandbox-message-role-badge.is-owner {
+  color: #9a5b00;
+  background: #fff3cf;
+}
+
+.sandbox-message-role-badge.is-admin {
+  color: #237343;
+  background: #e9f8ef;
+}
+
+.sandbox-message-role-badge.is-title {
+  color: #0b7fab;
+  background: rgb(18 183 245 / 10%);
+}
+
+.sandbox-message-stack {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-stack {
+  align-items: flex-end;
+}
+
+/* 右键菜单的触发层，只包住气泡，不参与气泡几何。 */
+.sandbox-message-bubble-trigger {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sandbox-message-bubble {
+  --sandbox-bubble-bg: rgb(255 255 255 / 90%);
+  --sandbox-reaction-bg: color-mix(in srgb, var(--sandbox-bubble-bg) 88%, #64748b 12%);
+
+  position: relative;
+  display: flex;
+  max-width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  margin: 1px 0;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 18px;
+  color: var(--sandbox-text);
+  background: var(--sandbox-bubble-bg);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 8%);
+  font-size: 13px;
+  line-height: 19px;
+  text-align: left;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-bubble {
+  --sandbox-bubble-bg: var(--sandbox-accent);
+  --sandbox-reaction-bg: color-mix(in srgb, var(--sandbox-bubble-bg) 88%, #0f172a 12%);
+
+  color: #fff;
+  /* 强调色气泡会削弱同透明度投影的视觉，保留几何参数并提高对比度。 */
+  box-shadow: 0 2px 8px rgb(15 23 42 / 16%);
+}
+
+/* 同一发送者的连续气泡：靠近同伴的一侧收成 3px 小圆角。 */
+.sandbox-message-row.is-cluster-first:not(.is-outgoing) .sandbox-message-bubble {
+  border-bottom-left-radius: 3px;
+}
+
+.sandbox-message-row.is-cluster-middle:not(.is-outgoing) .sandbox-message-bubble {
+  border-radius: 3px 18px 18px 3px;
+}
+
+.sandbox-message-row.is-cluster-last:not(.is-outgoing) .sandbox-message-bubble {
+  border-top-left-radius: 3px;
+}
+
+.sandbox-message-row.is-outgoing.is-cluster-first .sandbox-message-bubble {
+  border-bottom-right-radius: 3px;
+}
+
+.sandbox-message-row.is-outgoing.is-cluster-middle .sandbox-message-bubble {
+  border-radius: 18px 3px 3px 18px;
+}
+
+.sandbox-message-row.is-outgoing.is-cluster-last .sandbox-message-bubble {
+  border-top-right-radius: 3px;
+}
+
+/* 气泡小尖角：只画在一簇的首条上，朝向头像；尖角复用气泡背景，跟随强调色与暗色。 */
+.sandbox-message-list.has-tail .sandbox-message-row:not(.is-outgoing):not(.is-merged) .sandbox-message-bubble {
+  border-top-left-radius: 0;
+}
+
+.sandbox-message-list.has-tail .sandbox-message-row.is-outgoing:not(.is-merged) .sandbox-message-bubble {
+  border-top-right-radius: 0;
+}
+
+.sandbox-message-list.has-tail .sandbox-message-row:not(.is-merged) .sandbox-message-bubble::before {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 14px;
+  background: inherit;
+  content: "";
+}
+
+.sandbox-message-list.has-tail .sandbox-message-row:not(.is-outgoing):not(.is-merged) .sandbox-message-bubble::before {
+  left: -8px;
+  clip-path: path("M 0 0 L 8 0 L 8 14 Q 8 3 0 0 Z");
+}
+
+.sandbox-message-list.has-tail .sandbox-message-row.is-outgoing:not(.is-merged) .sandbox-message-bubble::before {
+  right: -8px;
+  clip-path: path("M 8 0 L 0 0 L 0 14 Q 0 3 8 0 Z");
+}
+
+.sandbox-message-quote {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  border: 0;
+  border-left: 3px solid rgb(148 163 184 / 70%);
+  border-radius: 6px;
+  color: rgb(40 40 44 / 62%);
+  background: rgb(148 163 184 / 16%);
+  font: inherit;
+  font-size: 12px;
+  line-height: 17px;
+  text-align: left;
+}
+
+.sandbox-message-quote-title {
+  color: rgb(30 30 34 / 78%);
+  font-weight: 600;
+}
+
+.sandbox-message-quote-title,
+.sandbox-message-quote span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-bubble .sandbox-message-quote {
+  border-left-color: rgb(255 255 255 / 62%);
+  color: rgb(255 255 255 / 82%);
+  background: rgb(255 255 255 / 16%);
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-bubble .sandbox-message-quote-title {
+  color: #fff;
+}
+
+/* 合并转发卡片。 */
+.sandbox-message-quote.sandbox-message-forward {
+  width: 260px;
+  max-width: 100%;
+  text-align: left;
+}
+
+.sandbox-message-quote.sandbox-message-forward:disabled {
+  opacity: 1;
+}
+
+.sandbox-message-forward > span:not(.sandbox-message-forward-entry) {
+  display: block;
+  /* Flex 子项默认按内容宽度参与布局，显式限制到卡片内容区才能稳定显示省略号。 */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sandbox-message-forward-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 38px;
+  margin: 4px -8px -6px;
+  padding: 0 8px;
+  border-top: 1px solid rgb(148 163 184 / 18%);
+  color: rgb(80 90 110 / 62%);
+  text-align: left;
+}
+
+.sandbox-message-forward-entry > svg {
+  flex: none;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-bubble .sandbox-message-forward-entry {
+  border-top-color: rgb(255 255 255 / 22%);
+  color: rgb(255 255 255 / 78%);
+}
+
+.sandbox-message-media {
+  display: flex;
+  max-width: min(280px, 100%);
+  flex-direction: column;
+}
+
+/* 图片放大的点击区；`min-width: 0` 防止按钮以图片固有宽度撑破窄气泡。 */
+.sandbox-message-image {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+}
+
+.sandbox-message-image:focus-visible {
+  outline: 2px solid var(--sandbox-accent);
+  outline-offset: 2px;
+}
+
+.sandbox-message-image img,
+.sandbox-message-media img,
+.sandbox-message-media video {
+  display: block;
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.sandbox-message-media audio {
+  width: min(260px, 100%);
+  height: 36px;
+}
+
+.sandbox-message-file {
+  display: flex;
+  min-width: 210px;
+  max-width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: inherit;
+  background: rgb(148 163 184 / 14%);
+  text-decoration: none;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-file {
+  background: rgb(255 255 255 / 14%);
+}
+
+.sandbox-message-file > svg {
+  flex: none;
+}
+
+.sandbox-message-file span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.sandbox-message-file strong,
+.sandbox-message-file small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-message-file small,
+.sandbox-message-media-loading {
+  color: var(--sandbox-muted);
+  font-size: 11px;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-file small,
+.sandbox-message-row.is-outgoing .sandbox-message-media-loading {
+  color: rgb(255 255 255 / 72%);
+}
+
+.sandbox-message-row.is-quote-target .sandbox-message-bubble::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 5px rgb(59 130 246 / 22%), 0 8px 18px rgb(37 99 235 / 18%);
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+  /* Chrome 在平滑滚动期间直接重绘 box-shadow 偶发横向图层接缝；固定阴影后只合成透明度。 */
+  animation: sandbox-message-quote-target 1.4s ease-out;
+  will-change: opacity;
+}
+
+@keyframes sandbox-message-quote-target {
+  0% {
+    opacity: 0;
+  }
+
+  32% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 表情回应胶囊：底色取所在气泡的派生色，出站与入站各自协调。 */
+.sandbox-message-reactions {
+  display: flex;
+  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 0;
+  margin-bottom: -5px;
+}
+
+.sandbox-message-reaction {
+  --sandbox-reaction-avatar-size: 18px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 2px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--sandbox-accent);
+  background: var(--sandbox-reaction-bg);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-reaction {
+  color: #fff;
+}
+
+.sandbox-message-reaction-users {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sandbox-message-reaction-avatar {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: var(--sandbox-reaction-avatar-size);
+  height: var(--sandbox-reaction-avatar-size);
+  flex: 0 0 var(--sandbox-reaction-avatar-size);
+  overflow: hidden;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--sandbox-reaction-bg);
+}
+
+.sandbox-message-reaction-avatar:not(:only-child):not(:last-child) {
+  box-shadow: 0 0 0 1px var(--sandbox-reaction-bg);
+}
+
+.sandbox-message-reaction-avatar + .sandbox-message-reaction-avatar {
+  margin-left: -6px;
+}
+
+.sandbox-message-reaction-emoji {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+/* 多选：marker 固定占最左列，出站气泡仍由 select-body 内部反转并靠右。 */
+.sandbox-message-list.is-selecting .sandbox-message-row.is-selectable {
+  width: 100%;
+  max-width: 100%;
+}
+
+.sandbox-message-row.is-selecting {
+  position: relative;
+  align-items: center;
+  flex-direction: row;
+  text-align: left;
+}
+
+.sandbox-message-select-marker {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid color-mix(in srgb, var(--sandbox-muted) 55%, transparent);
+  border-radius: 50%;
+  color: transparent;
+  background: color-mix(in srgb, var(--background) 88%, transparent);
+  transition: border-color 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+}
+
+.sandbox-message-row.is-selecting .sandbox-message-select-marker {
+  margin-top: 10px;
+  align-self: flex-start;
+}
+
+.sandbox-message-select-marker.is-checked {
+  border-color: var(--sandbox-accent);
+  color: #fff;
+  background: var(--sandbox-accent);
+}
+
+/* select-body 始终承接消息行的左右布局，避免非多选时头像与内容叠成一列。 */
+.sandbox-message-select-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-select-body {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.sandbox-message-row.is-selecting.is-outgoing .sandbox-message-select-body {
+  margin-left: auto;
+}
+
+/* 机器人正在思考：复用消息行结构，高度对齐单行文字气泡。 */
+.sandbox-message-thinking-dots {
+  display: flex;
+  width: 44px;
+  min-height: 19px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.sandbox-message-thinking-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.72;
+  animation: sandbox-message-thinking-dot 1s ease-in-out infinite;
+}
+
+.sandbox-message-thinking-dot:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.sandbox-message-thinking-dot:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+@keyframes sandbox-message-thinking-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.48;
+  }
+
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* 思考指标行跟在机器人最后一条消息下方：负上边距抵消消息行的 16px 间距，并让开 40px 头像列。
+   宽度上限不用 74%：折叠态下整行宽度只由指标行决定，74% 在窄聊天区会把指标行压到换行。 */
+.sandbox-message-thinking-row {
+  position: relative;
+  max-width: calc(100% - 40px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: -12px 40px 16px auto;
+  text-align: right;
+}
+
+.sandbox-message-thinking-row:last-child {
+  margin-bottom: 0;
+}
+
+.sandbox-message-thinking-row.is-incoming {
+  align-items: flex-start;
+  margin-right: auto;
+  margin-left: 40px;
+  text-align: left;
+}
+
+.sandbox-message-thinking-toggle {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0;
+  border: 0;
+  margin-top: 4px;
+  background: transparent;
+  color: var(--sandbox-muted);
+  font-size: 12px;
+  gap: 2px;
+  line-height: 18px;
+  /* 指标行必须始终单行：换行会把箭头挤到第二行。 */
+  white-space: nowrap;
+}
+
+/* 机器人在左侧时整体靠左并镜像 Token 位置，箭头始终紧跟在思考时长右侧。 */
+.sandbox-message-thinking-row.is-incoming .sandbox-message-thinking-toggle {
+  justify-content: flex-start;
+}
+
+.sandbox-message-thinking-row.is-incoming .sandbox-message-thinking-duration {
+  order: 1;
+}
+
+.sandbox-message-thinking-row.is-incoming .sandbox-message-thinking-chevron {
+  order: 2;
+}
+
+.sandbox-message-thinking-row.is-incoming .sandbox-message-thinking-usage {
+  order: 3;
+}
+
+/* Token 指标默认隐藏，悬停或键盘聚焦折叠按钮时淡入，避免常态下与思考时长争抢注意力。 */
+.sandbox-message-thinking-usage {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-right: 8px;
+  color: var(--sandbox-muted);
+  font-size: 12px;
+  gap: 6px;
+  line-height: 18px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, visibility 0.16s ease;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.sandbox-message-thinking-row.is-incoming .sandbox-message-thinking-usage {
+  margin-right: 0;
+  margin-left: 8px;
+}
+
+.sandbox-message-thinking-usage-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.sandbox-message-thinking-toggle:hover .sandbox-message-thinking-usage,
+.sandbox-message-thinking-toggle:focus-visible .sandbox-message-thinking-usage {
+  opacity: 1;
+  visibility: visible;
+}
+
+.sandbox-message-thinking-row.is-usage-only .sandbox-message-thinking-usage {
+  margin-right: 0;
+  opacity: 1;
+  visibility: visible;
+}
+
+.sandbox-message-thinking-row.is-usage-only.is-incoming .sandbox-message-thinking-usage {
+  margin-left: 0;
+}
+
+.sandbox-message-thinking-usage-icon {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.sandbox-message-thinking-usage-icon.is-output {
+  margin-left: 4px;
+}
+
+.sandbox-message-thinking-chevron {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transition: transform 0.16s ease;
+}
+
+/* 两侧朝向一致：折叠指右，展开朝下。 */
+.sandbox-message-thinking-chevron.is-expanded {
+  transform: rotate(90deg);
+}
+
+.sandbox-message-thinking-panel {
+  max-width: min(360px, 100%);
+  margin-top: 4px;
+  transform-origin: top right;
+  animation: sandbox-message-thinking-enter 0.16s ease;
+}
+
+.sandbox-message-thinking-row.is-incoming .sandbox-message-thinking-panel {
+  transform-origin: top left;
+}
+
+.sandbox-message-thinking-content {
+  min-height: 0;
+  padding: 8px 10px;
+  border-left: 2px solid rgb(148 163 184 / 54%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 72%);
+  color: var(--sandbox-muted);
+  font-size: 12px;
+  line-height: 18px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+@keyframes sandbox-message-thinking-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scaleY(0.98);
+  }
+}
+
+/* 暗色：沿用源插件暗色模式的气泡、引用与转发卡片配色。 */
+.dark .sandbox-message-bubble {
+  --sandbox-bubble-bg: rgb(57 57 63);
+  --sandbox-reaction-bg: rgb(47 47 52);
+
+  color: #e5edf7;
+}
+
+.dark .sandbox-message-row.is-outgoing .sandbox-message-bubble {
+  --sandbox-bubble-bg: var(--sandbox-accent);
+  --sandbox-reaction-bg: color-mix(in srgb, var(--sandbox-bubble-bg) 88%, #0f172a 12%);
+
+  color: #fff;
+}
+
+.dark .sandbox-message-quote {
+  border-left-color: rgb(161 161 170 / 62%);
+  color: rgb(212 212 216 / 82%);
+  background: rgb(39 39 42 / 62%);
+}
+
+.dark .sandbox-message-quote-title {
+  color: #f4f4f5;
+}
+
+.dark .sandbox-message-row.is-outgoing .sandbox-message-quote {
+  border-left-color: rgb(255 255 255 / 62%);
+  color: rgb(255 255 255 / 82%);
+  background: rgb(255 255 255 / 16%);
+}
+
+.dark .sandbox-message-row.is-outgoing .sandbox-message-quote-title {
+  color: #fff;
+}
+
+.dark .sandbox-message-forward-entry {
+  border-top-color: rgb(161 161 170 / 28%);
+  color: #a1a1aa;
+}
+
+.dark .sandbox-message-row.is-outgoing .sandbox-message-bubble .sandbox-message-forward-entry {
+  border-top-color: rgb(255 255 255 / 22%);
+  color: rgb(255 255 255 / 78%);
+}
+
+.dark .sandbox-message-thinking-content {
+  background: rgb(39 39 42 / 62%);
+}
