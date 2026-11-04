@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { DatabaseIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react'
 import {
-  Badge,
   Button,
   cn,
   ContextMenu,
@@ -16,6 +15,8 @@ import { getGroupMemberDisplayName } from '../webqq/group-display'
 import { errorText } from '../workspace/store'
 import { useSandbox, useWorkspace } from '../workspace/context'
 import { GroupMemberMenuItems } from './member-menu'
+// 群主/管理员/头衔标签复用消息列表的 `sandbox-message-role-badge`，与聊天页保持同一套样式。
+import './messages.css'
 
 /** 会话信息栏：群聊显示群公告与成员，私聊显示对方资料与当前环境状态。 */
 export function DetailsPanel({ onClose, onMention, className }: {
@@ -144,8 +145,8 @@ export function DetailsPanel({ onClose, onMention, className }: {
                       <small className="text-[11px] text-muted-foreground">{member.participantId}</small>
                     </span>
                     <span className="flex shrink-0 gap-1">
-                      {member.title && <Badge variant="secondary" className="text-[10px]">{member.title}</Badge>}
-                      {member.role !== 'member' && <Badge variant="outline" className="text-[10px]">{t(`sandbox.role.${member.role}`)}</Badge>}
+                      {member.title && <span className="sandbox-message-role-badge is-title">{member.title}</span>}
+                      {member.role !== 'member' && <span className={`sandbox-message-role-badge is-${member.role}`}>{t(`sandbox.role.${member.role}`)}</span>}
                     </span>
                   </ContextMenuTrigger>
                   <ContextMenuContent>
