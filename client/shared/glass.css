@@ -22,6 +22,17 @@
   backdrop-filter: saturate(180%) blur(20px);
 }
 
+/*
+ * 设置页强调色字段的取色浮层：SchemaForm 渲染 ui-kit 的 ColorPicker，它不把 className 传给内部的
+ * PopoverContent，加不上 .sandbox-glass。按「设置页挂载中」且「浮层直接子元素是取色区（role=slider）」
+ * 识别，不波及 v2 宿主其他页面的取色器。单独成条：不支持 :has 的浏览器只丢这一条，不连累 .sandbox-glass。
+ */
+body:has(.sandbox-settings-form) [data-slot='popover-content']:has(> [role='slider']) {
+  --control: color-mix(in oklab, var(--background) 45%, transparent);
+  background: color-mix(in oklab, var(--popover) 72%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
 /* 禁用的输入框（如不可修改的账号 ID）自带实心 bg-muted。 */
 .sandbox-glass :is(input, textarea):disabled {
   background: color-mix(in oklab, var(--muted) 55%, transparent);
