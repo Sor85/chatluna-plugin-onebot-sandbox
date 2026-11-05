@@ -2,16 +2,14 @@ import { requireString } from './arguments'
 import { SandboxMcpError } from './types'
 
 /**
- * 分页游标：四个 list 工具对外唯一的翻页位置。
+ * 分页游标：三个 list 工具对外唯一的翻页位置。
  *
- * 三族记录的排序键真的不一样——OneBot 调试记录只有每个记录域各自独立的 `sequence`，模型请求记录
- * 在单记录域用 `sequence`、跨记录域用 `createdAt` + `id`，会话列表与测试调用记录整份在内存里、
- * 只有偏移。把这些差异写进对外声明就一定会出现「哪个参数有效取决于另一个参数的取值」，而那是
- * 收敛前最坏的一处：`scope: 'all'` 时 `beforeSequence` 被静默置空，翻页翻不动却不报错，消费者
- * 一直拿到同一页。
+ * 各族记录的排序键不一样——OneBot 调试记录只有每个记录域各自独立的 `sequence`，会话列表与测试
+ * 调用记录整份在内存里、只有偏移。把这些差异写进对外声明就一定会出现「哪个参数有效取决于另一个
+ * 参数的取值」，翻页翻不动却不报错，消费者一直拿到同一页。
  *
  * 因此对外只有一个不透明字符串，编码内容按记录种类各自决定，不追求统一的载荷。种类标记让「把
- * 调试记录的游标传给模型请求工具」这种误用被认出来并报 `invalid_arguments`，而不是当成一个碰巧
+ * 调试记录的游标传给会话列表工具」这种误用被认出来并报 `invalid_arguments`，而不是当成一个碰巧
  * 能解析的游标。游标里刻意不藏可长期使用的语义：纪元或表结构变化时它就该失效。
  */
 
@@ -19,7 +17,6 @@ import { SandboxMcpError } from './types'
 export const SANDBOX_PAGE_CURSOR_KINDS = [
   'conversations',
   'onebot-debug-records',
-  'model-request-records',
   'test-call-records',
 ] as const
 
@@ -35,22 +32,10 @@ export interface SandboxSequencePageCursor {
   sequence: number
 }
 
-/** 按时间与记录标识续页，用于联邦读取：序号跨记录域不可比，时间加标识可比。 */
-export interface SandboxTimePageCursor {
-  createdAt: string
-  id: string
-}
-
-/**
- * 每种记录各自的游标载荷。
- *
- * 模型请求记录是唯一有两种载荷的一族，因为它的两条读取路径（单记录域与联邦）排序键不同；哪一种
- * 载荷配哪种 `scope` 由工具执行体判定，不在本模块——本模块只保证解析出来的载荷形状是完整的。
- */
+/** 每种记录各自的游标载荷。本模块只保证解析出来的载荷形状是完整的。 */
 export interface SandboxPageCursorPayloads {
   conversations: SandboxOffsetPageCursor
   'onebot-debug-records': SandboxSequencePageCursor
-  'model-request-records': SandboxSequencePageCursor | SandboxTimePageCursor
   'test-call-records': SandboxOffsetPageCursor
 }
 
@@ -58,7 +43,6 @@ export interface SandboxPageCursorPayloads {
 const PAGE_CURSOR_LABELS: Record<SandboxPageCursorKind, string> = {
   conversations: '会话列表',
   'onebot-debug-records': 'OneBot 调试记录',
-  'model-request-records': '模型请求记录',
   'test-call-records': '测试调用记录',
 }
 
@@ -97,13 +81,6 @@ export function readPageCursor<K extends SandboxPageCursorKind>(
   return requirePageCursorPayload(kind, decoded)
 }
 
-/** 序号载荷与时间载荷的判别。两种载荷只有模型请求记录会同时出现，判别写在这里一份。 */
-export function isSequencePageCursor(
-  payload: SandboxSequencePageCursor | SandboxTimePageCursor,
-): payload is SandboxSequencePageCursor {
-  return 'sequence' in payload
-}
-
 function decodePageCursorBody(encoded: string): Record<string, unknown> {
   let parsed: unknown
   try {
@@ -125,9 +102,6 @@ const PAGE_CURSOR_PAYLOAD_READERS: {
 } = {
   conversations: readOffsetPayload,
   'onebot-debug-records': readSequencePayload,
-  // 两种载荷都合法：单记录域给序号，联邦给时间加标识。带了 sequence 键就按序号读，因此一个
-  // 序号写坏的游标报的是无法解析，而不是掉进时间载荷再报缺 createdAt。
-  'model-request-records': (decoded) => ('sequence' in decoded ? readSequencePayload(decoded) : readTimePayload(decoded)),
   'test-call-records': readOffsetPayload,
 }
 
@@ -157,12 +131,6 @@ function readOffsetPayload(decoded: Record<string, unknown>): SandboxOffsetPageC
 function readSequencePayload(decoded: Record<string, unknown>): SandboxSequencePageCursor | undefined {
   const { sequence } = decoded
   return Number.isInteger(sequence) && (sequence as number) >= 1 ? { sequence: sequence as number } : undefined
-}
-
-function readTimePayload(decoded: Record<string, unknown>): SandboxTimePageCursor | undefined {
-  const { createdAt, id } = decoded
-  if (typeof createdAt !== 'string' || !createdAt || typeof id !== 'string' || !id) return undefined
-  return { createdAt, id }
 }
 
 function unreadablePageCursor(): SandboxMcpError {

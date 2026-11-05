@@ -2,7 +2,6 @@ import { App } from '@koishijs/core'
 import { describe, expect, it, vi } from 'vitest'
 import { observeCharacterTurnCompletion } from '../src/chatluna/character-turn-completion'
 import { SandboxControlService } from '../src/control-service'
-import { PresetRuntimeSnapshotTracker } from '../src/presets'
 import { createGroupSession } from './helpers/chatluna-state-broadcast'
 
 function session(channelId = 'group:30001') {
@@ -39,14 +38,6 @@ async function emitCollect(app: App, value: unknown): Promise<void> {
 
 async function emitBefore(app: App, value: ReturnType<typeof payload>): Promise<void> {
   await emit(app, 'chatluna_character/before-chat', value)
-}
-
-function createPresetTracker(app: App) {
-  return new PresetRuntimeSnapshotTracker(app, ({ botId, conversationId }) => ({
-    scopeId: 'main',
-    botId,
-    conversationId,
-  }))
 }
 
 interface StudioFixtureState {
@@ -228,7 +219,6 @@ describe('Character 真实终态观察', () => {
   it('原 release 唤醒同 Session 新轮时，旧轮先收尾且新轮保持活动', async () => {
     const app = new App()
     const states = new SandboxControlService(app)
-    const presets = createPresetTracker(app)
     const current = createGroupSession(states, '20001')
     const nextPayload = payload(current as any, '新角色')
     const original = vi.fn(function (_session: unknown) {
@@ -238,7 +228,6 @@ describe('Character 真实终态观察', () => {
     app.set('chatluna_character', service)
     const dispose = observeCharacterTurnCompletion(app, releasedSession => {
       states.finishChatLunaCharacterTurn(releasedSession)
-      presets.finishCharacterTurn(releasedSession)
     })
     await app.start()
 
@@ -250,11 +239,8 @@ describe('Character 真实终态观察', () => {
       expect(states.getChatLunaStates()).toEqual([
         expect.objectContaining({ conversationId: 'group:30001', thinking: true }),
       ])
-      expect(presets.getActiveSnapshots({ scopeId: 'main', botId: '20001', conversationId: 'group:30001' })[0]?.templates[0])
-        .toMatchObject({ template: '身份：新角色' })
     } finally {
       dispose()
-      presets.dispose()
       await states.dispose()
       await app.stop()
     }
@@ -263,12 +249,10 @@ describe('Character 真实终态观察', () => {
   it('过期、克隆或无关 Session 的 release 不删除同目标后继轮，真实并发仍逐轮收尾', async () => {
     const app = new App()
     const states = new SandboxControlService(app)
-    const presets = createPresetTracker(app)
     const service = { releaseResponseLock: vi.fn((_session: unknown) => undefined) }
     app.set('chatluna_character', service)
     const dispose = observeCharacterTurnCompletion(app, releasedSession => {
       states.finishChatLunaCharacterTurn(releasedSession)
-      presets.finishCharacterTurn(releasedSession)
     })
     await app.start()
 
@@ -285,8 +269,6 @@ describe('Character 真实终态观察', () => {
       expect(states.getChatLunaStates()).toEqual([
         expect.objectContaining({ conversationId: 'group:30001', thinking: true }),
       ])
-      expect(presets.getActiveSnapshots({ scopeId: 'main', botId: '20001', conversationId: 'group:30001' }))
-        .toMatchObject([{ templates: [{ template: '身份：新角色' }, expect.anything()] }])
 
       const direct = session('private:10001:20001')
       await emitCollect(app, direct)
@@ -297,10 +279,9 @@ describe('Character 真实终态观察', () => {
         expect.objectContaining({ conversationId: 'private:10001:20001', thinking: true }),
       ]))
       service.releaseResponseLock(direct)
-      expect(states.getThinkingModelRequestTargets()).toEqual([])
+      expect(states.getChatLunaStates().every(({ thinking }) => !thinking)).toBe(true)
     } finally {
       dispose()
-      presets.dispose()
       await states.dispose()
       await app.stop()
     }

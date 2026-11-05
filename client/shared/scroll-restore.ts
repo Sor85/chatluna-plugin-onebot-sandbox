@@ -39,7 +39,7 @@ export function createScrollRestore(adapter: ScrollRestoreAdapter) {
     }
   }
 
-  /** 取消进行中的恢复，例如切换到另一条模型请求记录。 */
+  /** 取消进行中的恢复，例如切换到另一条记录。 */
   function cancel(): void {
     generation += 1
   }

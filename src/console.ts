@@ -1,6 +1,4 @@
-import { lookupChatLunaUsage, type ChatLunaUsageLookup } from './chatluna/usage'
 import { listConversationIds } from './conversation-resolution'
-import { buildSandboxModelRequestTrajectoryFromStore } from './model-request-trajectory'
 import type {
   SandboxConsoleBroadcasts,
   SandboxConsoleEvents,
@@ -11,32 +9,14 @@ import type { SandboxHttpApiCapabilityCatalog } from './mcp/http-api'
 import type { SandboxMcpService } from './mcp/service'
 import type { SandboxMcpEndpointDescription } from './mcp/types'
 import { trimSnapshotMessages, type SandboxTestSpaceService } from './test-spaces'
-import {
-  DEFAULT_MODEL_REQUEST_PAGE_SIZE,
-  MAIN_MODEL_REQUEST_SCOPE_ID,
-  MAX_MODEL_REQUEST_PAGE_SIZE,
-  UNATTRIBUTED_MODEL_REQUEST_SCOPE_ID,
-  type SandboxModelRequestStore,
-} from './model-request'
 import type { SandboxOneBotDebugStore } from './onebot-debug'
 import { createScopeDirectory, type SceneScope } from './scope-directory'
 import type {
   ClearSandboxOneBotDebugRecordsResult,
-  ClearSandboxModelRequestRecordsResult,
   DeleteGroupAnnouncementInput,
   GetSandboxOneBotDebugRecordInput,
   GetSandboxOneBotDebugRecordsInput,
-  GetSandboxModelRequestRecordsInput,
   GetSandboxWorkspaceInput,
-  ListSandboxModelRequestRecordsInput,
-  ReadSandboxModelRequestRecordInput,
-  ReadSandboxModelRequestTrajectoryInput,
-  SandboxConsoleModelRequestDetail,
-  SandboxConsoleModelRequestListItem,
-  SandboxModelRequestRecordsPage,
-  SandboxModelRequestScope,
-  SandboxModelRequestTrajectory,
-  SandboxModelRequestSource,
   ManageSandboxEnvironmentInput,
   PerformFriendActionInput,
   PerformGroupActionInput,
@@ -62,12 +42,6 @@ import type {
   SetGroupAnnouncementInput,
 } from './types'
 import { getSandboxUsers, SandboxDomainError } from './types'
-
-type ChatLunaUsageSource = ChatLunaUsageLookup | (() => ChatLunaUsageLookup | undefined)
-
-function resolveChatLunaUsage(source: ChatLunaUsageSource | undefined): ChatLunaUsageLookup | undefined {
-  return typeof source === 'function' ? source() : source
-}
 
 const legacyRpcFields = ['senderId', 'botId', 'actorUserId', 'userId', 'currentUserId'] as const
 
@@ -126,8 +100,6 @@ export function registerConsole(
   appearance: SandboxAppearance,
   endpoint?: SandboxConsoleTestEndpoint,
   testSpaces?: SandboxTestSpaceService,
-  unattributedModelRequests?: SandboxModelRequestStore,
-  chatlunaUsage?: ChatLunaUsageSource,
 ) {
   console.addEntry()
 
@@ -147,12 +119,12 @@ export function registerConsole(
     return mutation ? testSpaces.requireUserControl(input.spaceId) : testSpaces.getControl(input.spaceId)
   }
   /**
-   * 「谁是全部记录域」的唯一答案。三个可选服务的判空在此被吸收一次，之后不再出现。
+   * 「谁是全部记录域」的唯一答案。可选服务的判空在此被吸收一次，之后不再出现。
    *
-   * 由本函数入口包装而不是由插件入口传入：两处消费方（这里与测试控制服务）从同样三个输入
+   * 由本函数入口包装而不是由插件入口传入：两处消费方（这里与测试控制服务）从同样的输入
    * 派生，内容不可能漂移，而改成入口统一创建要动两个函数的签名与二十多处测试调用点。
    */
-  const scopes = createScopeDirectory({ control, testSpaces, unattributedModelRequests })
+  const scopes = createScopeDirectory({ control, testSpaces })
   const resolveReadyControl = async (input: { spaceId?: string } | undefined, mutation: boolean) => {
     const activeControl = resolveControl(input, mutation)
     await activeControl.waitForSceneReady()
@@ -167,7 +139,6 @@ export function registerConsole(
    * 记录域目录只提供标识、名字与是不是主环境；投影成哪种来源形状留在这里。
    *
    * 来源形状属于 Console 契约的出参，让枚举模块去产出它等于把出参声明搬出契约。
-   * `SandboxModelRequestSource` 是本类型的超集（多一个未归属），因此两种记录共用这一处投影。
    */
   const sceneSource = (scope: SceneScope): SandboxEntitySource => (scope.kind === 'main'
     ? mainSource
@@ -367,121 +338,9 @@ export function registerConsole(
     await (await resolveReadyControl(input, true)).performGroupAction(assertInteractionInput(withoutSpaceId(input)) as PerformGroupActionInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
   }, { authority: 4 })
-  const requireUnattributedModelRequests = () => {
-    if (!unattributedModelRequests) throw new Error('未归属模型请求库不可用')
-    return unattributedModelRequests
-  }
-  const resolveModelRequestSource = (input: SandboxModelRequestScope): SandboxModelRequestSource => {
-    if (input.scope === 'unattributed') return { type: 'unattributed', name: '未归属' }
-    if (input.scope === 'all') return { type: 'main', name: '全部空间' }
-    if (input.scope === 'main' || input.spaceId === MAIN_MODEL_REQUEST_SCOPE_ID) return { type: 'main', name: '主环境' }
-    if (input.scope !== 'space' || !input.spaceId?.trim()) throw new Error('必须指定 all、main、space 或 unattributed')
-    if (!testSpaces) throw new Error('AI 测试空间服务不可用')
-    const space = testSpaces.getSpace(input.spaceId)
-    return { type: 'test-space', spaceId: space.id, name: space.name }
-  }
-  /**
-   * 来源标注反过来给出记录域标识：这是记录库查找的唯一入参，来路种类不再决定分支数。
-   *
-   * 反向映射写在这里而不是记录域目录里：`SandboxModelRequestSource` 是 Console 契约的出参形状，
-   * 记录域目录只认标识。
-   */
-  const modelRequestScopeId = (source: SandboxModelRequestSource): string => {
-    if (source.type === 'test-space') return source.spaceId
-    return source.type === 'unattributed' ? UNATTRIBUTED_MODEL_REQUEST_SCOPE_ID : MAIN_MODEL_REQUEST_SCOPE_ID
-  }
-  const resolveModelRequestControl = (input: SandboxModelRequestScope) => {
-    if (input.scope === 'unattributed' || input.scope === 'all') return
-    if (input.scope === 'main') return control
-    if (input.scope !== 'space' || !input.spaceId?.trim()) throw new Error('必须指定 all、main、space 或 unattributed')
-    if (input.spaceId === MAIN_MODEL_REQUEST_SCOPE_ID) return control
-    if (!testSpaces) throw new Error('AI 测试空间服务不可用')
-    return testSpaces.getControl(input.spaceId)
-  }
-  /**
-   * 联邦读取用的查询：`beforeSequence` 与 `spaceId` 刻意不透传。
-   *
-   * 序号是每个记录域各自独立的计数，跨记录域的精确游标没有意义；联邦续页只用时间与记录标识。
-   */
-  const federatedModelRequestQuery = (input: GetSandboxModelRequestRecordsInput): GetSandboxModelRequestRecordsInput => ({
-    botId: input.botId,
-    conversationId: input.conversationId,
-    interactionId: input.interactionId,
-    model: input.model,
-    status: input.status,
-    order: input.order,
-    limit: input.limit,
-    beforeCreatedAt: input.beforeCreatedAt,
-    beforeId: input.beforeId,
-  })
-  const listModelRequestRecords = async (input: ListSandboxModelRequestRecordsInput): Promise<SandboxModelRequestRecordsPage<SandboxConsoleModelRequestListItem>> => {
-    if (input.scope === 'all') {
-      const query = federatedModelRequestQuery(input)
-      // 「全部」排除未归属不写在这里：联邦读取本来就只遍历拥有场景的记录域。
-      const { next, ...page } = await scopes.federate(async (scope) => {
-        const scopePage = await scope.records.getRecords(query)
-        return { ...scopePage, records: scopePage.records.map((record) => ({ ...record, source: sceneSource(scope) })) }
-      }, {
-        limit: Math.min(Math.max(Number(input.limit ?? DEFAULT_MODEL_REQUEST_PAGE_SIZE) || DEFAULT_MODEL_REQUEST_PAGE_SIZE, 1), MAX_MODEL_REQUEST_PAGE_SIZE),
-        order: input.order === 'asc' ? 'asc' : 'desc',
-        tieBreak: ({ id }) => id,
-        // 时间与记录标识的组合跨记录域全局可比，WebQQ 的「加载更多」正在用它续页。
-        nextCursor: ({ createdAt, id }) => ({ nextCreatedAt: createdAt, nextId: id }),
-      })
-      return { ...page, ...next }
-    }
-    const source = resolveModelRequestSource(input)
-    const page = input.scope === 'unattributed'
-      ? await requireUnattributedModelRequests().getRecords(input)
-      : await resolveModelRequestControl(input)!.getModelRequestStore().getRecords(input)
-    return {
-      ...page,
-      records: page.records.map((record) => ({ ...record, source })),
-    }
-  }
-  const readModelRequestRecord = async (input: ReadSandboxModelRequestRecordInput): Promise<SandboxConsoleModelRequestDetail> => {
-    if (input.scope === 'all') {
-      const hit = await scopes.findFirst((scope) => scope.records.getRecord(input.recordId))
-      if (!hit) throw new SandboxDomainError(`模型请求记录不存在：${input.recordId}`)
-      return { ...hit.value, source: sceneSource(hit.scope) }
-    }
-    const source = resolveModelRequestSource(input)
-    if (input.scope === 'unattributed') {
-      return { ...await requireUnattributedModelRequests().requireRecord(input.recordId), source }
-    }
-    return { ...await resolveModelRequestControl(input)!.getModelRequestStore().requireRecord(input.recordId), source }
-  }
-  const getModelRequestRecord = async (input: ReadSandboxModelRequestRecordInput): Promise<SandboxConsoleModelRequestDetail> => {
-    const detail = await readModelRequestRecord(input)
-    // 可选服务可能晚于本插件加载或被热重载；详情读取时再解析，避免永久缓存初始化阶段的 undefined。
-    const usage = await lookupChatLunaUsage(resolveChatLunaUsage(chatlunaUsage), detail)
-    return usage ? { ...detail, usage } : detail
-  }
-  const getModelRequestTrajectory = async (input: ReadSandboxModelRequestTrajectoryInput): Promise<SandboxModelRequestTrajectory> => {
-    const detail = await readModelRequestRecord(input)
-    // 来源标注已经说明这条记录属于哪个记录域，因此记录库按同一个标识取一次就够，
-    // 不必再按「全部空间 / 未归属 / 单空间」三种来路各挑一遍。
-    const store = scopes.getModelRequests(modelRequestScopeId(detail.source))
-    return buildSandboxModelRequestTrajectoryFromStore({
-      record: detail,
-      mode: input.mode,
-      store,
-      ...(input.expandedRequestIds ? { expandedRequestIds: input.expandedRequestIds } : {}),
-    })
-  }
-  const clearModelRequestRecords = async (input: SandboxModelRequestScope): Promise<ClearSandboxModelRequestRecordsResult> => {
-    if (input.scope === 'all') throw new Error('全部空间视图不支持一次性清理')
-    if (input.scope === 'unattributed') return { cleared: await requireUnattributedModelRequests().clear() }
-    return { cleared: await resolveModelRequestControl(input)!.getModelRequestStore().clear() }
-  }
-
   registerListener('onebot-sandbox.debug-records', listDebugRecords, { authority: 4 })
   registerListener('onebot-sandbox.debug-record', getDebugRecord, { authority: 4 })
   registerListener('onebot-sandbox.clear-debug-records', clearDebugRecords, { authority: 4 })
-  registerListener('onebot-sandbox.model-request-records', listModelRequestRecords, { authority: 4 })
-  registerListener('onebot-sandbox.model-request-record', getModelRequestRecord, { authority: 4 })
-  registerListener('onebot-sandbox.model-request-trajectory', getModelRequestTrajectory, { authority: 4 })
-  registerListener('onebot-sandbox.clear-model-request-records', clearModelRequestRecords, { authority: 4 })
   if (endpoint) {
     const { mcp, httpApi, mcpEndpoint } = endpoint
     mcp.onActivity((running) => {

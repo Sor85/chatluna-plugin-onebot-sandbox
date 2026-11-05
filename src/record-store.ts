@@ -1,7 +1,6 @@
 /**
- * 证据记录行库的共享机制。OneBot 调试记录与模型请求记录都按行持久化，两者的
- * 「作用域摘要 + 按最旧回收」和「串行写入队列」语义完全一致，差异只在记录类型与过滤谓词；
- * 这些机制放在这里，内存适配器、数据库适配器与两个 Store 共用同一份实现。
+ * 证据记录行库的共享机制：OneBot 调试记录按行持久化，「作用域摘要 + 按最旧回收」和「串行写入队列」
+ * 与记录类型无关，放在这里，内存适配器与数据库适配器共用同一份实现。
  */
 
 export interface SandboxRecordScopeSummary {
@@ -140,14 +139,6 @@ export class InMemoryRecordRows<Record extends SandboxRecordRow, Query extends S
 
   async query(query: Query): Promise<Record[]> {
     return this.select(query).map((record) => structuredClone(record))
-  }
-
-  /**
-   * 只读出记录的一部分。投影先在存有的行上执行，再拷贝投影结果，因此读取路径不需要的子树
-   * （模型请求的请求体与响应原文）既不会被深拷贝，也不会被交给调用方。
-   */
-  async queryProjected<Projected>(query: Query, project: (record: Record) => Projected): Promise<Projected[]> {
-    return this.select(query).map((record) => structuredClone(project(record)))
   }
 
   private select(query: Query): Record[] {

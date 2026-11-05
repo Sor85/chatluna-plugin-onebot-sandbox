@@ -15,19 +15,15 @@ import {
   SandboxRuntimeBotRegistry,
 } from './control-service'
 import {
-  KoishiDatabaseModelRequestPersistence,
   KoishiDatabaseOneBotDebugPersistence,
   KoishiDatabaseScenePersistence,
   KoishiDatabaseTestSpacePersistence,
-  MemoryModelRequestPersistence,
   MemoryOneBotDebugPersistence,
-  registerSandboxModelRequestModel,
   registerSandboxOneBotDebugModel,
   registerSandboxSceneModel,
   registerSandboxTestSpaceModel,
 } from './persistence'
 import type { SandboxOneBotDebugPersistence } from './onebot-debug'
-import { DEFAULT_MODEL_REQUEST_RECORD_MAX_BYTES, MAIN_MODEL_REQUEST_SCOPE_ID, SandboxModelRequestStore, UNATTRIBUTED_MODEL_REQUEST_SCOPE_ID, type SandboxModelRequestPersistence } from './model-request'
 import { SandboxTestEndpointServer, type SandboxTestEndpointProtocolConfig, type SandboxTestEndpointServerConfig } from './mcp/server'
 import { describeHttpApiCapabilities, toHttpApiBaseUrl, type SandboxHttpApiCapabilityCatalog } from './mcp/http-api'
 import { SandboxMcpService, type SandboxMcpQuotaConfig } from './mcp/service'
@@ -42,11 +38,7 @@ export * from './control-service'
 export * from './persistence'
 export * from './record-store'
 export * from './onebot-debug'
-export * from './model-request'
-export * from './model-request-collector'
-export * from './model-request-error-preview'
 export * from './chatluna/character-turn-completion'
-export * from './chatluna/error'
 export * from './types'
 export * from './mcp/server'
 export * from './mcp/http-api'
@@ -86,15 +78,9 @@ export interface Config extends SandboxAppearance {
   persistenceMode: SandboxPersistenceMode
   sceneMessageLimit: number
   sceneMessageMaxBytes: number
-  modelRequestRecordLimit: number
-  modelRequestRecordMaxMegabytes: number
   testEndpoint: SandboxTestEndpointConfig
   botTools: SandboxBotToolsConfig
 }
-
-/** 字节上限以 MB 暴露给配置页；内部仍按字节比较，换算只发生在这一处。 */
-const MEGABYTE = 1024 * 1024
-const DEFAULT_MODEL_REQUEST_RECORD_MAX_MEGABYTES = DEFAULT_MODEL_REQUEST_RECORD_MAX_BYTES / MEGABYTE
 
 /**
  * 两个端点的配置形状相同，只有默认路径与文案不同；分组标题由调用方补上。
@@ -138,13 +124,6 @@ const sceneMessageFields = {
     .description('超出后从最旧的消息开始丢弃，丢弃后不可恢复'),
   sceneMessageMaxBytes: Schema.number().min(64 * 1024).default(DEFAULT_SCENE_MESSAGE_MAX_BYTES).extra('label', '体积上限（字节）')
     .description('单个空间场景 JSON 的大小上限，超出后同样从最旧的消息开始丢弃'),
-}
-
-const modelRequestFields = {
-  modelRequestRecordLimit: Schema.number().min(1).step(1).default(500).extra('label', '条数上限')
-    .description('与体积上限同时生效，超出后从最旧的记录开始丢弃'),
-  modelRequestRecordMaxMegabytes: Schema.number().min(1).step(1).default(DEFAULT_MODEL_REQUEST_RECORD_MAX_MEGABYTES).extra('label', '体积上限（MB）')
-    .description('单条记录包含完整请求体与响应原文，长上下文请求可达数百 KB'),
 }
 
 const endpointListenFields = {
@@ -211,9 +190,8 @@ export const Settings = Schema.intersect([
   Schema.intersect([
     Schema.object(storageModeFields),
     Schema.object(sceneMessageFields).extra('i18n', 'group.sceneMessages').description('场景消息'),
-    Schema.object(modelRequestFields).extra('i18n', 'group.modelRequests').description('模型请求记录'),
   ]).extra('i18n', 'group.storage').extra('label', '数据存储')
-    .description('模拟环境的保存位置，以及消息与模型请求记录的保留上限。上限按主环境与每个 AI 测试空间分别计算'),
+    .description('模拟环境的保存位置，以及消息的保留上限。上限按主环境与每个 AI 测试空间分别计算'),
   Schema.object({ ...endpointFields, ...botToolFields }).extra('i18n', 'group.endpoint').extra('label', '测试端点')
     .description('供 AI 客户端操控沙盒的 MCP 与 HTTP 接口，同一组工具也可以交给 ChatLuna 机器人调用。两个端点共用监听器、访问限制与调用配额，配额按测试凭证分别计数，超出返回 429'),
 ]) as unknown as Schema<Config>
@@ -224,7 +202,7 @@ export const Settings = Schema.intersect([
  */
 export const Config = Schema.object(
   Object.fromEntries(
-    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...modelRequestFields, ...endpointFields, ...botToolFields })
+    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...endpointFields, ...botToolFields })
       .map(([key, field]) => [key, (field as Schema).hidden()]),
   ),
 ).description('设置在 OneBot 沙盒工作台的「设置」页编辑') as unknown as Schema<Config>
@@ -249,22 +227,18 @@ export function apply(ctx: Context, config: Config) {
   const getDatabase = () => ctx.get('database')
   let persistence: KoishiDatabaseScenePersistence | undefined
   let createDebugPersistence: (scopeId: string) => SandboxOneBotDebugPersistence
-  let createModelRequestPersistence: (scopeId: string) => SandboxModelRequestPersistence
   if (config.persistenceMode === 'database') {
     // database 可能晚于本插件就绪；表在服务出现时注册，读写一律经 getter 现取。
     ctx.inject(['database'], (inner) => {
       registerSandboxSceneModel(inner)
       registerSandboxTestSpaceModel(inner)
       registerSandboxOneBotDebugModel(inner)
-      registerSandboxModelRequestModel(inner)
     })
     persistence = new KoishiDatabaseScenePersistence(getDatabase)
     createDebugPersistence = (scopeId) => new KoishiDatabaseOneBotDebugPersistence(scopeId, getDatabase)
-    createModelRequestPersistence = (scopeId) => new KoishiDatabaseModelRequestPersistence(scopeId, getDatabase)
   } else {
     // 内存 Adapter 与数据库 Adapter 共用同一 Interface；进程内跨控制服务实例可恢复，进程退出后不保留。
     const memoryDebug = new Map<string, MemoryOneBotDebugPersistence>()
-    const memoryModelRequests = new Map<string, MemoryModelRequestPersistence>()
     createDebugPersistence = (scopeId) => {
       const existing = memoryDebug.get(scopeId)
       if (existing) return existing
@@ -272,28 +246,12 @@ export function apply(ctx: Context, config: Config) {
       memoryDebug.set(scopeId, created)
       return created
     }
-    createModelRequestPersistence = (scopeId) => {
-      const existing = memoryModelRequests.get(scopeId)
-      if (existing) return existing
-      const created = new MemoryModelRequestPersistence(scopeId)
-      memoryModelRequests.set(scopeId, created)
-      return created
-    }
   }
   const runtimeBots = new SandboxRuntimeBotRegistry()
-  const modelRequestRecordMaxBytes = config.modelRequestRecordMaxMegabytes * MEGABYTE
-  const unattributedModelRequests = new SandboxModelRequestStore({
-    persistence: createModelRequestPersistence(UNATTRIBUTED_MODEL_REQUEST_SCOPE_ID),
-    maxRecords: config.modelRequestRecordLimit,
-    maxBytes: modelRequestRecordMaxBytes,
-  })
   const control = new SandboxControlService(ctx, {
     persistence,
     runtimeBots,
     debugPersistence: createDebugPersistence('main'),
-    modelRequestPersistence: createModelRequestPersistence(MAIN_MODEL_REQUEST_SCOPE_ID),
-    modelRequestRecordLimit: config.modelRequestRecordLimit,
-    modelRequestRecordMaxBytes,
     sceneMessageLimit: config.sceneMessageLimit,
     sceneMessageMaxBytes: config.sceneMessageMaxBytes,
   })
@@ -302,9 +260,6 @@ export function apply(ctx: Context, config: Config) {
     runtimeBots,
     config.persistenceMode === 'database' ? new KoishiDatabaseTestSpacePersistence(getDatabase) : undefined,
     createDebugPersistence,
-    createModelRequestPersistence,
-    config.modelRequestRecordLimit,
-    modelRequestRecordMaxBytes,
     {
       sceneMessageLimit: config.sceneMessageLimit,
       sceneMessageMaxBytes: config.sceneMessageMaxBytes,
@@ -332,7 +287,6 @@ export function apply(ctx: Context, config: Config) {
       maxConcurrentWaits: config.testEndpoint.shared.maxConcurrentWaits,
       maxConcurrentUploads: config.testEndpoint.shared.maxConcurrentUploads,
       testSpaces,
-      unattributedModelRequests,
     })
     const server = new SandboxTestEndpointServer(ctx, mcp, {
       host: config.testEndpoint.shared.host,
@@ -374,17 +328,13 @@ export function apply(ctx: Context, config: Config) {
     sandboxAccentColor: config.sandboxAccentColor,
     sandboxMarkRecalledMessages: config.sandboxMarkRecalledMessages,
   }
-  registerConsole(createWebuiRegistrar(ctx), control, appearance, endpoint, testSpaces, unattributedModelRequests)
+  registerConsole(createWebuiRegistrar(ctx), control, appearance, endpoint, testSpaces)
   registerSettings(ctx, Settings, 'chatluna-plugin-onebot-sandbox')
   onStart(ctx, async () => {
     await control.waitForSceneReady()
     await endpoint?.server.start().catch((error) => ctx.logger.error('%s\n%s', 'test endpoint listener failed to start', errorDetail(error)))
   })
   onDispose(ctx, () => {
-    // Cordis 不等待 dispose 回调；这里只保证收尾写入的失败进日志，而不是被静默丢弃。
-    void unattributedModelRequests.waitForPersistence().catch((error) => {
-      ctx.logger.error('%s\n%s', 'unattributed model request persistence failed on shutdown', errorDetail(error))
-    })
     endpoint?.server.stop()
   })
 }

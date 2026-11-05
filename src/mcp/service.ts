@@ -9,8 +9,6 @@ import {
   type SandboxWakeupReader,
 } from '../chatluna/wakeup'
 import type { SandboxControlService } from '../control-service'
-import type { SandboxModelRequestStore } from '../model-request'
-import { createScopeDirectory, type ScopeDirectory } from '../scope-directory'
 import type { SandboxTestSpaceService } from '../test-spaces'
 import type { SandboxMedia } from '../types'
 import { isRecalledMessage, SandboxDomainError, SandboxSpaceNotFoundError } from '../types'
@@ -78,7 +76,6 @@ export interface SandboxMcpServiceOptions extends Partial<SandboxMcpQuotaConfig>
   idempotencyLimit?: number
   idempotencyTtlMs?: number
   testSpaces?: SandboxTestSpaceService
-  unattributedModelRequests?: SandboxModelRequestStore
   /** 唤醒规则的来源；省略时读本服务所在 Koishi 实例里的被测响应插件运行时。 */
   wakeup?: SandboxWakeupReader
 }
@@ -271,26 +268,13 @@ export class SandboxMcpService {
   /** 三档并发上限。只读档不设上限，因此它不在这张表里。 */
   private concurrentLimits: Record<Exclude<SandboxMcpToolQuota, 'read'>, number>
   private testSpaces?: SandboxTestSpaceService
-  private unattributedModelRequests?: SandboxModelRequestStore
   /** 被测机器人当前的唤醒规则；工具声明、测试指南与 `get_wakeup_rules` 都问它。 */
   private wakeup: SandboxWakeupReader
-  /**
-   * 「谁是全部记录域」的唯一答案，与 Console 注册处各自从同样三个输入包一份。
-   *
-   * 判空在此吸收一次：`testSpaces` 与 `unattributedModelRequests` 缺席就是目录里少一个成员。
-   */
-  private scopes: ScopeDirectory
 
   constructor(private ctx: Context, private control: SandboxControlService, options: SandboxMcpServiceOptions) {
     this.testSpaces = options.testSpaces
-    this.unattributedModelRequests = options.unattributedModelRequests
     // 默认读本服务所在实例的被测运行时。每次读取都现取，因此被测插件重载或改配置后无需重启端点。
     this.wakeup = options.wakeup ?? new SandboxChatLunaWakeup(() => readSandboxResponderRuntimes(ctx))
-    this.scopes = createScopeDirectory({
-      control,
-      testSpaces: options.testSpaces,
-      unattributedModelRequests: options.unattributedModelRequests,
-    })
     mkdirSync(options.dataDirectory, { recursive: true })
     this.credentialFile = join(options.dataDirectory, 'test-credentials.json')
     this.eventLimit = options.eventLimit ?? 1000
@@ -594,10 +578,10 @@ export class SandboxMcpService {
         wait_for_onebot_action: { spaceId: '<spaceId>', cursor: '<perform_group_action.cursorBefore>', botId: '20002', action: 'set_group_kick', timeoutSeconds: 30 },
       },
       翻页读记录: {
-        说明: '四个 list 工具用同一套分页：只有 limit 与 pageCursor，结果给 items 与 nextPageCursor。游标是服务端编码的不透明字符串，原样传回即可续页；结果里没有 nextPageCursor 就是到底了。它带记录种类标记，跨族传递会被判为参数错误。',
+        说明: '三个 list 工具用同一套分页：只有 limit 与 pageCursor，结果给 items 与 nextPageCursor。游标是服务端编码的不透明字符串，原样传回即可续页；结果里没有 nextPageCursor 就是到底了。它带记录种类标记，跨族传递会被判为参数错误。',
         步骤: [
-          { tool: 'list_model_request_records', arguments: { scope: 'all', limit: 20 }, 得到: 'nextPageCursor' },
-          { tool: 'list_model_request_records', arguments: { scope: 'all', limit: 20, pageCursor: '<上一页的 nextPageCursor>' } },
+          { tool: 'list_onebot_debug_records', arguments: { spaceId: '<spaceId>', limit: 20 }, 得到: 'nextPageCursor' },
+          { tool: 'list_onebot_debug_records', arguments: { spaceId: '<spaceId>', limit: 20, pageCursor: '<上一页的 nextPageCursor>' } },
         ],
       },
       群聊触发命令: {
@@ -707,14 +691,11 @@ export class SandboxMcpService {
       transport,
       credentialId: credential.id,
       spaceId,
-      scopes: this.scopes,
       currentCursor: () => this.currentCursor(),
       appendEvent: (type, data, eventSpaceId = spaceId) => this.appendEvent(type, data, eventSpaceId),
       waitFor: (waitArgs, predicate) => this.waitFor(waitArgs, predicate),
       readWakeupRules: (targets) => this.wakeup.read(targets),
       requireTestSpaces: () => this.requireTestSpaces(),
-      requireUnattributedModelRequests: () => this.requireUnattributedModelRequests(),
-      resolveControl: (targetSpaceId, mutation) => this.resolveControl({ spaceId: targetSpaceId }, mutation),
       rememberUploadedMedia: (mediaId, media) => this.rememberUploadedMedia(this.mediaCacheKey(spaceId, mediaId), media),
       findUploadedMedia: (mediaId) => this.uploadedMedia.get(this.mediaCacheKey(spaceId, mediaId)),
       rememberConfirmation: (token, confirmation) => this.rememberConfirmation(token, { ...confirmation, scope: scopeKey(spaceId) }),
@@ -915,11 +896,6 @@ export class SandboxMcpService {
   private requireTestSpaces(): SandboxTestSpaceService {
     if (!this.testSpaces) throw new SandboxMcpError('test_spaces_unavailable', 'AI 测试空间服务不可用')
     return this.testSpaces
-  }
-
-  private requireUnattributedModelRequests(): SandboxModelRequestStore {
-    if (!this.unattributedModelRequests) throw new SandboxMcpError('internal_error', '未归属模型请求库不可用')
-    return this.unattributedModelRequests
   }
 
   private resolveControl(args: Record<string, unknown>, mutation: boolean): SandboxControlService {

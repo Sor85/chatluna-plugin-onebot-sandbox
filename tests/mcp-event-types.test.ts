@@ -78,18 +78,6 @@ describe('按调用结果筛选记录', () => {
     expect(await read()).toEqual(['bad-action', 'ok-action'])
   })
 
-  it('模型请求记录能按还在飞的状态筛选', async () => {
-    const { service, credential, control } = createMcpTestService(['read', 'debug'])
-    const store = control.getModelRequestStore()
-    store.append({ status: 'pending', durationMs: 0, model: 'flying', attribution: 'attributed', entities: { scopeId: 'main' }, requestBodyAvailable: false })
-    store.append({ status: 'success', durationMs: 1, model: 'landed', attribution: 'attributed', entities: { scopeId: 'main' }, requestBodyAvailable: false })
-
-    const page = await service.callTool(credential.token, 'list_model_request_records', { scope: 'main', status: 'pending' }) as {
-      items: Array<{ model: string }>
-    }
-    expect(page.items.map(({ model }) => model)).toEqual(['flying'])
-  })
-
   it('取值集合之外的筛选值与排序值都显式失败，不当成不筛选', async () => {
     const { service, credential } = createMcpTestService(['read', 'debug'])
 

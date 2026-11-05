@@ -21,8 +21,8 @@ function identity(avatar?: string) {
 }
 
 /**
- * 主环境与全部 AI 测试空间的机器人合成一张目录。环境管理页与模型请求工作台都按这张
- * 目录展示机器人，因此两处的来源标签、排列顺序与头像解析口径只有一份。
+ * 主环境与全部 AI 测试空间的机器人合成一张目录，OneBot 调试页的机器人筛选按它展示，
+ * 来源标签、排列顺序与头像解析口径只有一份。
  */
 export function buildSandboxBotDirectory(
   mainSnapshot: Pick<SandboxSnapshot, 'participants'>,

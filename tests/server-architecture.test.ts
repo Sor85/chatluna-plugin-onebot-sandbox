@@ -125,8 +125,8 @@ function enumerationBodies(source: string): string[] {
  *
  * 谓词按标识符名判定：裸的 `tool`／`toolName`，以及注册表条目自己那个字段 `entry.name`／
  * `definition.name`——治理今天持有的是条目而不是名字，只认裸标识符会漏掉 `entry.name === '…'`
- * 这条最近的加特例路径。刻意不放宽到任意 `X.name`：那个形状在模型证据那一族里有一处合法命中
- * （`name === 'input'` 判定的是模型请求变量的键），会变成误报。
+ * 这条最近的加特例路径。刻意不放宽到任意 `X.name`：那个形状也用来判定普通对象的键名
+ * （如 `name === 'input'`），会变成误报。
  *
  * 代价是目录项遍历里的 `entry.name` 落进了同一个名字。今天不冲突（那两处用 `endsWith` 与正则，
  * 命不中本规则），真撞上时改循环变量名比加豁免便宜。
@@ -344,8 +344,8 @@ interface ArchitectureExemption {
   /**
    * 成员级豁免：只放行这一个成员。省略表示放行该文件下该规则的全部违规。
    *
-   * 「公开成员不得只转售协作 module」这条要的就是成员级粒度：它的两处豁免同在一个文件里，
-   * 沿用文件级匹配会让同文件长出第三个转售成员被静默放过。
+   * 「公开成员不得只转售协作 module」这条要的就是成员级粒度：它的豁免在一个大文件里，
+   * 沿用文件级匹配会让同文件长出第二个转售成员被静默放过。
    */
   readonly member?: string
   /** 必填：为什么当前允许它违反规则。 */
@@ -359,8 +359,8 @@ interface ArchitectureExemption {
  * 理由与负责人均为必填；豁免不是放行，是有主的债务。
  *
  * 六条规则里四条当前无例外：全部会话查找都已经收进解析模块，全部记录域枚举都已经收进记录域
- * 目录，入站消息事件组装只剩投递模块那一处，工具名在治理路径上已经不存在。转售那条留下两处，
- * 都在同一个文件里，因此按成员登记——同一文件长出第三个转售成员仍要报出。角色比较那条留下一处，
+ * 目录，入站消息事件组装只剩投递模块那一处，工具名在治理路径上已经不存在。转售那条留下一处，
+ * 按成员登记——同一文件长出第二个转售成员仍要报出。角色比较那条留下一处，
  * 按文件登记：它是共用消息能力规则自己的职责。
  */
 const exemptions: readonly ArchitectureExemption[] = [
@@ -375,14 +375,7 @@ const exemptions: readonly ArchitectureExemption[] = [
     rule: '公开成员不得只转售协作 module',
     member: 'getChatLunaStates',
     reason: 'ChatLuna 对话状态库尚未决定归属：它不是证据记录，读取方是工作区状态投影而不是记录页，与本轮收拢的两个记录库不同源。就地把状态库交出去会让工作区投影直接依赖 ChatLuna 事件模型，代价大于这一个键。',
-    owner: '后续候选「ChatLuna 状态库的归属」：先判定状态库该由谁持有，再一并收掉这两个成员。',
-  },
-  {
-    file: 'src/control-service.ts',
-    rule: '公开成员不得只转售协作 module',
-    member: 'recordChatLunaModelRequest',
-    reason: '与 getChatLunaStates 同源：写入侧的这一句同样只是替 ChatLuna 状态库转述，两者要在同一次判定里一起处理，单独收掉写入侧会让读写两侧的持有者不一致。',
-    owner: '后续候选「ChatLuna 状态库的归属」：先判定状态库该由谁持有，再一并收掉这两个成员。',
+    owner: '后续候选「ChatLuna 状态库的归属」：先判定状态库该由谁持有，再收掉这个成员。',
   },
 ]
 
@@ -447,9 +440,9 @@ describe('服务端架构守卫', () => {
 
     // 链式遍历与 for…of 两种写法，以及测试控制端点自己那层包装，都是同一件事。
     expect(scopeRule.findViolations('src/x.ts', 'testSpaces.listSpaces().map((space) => testSpaces.getControl(space.id))')).not.toEqual([])
-    expect(scopeRule.findViolations('src/x.ts', '...(testSpaces?.listSpaces() ?? []).map((space) => testSpaces!.getControl(space.id)\n  .getModelRequestStore().getRecords(query))')).not.toEqual([])
+    expect(scopeRule.findViolations('src/x.ts', '...(testSpaces?.listSpaces() ?? []).map((space) => testSpaces!.getControl(space.id)\n  .getOneBotDebugStore().getRecords(query))')).not.toEqual([])
     expect(scopeRule.findViolations('src/x.ts', 'for (const space of testSpaces?.listSpaces() ?? []) {\n  cleared += await testSpaces!.getControl(space.id).getOneBotDebugStore().clear()\n}')).not.toEqual([])
-    expect(scopeRule.findViolations('src/x.ts', '...(this.testSpaces?.listSpaces() ?? []).map((space) => this.resolveControl({ spaceId: space.id }, false).getModelRequestStore().getRecords(query))')).not.toEqual([])
+    expect(scopeRule.findViolations('src/x.ts', '...(this.testSpaces?.listSpaces() ?? []).map((space) => this.resolveControl({ spaceId: space.id }, false).getOneBotDebugStore().getRecords(query))')).not.toEqual([])
     // 纯粹把清单列给用户或外部测试控制器看：只取清单，不取控制服务。
     expect(scopeRule.findViolations('src/x.ts', "registerListener('test-spaces', () => testSpaces.listSpaces()\n  .map((space) => ({ ...space, snapshot: trimSnapshotMessages(space.snapshot, 10) })), { authority: 4 })\nconst spaceControl = testSpaces.getControl(input.spaceId)")).toEqual([])
     expect(scopeRule.findViolations('src/x.ts', "if (tool === 'list_test_spaces') return this.requireTestSpaces().listSpaces()\nreturn this.requireTestSpaces().getControl(args.spaceId)")).toEqual([])
@@ -467,10 +460,10 @@ describe('服务端架构守卫', () => {
 
     /** 三个字段各代表一类：协作 module、内置集合、数组字面量。 */
     const thing = (...members: string[]) => [
-      "import { SandboxModelRequestStore } from './model-request'",
+      "import { SandboxOneBotDebugStore } from './onebot-debug'",
       '',
       'export class Thing {',
-      '  private records: SandboxModelRequestStore',
+      '  private records: SandboxOneBotDebugStore',
       '  private rows = new Map<string, string>()',
       '  private names: SandboxName[] = []',
       '',
@@ -517,7 +510,7 @@ describe('服务端架构守卫', () => {
     ))).toEqual([])
     // 把记录库整个交出去正是本规则想要的结果，没有调用就不是转售。
     expect(resellRule.findViolations('src/x.ts', thing(
-      '  getModelRequestStore(): SandboxModelRequestStore {',
+      '  getOneBotDebugStore(): SandboxOneBotDebugStore {',
       '    return this.records',
       '  }',
     ))).toEqual([])
@@ -648,7 +641,7 @@ describe('服务端架构守卫', () => {
     expect(rule.findViolations('src/x.ts', "if ('reset_scene' === definition.name) return true")).not.toEqual([])
 
     // 目录项遍历里的 entry.name 落进同一个名字，但那两处用 endsWith 与正则，命不中本规则。
-    expect(rule.findViolations('src/presets/repository.ts', "if (!entry.name.endsWith('.yml') || !entry.isFile()) continue")).toEqual([])
+    expect(rule.findViolations('src/x.ts', "if (!entry.name.endsWith('.yml') || !entry.isFile()) continue")).toEqual([])
     expect(rule.findViolations('src/media-storage.ts', "if (!/^[a-f0-9]{32}$/.test(entry.name)) continue")).toEqual([])
     // 条目名字当值用不是比较。
     expect(rule.findViolations('src/x.ts', 'new Map(REGISTERED.map((entry) => [entry.name, entry]))')).toEqual([])
@@ -663,7 +656,7 @@ describe('服务端架构守卫', () => {
     expect(rule.findViolations('src/x.ts', 'if (confirmation.tool !== entry.name) return false')).toEqual([])
     expect(rule.findViolations('src/x.ts', 'if (input.tool && record.tool !== input.tool) return false')).toEqual([])
     // 模型证据那一族里这处名字比较是合法的：宽松形状会把它当成违规，因此规则按标识符名判定。
-    expect(rule.findViolations('src/model-evidence/request.ts', "if (name === 'input') return isRecord(value)")).toEqual([])
+    expect(rule.findViolations('src/x.ts', "if (name === 'input') return isRecord(value)")).toEqual([])
   })
 
   /**

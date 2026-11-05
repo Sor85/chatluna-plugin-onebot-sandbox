@@ -102,7 +102,5 @@ export function createEvidenceRecordDatabase(): FakeDatabase {
   return new FakeDatabase({
     'onebot_sandbox_debug_record': ['scopeId', 'sequence'],
     'onebot_sandbox_debug_scope': ['scopeId'],
-    'onebot_sandbox_model_request': ['scopeId', 'sequence'],
-    'onebot_sandbox_model_request_scope': ['scopeId'],
   })
 }

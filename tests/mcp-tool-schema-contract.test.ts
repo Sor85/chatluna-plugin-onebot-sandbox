@@ -53,9 +53,6 @@ const TOOL_PARAMETERS: Record<string, string[]> = {
   list_onebot_debug_records: ['spaceId', 'botId', 'direction', 'action', 'requestedAction', 'status', 'order', 'limit', 'pageCursor', 'testRunId'],
   get_onebot_debug_record: ['spaceId', 'recordId', 'includeLargeValues', 'testRunId'],
   clear_onebot_debug_records: ['spaceId', 'testRunId'],
-  list_model_request_records: ['scope', 'spaceId', 'botId', 'conversationId', 'interactionId', 'model', 'status', 'order', 'limit', 'pageCursor', 'testRunId'],
-  get_model_request_record: ['scope', 'spaceId', 'recordId', 'testRunId'],
-  clear_model_request_records: ['spaceId', 'testRunId'],
   list_test_call_records: ['tool', 'credentialName', 'transport', 'spaceId', 'testRunId', 'status', 'order', 'limit', 'pageCursor'],
   get_test_call_record: ['recordId', 'testRunId'],
   clear_test_call_records: ['testRunId'],
@@ -73,7 +70,6 @@ const RETIRED_PAGINATION_PARAMETERS = ['offset', 'beforeSequence', 'beforeCreate
 const PAGINATED_TOOLS = [
   'list_conversations',
   'list_onebot_debug_records',
-  'list_model_request_records',
   'list_test_call_records',
 ]
 
@@ -155,9 +151,6 @@ const TOOL_VARIANTS: Record<string, Record<string, string[]>> = {
     'set-name': ['groupId', 'name'],
     poke: ['groupId', 'targetId'],
   },
-  // 记录域：只有 space 分支需要空间标识，其余三种取值不带。
-  list_model_request_records: { all: [], main: [], space: ['spaceId'], unattributed: [] },
-  get_model_request_record: { all: [], main: [], space: ['spaceId'], unattributed: [] },
   send_forward_message: { 引用已有消息: ['messageIds'], 显式节点: ['nodes'] },
 }
 
@@ -277,12 +270,6 @@ describe('MCP 工具参数契约', () => {
           .toEqual({ tool, variant: branch.title, discriminator: branch.title })
       }
     }
-    for (const tool of ['list_model_request_records', 'get_model_request_record']) {
-      for (const branch of schemas[tool]?.oneOf ?? []) {
-        expect({ tool, variant: branch.title, discriminator: branch.properties?.scope?.const })
-          .toEqual({ tool, variant: branch.title, discriminator: branch.title })
-      }
-    }
     // 动作枚举与分支清单同源：声明里能选的动作必须都有一个分支说明它要带什么。
     for (const tool of ['perform_friend_action', 'perform_group_action']) {
       expect({ tool, actions: (schemas[tool]?.properties?.action as { enum?: string[] } | undefined)?.enum })
@@ -296,7 +283,7 @@ describe('MCP 工具参数契约', () => {
     expect(forward?.anyOf).toEqual([{ required: ['forwardId'] }, { required: ['messageId'] }])
   })
 
-  it('四个 list 工具的分页参数只有 limit 与 pageCursor，退役的游标参数不再出现', () => {
+  it('三个 list 工具的分页参数只有 limit 与 pageCursor，退役的游标参数不再出现', () => {
     const schemas = toolSchemas()
 
     for (const tool of PAGINATED_TOOLS) {

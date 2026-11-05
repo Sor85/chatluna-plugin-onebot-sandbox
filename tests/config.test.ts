@@ -25,11 +25,6 @@ describe('插件持久化配置', () => {
     expect(Config.dict.sandboxAccentColor.meta.default).toBe('#2563eb')
     expect(Config.dict.sandboxAccentColor.meta.role).toBe('color')
     expect(Config.dict.sandboxMarkRecalledMessages.meta.default).toBe(true)
-    expect(Config.dict.modelRequestRecordLimit.meta.default).toBe(500)
-    // 条数与体积是两道各自独立的上限，任一超出即从最旧记录开始丢弃。体积上限原先 50MB 硬编码
-    // 且不可见，长上下文记录会在远未到条数上限时被回收；条数上限的说明必须说清「同时生效」。
-    expect(Config.dict.modelRequestRecordMaxMegabytes.meta.default).toBe(50)
-    expect(Config.dict.modelRequestRecordLimit.meta.description).toContain('同时生效')
     expect(Config.dict.webQQChatStyle).toBeUndefined()
   })
 

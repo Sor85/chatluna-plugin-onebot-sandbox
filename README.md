@@ -9,8 +9,6 @@
 | `persistenceMode` | `'memory' \| 'database'` | `'database'` | 模拟环境状态存储方式 |
 | `sandboxTimBubbleTail` | `boolean` | `true` | 显示气泡小尖角 |
 | `sandboxMarkRecalledMessages` | `boolean` | `true` | 保留撤回气泡并显示撤回线 |
-| `modelRequestRecordLimit` | `number` | `500` | 每个空间保留的模型请求记录条数上限 |
-| `modelRequestRecordMaxMegabytes` | `number` | `50` | 每个空间模型请求记录的体积上限（MB） |
 | `sceneMessageLimit` | `number` | `2000` | 每个空间保留的场景消息条数上限 |
 | `sceneMessageMaxBytes` | `number` | `8388608` | 每个空间场景 JSON 的字节上限 |
 | `testEndpoint.mcp` | `{ enabled, path }` | `{ true, '/mcp' }` | MCP 测试端点 |

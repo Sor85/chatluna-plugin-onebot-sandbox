@@ -1,7 +1,7 @@
 import { includesConversationParticipant, listConversations } from '../../src/conversation-resolution'
 import type { SandboxSnapshot } from '../../src/types'
 
-export type SandboxWorkspaceView = 'messages' | 'contacts' | 'profile' | 'debug' | 'test-calls' | 'model-requests' | 'presets' | 'spaces'
+export type SandboxWorkspaceView = 'messages' | 'contacts' | 'profile' | 'debug' | 'test-calls' | 'presets' | 'spaces'
 export type SandboxDetailsPreference = 'auto' | 'open' | 'closed'
 
 export interface SandboxWorkspacePreferences {
@@ -19,7 +19,7 @@ const STORAGE_KEY = 'chatluna-sandbox.workspace'
 const DEFAULT_PREFERENCES: SandboxWorkspacePreferences = {
   currentView: 'messages',
 }
-const WORKSPACE_VIEWS = new Set<SandboxWorkspaceView>(['messages', 'contacts', 'profile', 'debug', 'test-calls', 'model-requests', 'presets', 'spaces'])
+const WORKSPACE_VIEWS = new Set<SandboxWorkspaceView>(['messages', 'contacts', 'profile', 'debug', 'test-calls', 'presets', 'spaces'])
 
 export function resolveDetailsVisibility(preference: SandboxDetailsPreference, wideLayout: boolean) {
   if (preference === 'open') return true

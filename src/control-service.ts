@@ -15,7 +15,6 @@ import {
   SandboxChatLunaCharacterContext,
   findChatLunaCharacterChatContext,
 } from './chatluna/character-context'
-import { archiveChatLunaModelRequestError } from './chatluna/error'
 import {
   createInboundDelivery,
   createInboundEventConversations,
@@ -26,10 +25,6 @@ import {
 } from './inbound-delivery'
 import { SandboxMediaStorage, MAX_MEDIA_SIZE, toMediaMetadata } from './media-storage'
 import { SandboxOneBotDebugStore, type AppendOneBotDebugRecordInput, type SandboxOneBotDebugPersistence } from './onebot-debug'
-import {
-  SandboxModelRequestStore,
-  type SandboxModelRequestPersistence,
-} from './model-request'
 import { toOneBotMessageSegments, toOneBotRawMessage, type SandboxOneBotMessageSegment } from './onebot-message'
 import type { SandboxSceneLoadResult, SandboxScenePersistence } from './persistence'
 import {
@@ -148,9 +143,6 @@ export interface SandboxControlServiceOptions {
   debugPersistence?: SandboxOneBotDebugPersistence
   debugRecordLimit?: number
   debugRecordMaxBytes?: number
-  modelRequestPersistence?: SandboxModelRequestPersistence
-  modelRequestRecordLimit?: number
-  modelRequestRecordMaxBytes?: number
   /** 场景保留的消息条数上限；超出后从最旧消息开始淘汰。 */
   sceneMessageLimit?: number
   /** 场景 JSON 的字节上限；超出后继续从最旧消息开始淘汰。 */
@@ -413,7 +405,6 @@ export class SandboxControlService {
   private channelAssignee: SandboxChannelAssignee
   private initialScene: SandboxSnapshot
   private oneBotDebug: SandboxOneBotDebugStore
-  private modelRequests: SandboxModelRequestStore
   private mediaStorage: SandboxMediaStorage
   private mediaDirectory: string
   private ownsMediaDirectory: boolean
@@ -450,11 +441,6 @@ export class SandboxControlService {
       maxBytes: options.debugRecordMaxBytes,
       persistence: options.debugPersistence,
     })
-    this.modelRequests = new SandboxModelRequestStore({
-      maxRecords: options.modelRequestRecordLimit,
-      maxBytes: options.modelRequestRecordMaxBytes,
-      persistence: options.modelRequestPersistence,
-    })
     // 内存模式默认使用实例级媒体目录，避免并行测试/多实例共享默认目录时互相 clear 与写冲突。
     // Database 模式仍使用共享目录，以便场景引用在重启后继续命中同一媒体文件。
     // 只有本类自己生成的实例级目录才由本类负责删除；调用方显式传入的目录归调用方管理。
@@ -479,8 +465,6 @@ export class SandboxControlService {
       return participant?.kind === 'bot' && !!findVisibleConversation(this.scene, botParticipantId, conversationId)
     }, () => this.notifySceneMutation(), (botParticipantId, conversationId, result, messageIds) => {
       this.archiveChatLunaResult(botParticipantId, conversationId, result, messageIds)
-    }, (error, targets) => {
-      archiveChatLunaModelRequestError(this.modelRequests, error, targets)
     })
     this.chatLunaCharacterContext = new SandboxChatLunaCharacterContext(() => findChatLunaCharacterChatContext(ctx))
     // database 服务可以晚于本插件加载，因此每次现取；取不到时 Koishi 的受理人判定本身也不生效。
@@ -778,29 +762,15 @@ export class SandboxControlService {
    * 取得调试记录库。
    *
    * 「这条记录在不在」「读一页」「清一次」都归记录库自己，本类不再替它转述；这个入口只负责
-   * 把记录库交出去，与模型请求库那个入口同形。
+   * 把记录库交出去。
    */
   getOneBotDebugStore(): SandboxOneBotDebugStore {
     return this.oneBotDebug
   }
 
-  getModelRequestStore(): SandboxModelRequestStore {
-    return this.modelRequests
-  }
-
-  getThinkingModelRequestTargets(): Array<{ botId: string, conversationId: string }> {
-    return this.chatLunaState.getStates()
-      .filter(({ thinking }) => thinking)
-      .map(({ botParticipantId, conversationId }) => ({ botId: botParticipantId, conversationId }))
-  }
-
   finishChatLunaCharacterTurn(session: unknown): void {
     if (!this.chatLunaState.finishCharacterTurn(session)) return
     this.notifySceneMutation()
-  }
-
-  recordChatLunaModelRequest(scopeId: string, recordId: string, botParticipantId: string, conversationId: string): void {
-    this.chatLunaState.recordModelRequest(botParticipantId, conversationId, { scopeId, recordId })
   }
 
   recordOneBotDebug(input: AppendOneBotDebugRecordInput): SandboxOneBotDebugRecord {
@@ -817,10 +787,8 @@ export class SandboxControlService {
     await this.sceneReady
     await Promise.all([
       this.oneBotDebug.waitForReady(),
-      this.modelRequests.waitForReady(),
       this.persistenceQueue,
       this.oneBotDebug.waitForPersistence(),
-      this.modelRequests.waitForPersistence(),
     ])
   }
 
@@ -854,7 +822,6 @@ export class SandboxControlService {
     this.chatLunaState.clear()
     // 清理与场景重置同步入队；收尾等待走 waitForPersistence，不阻塞领域调用方。
     void this.oneBotDebug.clear()
-    void this.modelRequests.clear()
     this.botDeliveries = []
     // 恢复到本实例的初始场景而非全局默认场景：测试空间的初始场景是空白，
     // 直接 createDefaultScene() 会引入默认机器人 20001，与主场景在全局
@@ -2362,8 +2329,8 @@ export class SandboxControlService {
     return message
   }
 
-  // 显式记录本轮产生的每条机器人回复，确保分段发送时每个气泡都能追溯到同一组模型请求。
-  // 没有捕获到消息 ID 的兼容路径仍只归档最后一条，供不经过标准发送入口的上游实现使用。
+  // 本轮结果只归档到最后一条机器人回复：分段发送时思考与用量属于整轮，挂在收尾的气泡上。
+  // 没有捕获到消息 ID 的兼容路径取会话里最近一条，供不经过标准发送入口的上游实现使用。
   private archiveChatLunaResult(
     botParticipantId: string,
     conversationId: string,
@@ -2371,36 +2338,23 @@ export class SandboxControlService {
     replyMessageIds: readonly string[],
   ): void {
     const targetIds = new Set(replyMessageIds)
-    const messages = targetIds.size
-      ? this.scene.messages.filter((message) => targetIds.has(message.id))
-      : [...this.scene.messages].reverse().filter((message) => (
+    const message = targetIds.size
+      ? this.scene.messages.findLast((message) => targetIds.has(message.id))
+      : this.scene.messages.findLast((message) => (
           !message.event
           && message.authorId === botParticipantId
           && message.conversationId === conversationId
-        )).slice(0, 1)
-    if (!messages.length) return
+        ))
+    if (!message) return
 
-    const finalMessage = messages.at(-1)!
-    for (const message of messages) {
-      if (message !== finalMessage) {
-        if (result.modelRequests?.length) {
-          message.chatLuna = {
-            ...(message.chatLuna ?? { thought: '' }),
-            modelRequests: result.modelRequests.map((reference) => ({ ...reference })),
-          }
-        }
-        continue
-      }
-      const trace = message.chatLuna?.trace
-      message.chatLuna = {
-        ...(result.thought ? { thought: result.thought } : { thought: message.chatLuna?.thought ?? '' }),
-        ...(result.thoughtDurationMs === undefined ? {} : { thoughtDurationMs: result.thoughtDurationMs }),
-        ...(result.usage ? { usage: result.usage } : {}),
-        ...(result.modelRequests?.length ? { modelRequests: result.modelRequests.map((reference) => ({ ...reference })) } : {}),
-        ...(trace ? { trace } : {}),
-      }
-      if (!message.chatLuna.thought && !message.chatLuna.usage && !message.chatLuna.modelRequests?.length && !message.chatLuna.trace) delete message.chatLuna
+    const trace = message.chatLuna?.trace
+    message.chatLuna = {
+      ...(result.thought ? { thought: result.thought } : { thought: message.chatLuna?.thought ?? '' }),
+      ...(result.thoughtDurationMs === undefined ? {} : { thoughtDurationMs: result.thoughtDurationMs }),
+      ...(result.usage ? { usage: result.usage } : {}),
+      ...(trace ? { trace } : {}),
     }
+    if (!message.chatLuna.thought && !message.chatLuna.usage && !message.chatLuna.trace) delete message.chatLuna
     this.commitSceneMutation()
   }
 

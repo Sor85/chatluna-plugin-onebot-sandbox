@@ -1,7 +1,6 @@
 import type {
   BranchConversationInstanceInput,
   ClearConversationMessagesInput,
-  ClearSandboxModelRequestRecordsResult,
   ClearSandboxOneBotDebugRecordsResult,
   CreateConversationInstanceInput,
   DeleteConversationInstanceInput,
@@ -12,25 +11,17 @@ import type {
   GetSandboxOneBotDebugRecordInput,
   GetSandboxOneBotDebugRecordsInput,
   GetSandboxWorkspaceInput,
-  ListSandboxModelRequestRecordsInput,
   ManageSandboxEnvironmentInput,
   PerformFriendActionInput,
   PerformGroupActionInput,
-  ReadSandboxModelRequestRecordInput,
-  ReadSandboxModelRequestTrajectoryInput,
   RecallMessageInput,
   RenameConversationInstanceInput,
-  SandboxConsoleModelRequestDetail,
-  SandboxConsoleModelRequestListItem,
   SandboxConsoleOneBotDebugRecord,
   SandboxConversationInstanceResult,
   SandboxForward,
   SandboxMediaContent,
   SandboxMessageHistory,
   SandboxMessageSearchResult,
-  SandboxModelRequestRecordsPage,
-  SandboxModelRequestScope,
-  SandboxModelRequestTrajectory,
   SandboxOneBotDebugRecordsPage,
   SandboxWorkspaceState,
   SearchConversationMessagesInput,
@@ -100,14 +91,6 @@ export interface SandboxDebugRecordConsoleEvents {
   'onebot-sandbox.clear-debug-records': (input?: { spaceId?: string }) => Promise<ClearSandboxOneBotDebugRecordsResult>
 }
 
-/** 模型请求：记录列表、详情、轨迹与清理；定域由入参自带的 scope 表达，不走 spaceId 注入。 */
-export interface SandboxModelRequestConsoleEvents {
-  'onebot-sandbox.model-request-records': (input: ListSandboxModelRequestRecordsInput) => Promise<SandboxModelRequestRecordsPage<SandboxConsoleModelRequestListItem>>
-  'onebot-sandbox.model-request-record': (input: ReadSandboxModelRequestRecordInput) => Promise<SandboxConsoleModelRequestDetail>
-  'onebot-sandbox.model-request-trajectory': (input: ReadSandboxModelRequestTrajectoryInput) => Promise<SandboxModelRequestTrajectory>
-  'onebot-sandbox.clear-model-request-records': (input: SandboxModelRequestScope) => Promise<ClearSandboxModelRequestRecordsResult>
-}
-
 /**
  * 测试端点管理：测试调用记录、测试凭证、两种协议表述各自的能力目录与服务器活动。
  *
@@ -149,7 +132,6 @@ export interface SandboxConsoleEvents extends
   SandboxConversationConsoleEvents,
   SandboxEnvironmentConsoleEvents,
   SandboxDebugRecordConsoleEvents,
-  SandboxModelRequestConsoleEvents,
   SandboxTestEndpointConsoleEvents,
   SandboxTestSpaceConsoleEvents {}
 

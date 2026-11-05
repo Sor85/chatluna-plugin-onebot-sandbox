@@ -4,7 +4,6 @@ import { parseThinkContent, readChatLunaResponseText } from './thinking'
 import type {
   SandboxChatLunaState,
   SandboxMessageChatLuna,
-  SandboxMessageModelRequestReference,
   SandboxMessageTraceReference,
 } from '../types'
 
@@ -15,12 +14,6 @@ type ArchiveResult = (
   result: SandboxMessageChatLuna,
   messageIds: readonly string[],
 ) => void
-type ArchiveError = (error: unknown, target: SandboxChatLunaErrorTarget) => void
-
-export interface SandboxChatLunaErrorTarget {
-  botParticipantId: string
-  conversationId: string
-}
 
 interface ChatLunaModelUsagePayload {
   context?: {
@@ -117,7 +110,6 @@ export class SandboxChatLunaStateStore {
   private states = new Map<string, SandboxChatLunaState>()
   private activeStateKeys = new Map<string, Set<string>>()
   private thinkingStartedAt = new Map<string, number>()
-  private modelRequests = new Map<string, SandboxMessageModelRequestReference[]>()
   private replyMessageIds = new Map<string, string[]>()
   private characterSessionStateKeys = new WeakMap<object, string>()
   private activeCharacterSessions = new Map<string, object>()
@@ -133,7 +125,6 @@ export class SandboxChatLunaStateStore {
     private validateTarget: ValidateTarget,
     private onChange: () => void = () => {},
     private archiveResult: ArchiveResult = () => {},
-    private archiveError: ArchiveError = () => {},
   ) {
     const on = this.ctx.on.bind(this.ctx) as unknown as ChatLunaEventRegistrar
     this.disposers.push(on('chatluna/before-chat', (conversationId, _message, _variables, _chatInterface, session) => {
@@ -142,9 +133,7 @@ export class SandboxChatLunaStateStore {
     this.disposers.push(on('chatluna/after-chat', (conversationId, _sourceMessage, responseMessage, _variables, _chatInterface, session) => {
       this.finish(conversationId, session, { lastResponseMessage: responseMessage })
     }))
-    this.disposers.push(on('chatluna/after-chat-error', (error, conversationId) => {
-      const targets = this.resolveErrorTargets(conversationId)
-      if (targets.length === 1) this.archiveError(error, targets[0]!)
+    this.disposers.push(on('chatluna/after-chat-error', (_error, conversationId) => {
       this.finish(conversationId)
     }))
     this.disposers.push(on('chatluna/model-usage', (payload) => {
@@ -244,21 +233,6 @@ export class SandboxChatLunaStateStore {
     return this.finishState(key, payload, { allowReplyFallback: payload !== undefined })
   }
 
-  recordModelRequest(
-    botParticipantId: string,
-    conversationId: string,
-    reference: SandboxMessageModelRequestReference,
-  ): void {
-    const key = createStateKey(botParticipantId, conversationId)
-    const state = this.states.get(key)
-    if (!state?.thinking) return
-    const references = this.modelRequests.get(key) ?? []
-    if (!references.some(({ scopeId, recordId }) => scopeId === reference.scopeId && recordId === reference.recordId)) {
-      references.push({ ...reference })
-      this.modelRequests.set(key, references)
-    }
-  }
-
   recordReplyMessage(
     botParticipantId: string,
     conversationId: string,
@@ -277,7 +251,6 @@ export class SandboxChatLunaStateStore {
     this.states.clear()
     this.activeStateKeys.clear()
     this.thinkingStartedAt.clear()
-    this.modelRequests.clear()
     this.replyMessageIds.clear()
     this.characterSessionStateKeys = new WeakMap()
     this.activeCharacterSessions.clear()
@@ -332,7 +305,6 @@ export class SandboxChatLunaStateStore {
       return key
     }
     this.detachStateKey(key)
-    this.modelRequests.delete(key)
     this.replyMessageIds.delete(key)
     this.states.set(key, {
       ...target,
@@ -352,15 +324,6 @@ export class SandboxChatLunaStateStore {
     return key
   }
 
-  private resolveErrorTargets(chatLunaConversationId: string): SandboxChatLunaErrorTarget[] {
-    const activeKeys = this.activeStateKeys.get(chatLunaConversationId)
-    if (!activeKeys) return []
-    return [...activeKeys].flatMap((key) => {
-      const state = this.states.get(key)
-      return state ? [{ botParticipantId: state.botParticipantId, conversationId: state.conversationId }] : []
-    })
-  }
-
   private finish(chatLunaConversationId?: string, session?: unknown, payload?: ChatLunaCharacterPayload): void {
     const target = readSessionTarget(session)
     const targetKey = target && this.validateTarget(target.botParticipantId, target.conversationId)
@@ -376,7 +339,6 @@ export class SandboxChatLunaStateStore {
       for (const activeKey of activeKeys) {
         changed = this.states.delete(activeKey) || changed
         this.thinkingStartedAt.delete(activeKey)
-        this.modelRequests.delete(activeKey)
         this.replyMessageIds.delete(activeKey)
       }
     }
@@ -422,11 +384,10 @@ export class SandboxChatLunaStateStore {
     state.thinking = false
     state.updatedAt = new Date().toISOString()
     const thought = payload ? parseThinkContent(readChatLunaResponseText(payload)) : ''
-    const modelRequests = this.modelRequests.get(key)
     const replyMessageIds = this.replyMessageIds.get(key) ?? []
-    // release 没有权威响应载荷；若本轮也没有明确捕获回复 ID，调用兼容 fallback 会把失败请求贴到
+    // release 没有权威响应载荷；若本轮也没有明确捕获回复 ID，调用兼容 fallback 会把失败轮次的用量贴到
     // 上一轮最后一条机器人消息。成功 after-chat 仍保留该 fallback，部分回复后失败则只归档明确 ID。
-    const hasResult = Boolean(thought || state.usage || modelRequests?.length)
+    const hasResult = Boolean(thought || state.usage)
     if (hasResult && (options.allowReplyFallback || replyMessageIds.length > 0)) {
       this.archiveResult(
         state.botParticipantId,
@@ -435,12 +396,10 @@ export class SandboxChatLunaStateStore {
           thought,
           ...(thought && startedAt !== undefined ? { thoughtDurationMs: Math.max(0, Date.now() - startedAt) } : {}),
           ...(state.usage ? { usage: { ...state.usage } } : {}),
-          ...(modelRequests?.length ? { modelRequests: modelRequests.map((reference) => ({ ...reference })) } : {}),
         },
         replyMessageIds,
       )
     }
-    this.modelRequests.delete(key)
     this.replyMessageIds.delete(key)
     this.detachStateKey(key)
     return true
@@ -460,8 +419,7 @@ export class SandboxChatLunaStateStore {
       if (!predicate(state)) continue
       this.states.delete(key)
       this.thinkingStartedAt.delete(key)
-      this.modelRequests.delete(key)
-      this.replyMessageIds.delete(key)
+        this.replyMessageIds.delete(key)
       this.detachStateKey(key)
     }
     for (const key of [...this.latestTraces.keys()]) {

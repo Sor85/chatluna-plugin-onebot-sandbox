@@ -233,7 +233,7 @@ describe('场景消息保留上限', () => {
     let spaces: SandboxTestSpaceService | undefined
     app.plugin((ctx) => {
       main = new SandboxControlService(ctx, { runtimeBots, sceneMessageLimit: 2 })
-      spaces = new SandboxTestSpaceService(ctx, runtimeBots, undefined, undefined, undefined, undefined, undefined, {
+      spaces = new SandboxTestSpaceService(ctx, runtimeBots, undefined, undefined, {
         sceneMessageLimit: 2,
       })
     })

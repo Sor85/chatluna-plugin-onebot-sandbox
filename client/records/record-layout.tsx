@@ -33,8 +33,10 @@ import { toast } from '@chatluna/ui-client/client'
 import { useT } from '../i18n'
 import { formatDuration } from '../shared/format-duration'
 import { OverlayScrollbar } from '../shared/overlay-scrollbar'
-import { MODEL_REQUEST_LIVE_REFRESH_INTERVAL_MS } from '../model-request/live-refresh'
 import './records.css'
+
+/** 自动刷新开着且页面可见时的轮询间隔。 */
+const LIVE_REFRESH_INTERVAL_MS = 2000
 
 export type SortOrder = 'asc' | 'desc'
 
@@ -406,7 +408,7 @@ export function useRecordRefresh(live: boolean, refresh: () => void) {
     let timer: ReturnType<typeof setInterval> | undefined
     const sync = () => {
       const visible = document.visibilityState === 'visible'
-      if (visible && !timer) timer = setInterval(() => latest.current(), MODEL_REQUEST_LIVE_REFRESH_INTERVAL_MS)
+      if (visible && !timer) timer = setInterval(() => latest.current(), LIVE_REFRESH_INTERVAL_MS)
       if (!visible && timer) {
         clearInterval(timer)
         timer = undefined

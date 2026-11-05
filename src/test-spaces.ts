@@ -7,7 +7,6 @@ import { resolve } from 'node:path'
 import type { Context } from 'cordis'
 import { createEmptyScene, SandboxControlService, type SandboxRuntimeBotRegistry } from './control-service'
 import type { SandboxOneBotDebugPersistence } from './onebot-debug'
-import type { SandboxModelRequestPersistence } from './model-request'
 import type { SandboxTestSpacePersistence, SandboxTestSpacePersistenceRecord } from './persistence'
 import { trimConversationMessages } from './conversation-resolution'
 import type { SandboxSnapshot } from './types'
@@ -66,9 +65,6 @@ export class SandboxTestSpaceService {
     private runtimeBots: SandboxRuntimeBotRegistry,
     private persistence?: SandboxTestSpacePersistence,
     private createDebugPersistence?: (scopeId: string) => SandboxOneBotDebugPersistence,
-    private createModelRequestPersistence?: (scopeId: string) => SandboxModelRequestPersistence,
-    private modelRequestRecordLimit?: number,
-    private modelRequestRecordMaxBytes?: number,
     private retention: SandboxTestSpaceRetention = {},
   ) {
     onStart(ctx, async () => {
@@ -233,7 +229,6 @@ export class SandboxTestSpaceService {
     this.spaces.delete(spaceId)
     // 删除空间时清空并落盘独立调试证据，再 dispose，避免恢复到已删空间记录。
     space.control.getOneBotDebugStore().clear()
-    space.control.getModelRequestStore().clear()
     void space.control.waitForPersistence().finally(() => {
       void space.control.dispose().finally(() => {
         // 空间目录由本服务分配（spaces/<id>/），删除空间后必须整棵回收，
@@ -263,9 +258,6 @@ export class SandboxTestSpaceService {
       runtimeBots: this.runtimeBots,
       mediaDirectory: resolve(this.spaceDirectory(id), 'media'),
       debugPersistence: this.createDebugPersistence?.(id),
-      modelRequestPersistence: this.createModelRequestPersistence?.(id),
-      modelRequestRecordLimit: this.modelRequestRecordLimit,
-      modelRequestRecordMaxBytes: this.modelRequestRecordMaxBytes,
       // 每个空间独立持有场景消息配额，与主环境和其他空间互不共享。
       sceneMessageLimit: this.retention.sceneMessageLimit,
       sceneMessageMaxBytes: this.retention.sceneMessageMaxBytes,

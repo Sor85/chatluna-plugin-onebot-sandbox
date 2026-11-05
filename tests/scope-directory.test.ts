@@ -1,7 +1,6 @@
 import { App } from './helpers/app'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SandboxControlService, SandboxRuntimeBotRegistry } from '../src/control-service'
-import { SandboxModelRequestStore } from '../src/model-request'
 import {
   createScopeDirectory,
   type FederatablePage,
@@ -12,7 +11,7 @@ import { SandboxTestSpaceService } from '../src/test-spaces'
 const apps: App[] = []
 afterEach(async () => Promise.all(apps.splice(0).map((app) => app.stop())))
 
-function createHarness(options: { spaces?: string[], unattributed?: boolean } = {}) {
+function createHarness(options: { spaces?: string[] } = {}) {
   const app = new App()
   apps.push(app)
   const runtimeBots = new SandboxRuntimeBotRegistry()
@@ -23,11 +22,7 @@ function createHarness(options: { spaces?: string[], unattributed?: boolean } = 
     control,
     testSpaces,
     created,
-    directory: createScopeDirectory({
-      control,
-      testSpaces,
-      unattributedModelRequests: options.unattributed ? new SandboxModelRequestStore() : undefined,
-    }),
+    directory: createScopeDirectory({ control, testSpaces }),
   }
 }
 
@@ -43,17 +38,16 @@ function page(records: Row[], extra: Partial<FederatablePage<Row>> = {}): Federa
 }
 
 const byId = (row: Row) => row.id
-const desc = { limit: 10, order: 'desc' as const, tieBreak: byId }
+const desc = { limit: 10, order: 'desc' as const, tieBreak: (row: Row) => row.sequence }
 
 describe('记录域目录', () => {
-  it('清单顺序固定为主环境、各测试空间的创建序、未归属', () => {
-    const { directory, created } = createHarness({ spaces: ['甲', '乙'], unattributed: true })
+  it('清单顺序固定为主环境、各测试空间的创建序', () => {
+    const { directory, created } = createHarness({ spaces: ['甲', '乙'] })
 
-    expect(directory.listScopes().map(({ kind, id, name }) => ({ kind, id, name }))).toEqual([
+    expect(directory.listScenes().map(({ kind, id, name }) => ({ kind, id, name }))).toEqual([
       { kind: 'main', id: 'main', name: '主环境' },
       { kind: 'test-space', id: created[0]!.id, name: '甲' },
       { kind: 'test-space', id: created[1]!.id, name: '乙' },
-      { kind: 'unattributed', id: 'unattributed', name: '未归属' },
     ])
   })
 
@@ -62,19 +56,11 @@ describe('记录域目录', () => {
     apps.push(app)
     const directory = createScopeDirectory({ control: new SandboxControlService(app) })
 
-    expect(directory.listScopes().map(({ kind }) => kind)).toEqual(['main'])
     expect(directory.listScenes().map(({ kind }) => kind)).toEqual(['main'])
   })
 
-  it('沙盒场景清单不含未归属，因为它没有场景', () => {
-    const { directory } = createHarness({ spaces: ['甲'], unattributed: true })
-
-    expect(directory.listScopes()).toHaveLength(3)
-    expect(directory.listScenes().map(({ kind }) => kind)).toEqual(['main', 'test-space'])
-  })
-
-  it('联邦只遍历沙盒场景，未归属永不参与', async () => {
-    const { directory } = createHarness({ spaces: ['甲'], unattributed: true })
+  it('联邦按清单顺序遍历全部记录域', async () => {
+    const { directory } = createHarness({ spaces: ['甲'] })
     const visited: string[] = []
 
     await directory.federate(async (scope) => {
@@ -83,7 +69,6 @@ describe('记录域目录', () => {
     }, desc)
 
     expect(visited).toEqual(directory.listScenes().map(({ id }) => id))
-    expect(visited).not.toContain('unattributed')
   })
 
   it('按 createdAt 合并，相同时用第二排序键破平，并跟随排序方向', async () => {
@@ -152,26 +137,6 @@ describe('记录域目录', () => {
     expect((await directory.federate(async () => page([]), desc)).earliestCursor).toBeUndefined()
   })
 
-  it('只有调用方声明了续页游标且确实还有下一页时才产出 next', async () => {
-    const { directory } = createHarness()
-    const rows = [
-      { id: 'a', createdAt: '2026-01-02T00:00:00.000Z', sequence: 1 },
-      { id: 'b', createdAt: '2026-01-01T00:00:00.000Z', sequence: 2 },
-    ]
-    const read = async () => page(rows)
-    const withCursor = { ...desc, nextCursor: (last: Row) => ({ beforeCreatedAt: last.createdAt, beforeId: last.id }) }
-
-    // 截断了，所以给游标，且游标指向本页最后一条。
-    expect((await directory.federate(read, { ...withCursor, limit: 1 })).next).toEqual({
-      beforeCreatedAt: '2026-01-02T00:00:00.000Z',
-      beforeId: 'a',
-    })
-    // 没有下一页，不给游标。
-    expect((await directory.federate(read, withCursor)).next).toBeUndefined()
-    // 调用方没声明续页能力（调试记录的 sequence 跨记录域不可比），结果里根本没有这一项。
-    expect(Object.hasOwn(await directory.federate(read, { ...desc, limit: 1 }), 'next')).toBe(false)
-  })
-
   it('联邦读取前等到全部成员就绪', async () => {
     const { directory, control } = createHarness({ spaces: ['甲'] })
     let released = () => {}
@@ -236,42 +201,5 @@ describe('记录域目录', () => {
     const { directory } = createHarness({ spaces: ['甲', '乙'] })
 
     expect(await directory.forEachScene(async ({ name }) => name)).toEqual(['主环境', '甲', '乙'])
-  })
-
-  /**
-   * 记录域自己带模型请求库：跨记录域读一条记录不再写成「取记录域 → 取控制服务 → 取记录库」。
-   */
-  it('场景那一支直接给出模型请求库，从记录域读一条记录不经控制服务', async () => {
-    const { directory, control, created } = createHarness({ spaces: ['甲'], unattributed: true })
-    const [main, space] = directory.listScenes()
-    const appended = main!.records.append({
-      status: 'success', durationMs: 1, model: 'main-model',
-      attribution: 'attributed', entities: { scopeId: 'main' }, requestBodyAvailable: false,
-    })
-
-    expect(main!.records).toBe(control.getModelRequestStore())
-    expect(space!.records).not.toBe(main!.records)
-    expect((await main!.records.getRecord(appended.id))?.model).toBe('main-model')
-    expect(await space!.records.getRecord(appended.id)).toBeUndefined()
-    const hit = await directory.findFirst((scope) => scope.records.getRecord(appended.id))
-    expect(hit?.scope).toMatchObject({ kind: 'main', id: 'main' })
-    expect(created[0]!.id).toBe(space!.id)
-  })
-
-  it('按记录域标识取模型请求库，主环境、测试空间与未归属各一处答案', () => {
-    const { directory, control, created } = createHarness({ spaces: ['甲'], unattributed: true })
-    const [, space] = directory.listScopes()
-    const unattributed = directory.listScopes().at(-1)!
-
-    expect(directory.getModelRequests('main')).toBe(control.getModelRequestStore())
-    expect(directory.getModelRequests(created[0]!.id)).toBe(space!.records)
-    expect(directory.getModelRequests('unattributed')).toBe(unattributed.records)
-    expect(directory.getModelRequests('不存在的记录域')).toBeUndefined()
-  })
-
-  it('未归属缺席时按它的标识也取不到记录库', () => {
-    const { directory } = createHarness({ spaces: ['甲'] })
-
-    expect(directory.getModelRequests('unattributed')).toBeUndefined()
   })
 })

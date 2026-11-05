@@ -15,29 +15,19 @@ import {
   resolveConversation,
   type ResolvedConversation,
 } from '../conversation-resolution'
-import {
-  DEFAULT_MODEL_REQUEST_PAGE_SIZE,
-  MAIN_MODEL_REQUEST_SCOPE_ID,
-  MAX_MODEL_REQUEST_PAGE_SIZE,
-  type SandboxModelRequestStore,
-} from '../model-request'
 import { getOneBotCapabilityMatrix } from '../onebot-profiles'
 import { DEFAULT_DEBUG_PAGE_SIZE, MAX_DEBUG_PAGE_SIZE } from '../onebot-debug'
-import type { ScopeDirectory, SceneScope } from '../scope-directory'
 import type { SandboxTestSpaceService } from '../test-spaces'
 import type {
-  GetSandboxModelRequestRecordsInput,
   SandboxForwardNodeInput,
   SandboxImplementationProfile,
   SandboxMedia,
-  SandboxModelRequestRecordsPage,
-  SandboxModelRequestStatus,
   SandboxOneBotDebugDirection,
   SandboxOneBotDebugRecordsPage,
   SandboxOneBotDebugStatus,
   SandboxSnapshot,
 } from '../types'
-import { SandboxModelRequestCursorExpiredError, SandboxOneBotDebugCursorExpiredError } from '../types'
+import { SandboxOneBotDebugCursorExpiredError } from '../types'
 import { argumentsFingerprint, asRecord, optionalBoolean, optionalEnum, optionalNumber, readSpaceId, requireNumber, requireString } from './arguments'
 import {
   DEFAULT_TEST_CALL_PAGE_SIZE,
@@ -47,9 +37,7 @@ import {
 } from './call-records'
 import {
   encodePageCursor,
-  isSequencePageCursor,
   readPageCursor,
-  type SandboxPageCursorPayloads,
 } from './page-cursor'
 import {
   SandboxMcpError,
@@ -77,9 +65,7 @@ export type SandboxMcpToolQuota = 'read' | 'mutation' | 'wait' | 'upload'
  * - `read`：按读取解析。省略 spaceId 时读主场景。
  * - `none`：治理不代它解析。三族工具落在这里，理由各自成立：没有空间参数的（服务自述、空间
  *   清单、测试调用记录）无从解析；空间生命周期那五个由测试空间服务自己校验状态，经空间三态
- *   判定会把「空间当前不可修改」这类领域拒绝改写成空间不可用；模型请求记录那三个的记录域由
- *   `scope` 参数决定而不是 spaceId 单独决定，清理那一个还必须先拒绝未归属分类，否则缺少
- *   spaceId 的调用会报成「必须显式指定空间」而不是「不能清理未归属记录」。
+ *   判定会把「空间当前不可修改」这类领域拒绝改写成空间不可用。
  */
 export type SandboxMcpSpaceResolution = 'none' | 'read' | 'mutation'
 
@@ -118,8 +104,6 @@ export interface SandboxMcpToolRuntime {
   readonly credentialId: string
   /** 参数里的空间标识原文；事件归属与媒体缓存键都取它。 */
   readonly spaceId?: string
-  /** 「谁是全部记录域」的唯一答案。 */
-  readonly scopes: ScopeDirectory
   currentCursor(): SandboxMcpEventCursor
   /** 追加一条事件；省略 `spaceId` 时按本次调用的空间归属写入。 */
   appendEvent(type: SandboxMcpEventType, data: unknown, spaceId?: string): SandboxMcpEventCursor
@@ -127,9 +111,6 @@ export interface SandboxMcpToolRuntime {
   /** 被测机器人当前的唤醒规则；省略 `target` 时同时给出私聊与群聊两份通用规则。 */
   readWakeupRules(targets?: readonly SandboxWakeupTarget[]): SandboxWakeupRules
   requireTestSpaces(): SandboxTestSpaceService
-  requireUnattributedModelRequests(): SandboxModelRequestStore
-  /** 按显式空间标识另取一个控制服务，供记录域由 `scope` 参数决定的工具使用。 */
-  resolveControl(spaceId: string | undefined, mutation: boolean): SandboxControlService
   rememberUploadedMedia(mediaId: string, media: SandboxMedia): void
   findUploadedMedia(mediaId: string): SandboxMedia | undefined
   rememberConfirmation(token: string, confirmation: SandboxMcpConfirmation): void
@@ -170,11 +151,8 @@ export interface SandboxMcpToolEntry extends SandboxMcpToolCapability {
 const RECORD_ORDERS: readonly ('asc' | 'desc')[] = ['asc', 'desc']
 const ONEBOT_DEBUG_DIRECTIONS: readonly SandboxOneBotDebugDirection[] = ['event', 'action']
 const ONEBOT_DEBUG_STATUSES: readonly SandboxOneBotDebugStatus[] = ['success', 'error']
-// 模型请求多一个「还在飞」的状态，因此它的筛选集合比另外两族记录宽一项，不合并成一份。
-const MODEL_REQUEST_STATUSES: readonly SandboxModelRequestStatus[] = ['pending', 'success', 'error']
 const TEST_CALL_STATUSES: readonly SandboxTestCallRecord['status'][] = ['success', 'error']
 const TEST_CALL_TRANSPORTS: readonly SandboxTestCallTransport[] = ['mcp', 'http', 'chatluna']
-const MODEL_REQUEST_SCOPES: readonly ('all' | 'main' | 'space' | 'unattributed')[] = ['all', 'main', 'space', 'unattributed']
 
 const SPACE_REQUIRED = { type: 'string', description: 'AI 测试空间 ID，由 create_test_space 返回；修改与等待类操作必填' }
 const SPACE_OPTIONAL = { type: 'string', description: 'AI 测试空间 ID；省略时读取主场景' }
@@ -223,27 +201,6 @@ const IMPLEMENTATION = { type: 'string', enum: ['napcat', 'llbot', 'snowluma'] }
 // 调用标注参数：每次调用都被写进测试调用记录，也是 list_test_call_records 的筛选维度。它对全部
 // 工具生效而非某个工具的业务参数，因此由 withTestRunId 统一注入，不逐个工具书写。
 const TEST_RUN_ID = { type: 'string', description: '本次测试编排的标识；写入测试调用记录，可用 list_test_call_records 按它回溯同一轮编排的全部调用' }
-
-/**
- * 记录域的两个参数与它们的取值组合。
- *
- * `scope` 是判别式，`spaceId` 只在 `space` 分支有意义且必填。组合写成 `oneOf` 而不是留在散文里：
- * 缺 `spaceId` 此前静默读主环境，而「读到了另一个记录域的记录」不报错，消费者据此得出的是错的结论。
- *
- * 扁平 `properties` 保留不动：只读 `properties` 的客户端仍然看得见全部参数，读得懂 `oneOf` 的客户端
- * 多知道每种取值各自要带什么。每个分支只用 `const` 钉住 `scope`，因此任何一次调用恰好匹配一个分支。
- */
-const RECORD_SCOPE = {
-  type: 'string',
-  enum: [...MODEL_REQUEST_SCOPES],
-  description: 'all 读取全部已归属记录域，main 读取主环境，space 读取指定 AI 测试空间，unattributed 读取无法安全归属的记录',
-}
-const RECORD_SCOPE_SPACE = { type: 'string', description: 'AI 测试空间 ID，scope=space 时必填；写成 main 时解析成主环境' }
-const RECORD_SCOPE_VARIANTS = MODEL_REQUEST_SCOPES.map((scope) => ({
-  title: scope,
-  properties: { scope: { const: scope } },
-  ...(scope === 'space' ? { required: ['spaceId'] } : {}),
-}))
 
 /**
  * 关系操作的取值组合：每种动作各自声明必填参数。
@@ -828,11 +785,11 @@ function toPagedItems<T>(
 /**
  * 把记录库的游标过期翻译成带可用游标的恢复建议。
  *
- * 两族记录共用：恢复建议此前是「请使用 `earliestCursor=123` 恢复分页」，让消费者自己把数值拼回
- * 参数名。给出编码好的 `pageCursor` 之后它是一个能直接传回来的输入，而这条口径只该有一处。
+ * 恢复建议此前是「请使用 `earliestCursor=123` 恢复分页」，让消费者自己把数值拼回参数名。
+ * 给出编码好的 `pageCursor` 之后它是一个能直接传回来的输入。
  */
 function toCursorExpiredError(
-  kind: 'onebot-debug-records' | 'model-request-records',
+  kind: 'onebot-debug-records',
   error: { message: string; earliestCursor?: number },
 ): SandboxMcpError {
   return new SandboxMcpError('cursor_expired', error.message, false, error.earliestCursor === undefined
@@ -1341,163 +1298,6 @@ async function getOneBotDebugRecord(runtime: SandboxMcpToolRuntime, args: Record
 
 async function clearOneBotDebugRecords(runtime: SandboxMcpToolRuntime) {
   return { cleared: await runtime.control.getOneBotDebugStore().clear() }
-}
-
-// —— 执行体：模型请求记录 ——
-
-/**
- * 记录域按 `scope` 判别，`space` 分支必须显式带 `spaceId`。
- *
- * 缺 `spaceId` 时刻意不回落到主环境：那条回落读到的是另一个记录域的记录，而调用不报错，消费者
- * 拿着主环境的记录去断言某个测试空间里发生了什么，得出的是错的结论。对外声明用判别联合表达同一
- * 件事（`space` 分支的 `required` 里有 `spaceId`），因此这里的失败是声明的兑现而不是额外规则。
- *
- * `spaceId` 写成主环境标识仍解析成主环境：那是 `describeRecordScope` 给出的来源标注原样传回来的
- * 形态，不是省略。
- */
-function resolveModelRequestScope(args: Record<string, unknown>) {
-  const scope = optionalEnum(args.scope, 'scope', MODEL_REQUEST_SCOPES)
-  if (scope === undefined) throw new SandboxMcpError('invalid_arguments', 'scope 不能为空')
-  if (scope !== 'space') return { kind: scope }
-  const spaceId = requireString(args.spaceId, 'spaceId')
-  if (spaceId === MAIN_MODEL_REQUEST_SCOPE_ID) return { kind: 'main' as const }
-  return { kind: 'space' as const, spaceId }
-}
-
-/**
- * 来源标注按本端点自己的入参词汇给出，而不是照抄 Console 的 `type: 'main' | 'test-space'`：
- * 调用方拿到 `scope` 与 `spaceId` 就能原样传回任何单记录域工具（`spaceId='main'` 也解析成主环境）。
- */
-function describeRecordScope(scope: SceneScope) {
-  return scope.kind === 'main'
-    ? { scope: 'main' as const, spaceId: MAIN_MODEL_REQUEST_SCOPE_ID, name: scope.name }
-    : { scope: 'space' as const, spaceId: scope.id, name: scope.name }
-}
-
-/**
- * 分页游标与记录域的搭配。
- *
- * 单记录域按序号续页，`scope: 'all'` 按时间加记录标识续页——序号是每个记录域各自独立的计数，跨记录域
- * 比较没有意义。收敛前三个游标参数在声明里并列、都不标条件，而执行体在 `scope: 'all'` 时把
- * `beforeSequence` 静默置空，于是翻页翻不动也不报错，只会一直拿到同一页。现在游标由服务端编码，
- * 搭配不上就显式失败：那是调用方拿了另一条读取路径的游标，继续按它翻只会给出错的结论。
- */
-function toModelRequestPageQuery(
-  pageCursor: SandboxPageCursorPayloads['model-request-records'] | undefined,
-  federated: boolean,
-): Pick<GetSandboxModelRequestRecordsInput, 'beforeSequence' | 'beforeCreatedAt' | 'beforeId'> {
-  if (!pageCursor) return {}
-  const recovery = '请传回同一种 scope 上一页返回的 nextPageCursor。'
-  if (federated) {
-    if (isSequencePageCursor(pageCursor)) {
-      throw new SandboxMcpError('invalid_arguments', 'pageCursor 是单个记录域的分页位置，不能用于 scope=all', false, recovery)
-    }
-    return { beforeCreatedAt: pageCursor.createdAt, beforeId: pageCursor.id }
-  }
-  if (!isSequencePageCursor(pageCursor)) {
-    throw new SandboxMcpError('invalid_arguments', 'pageCursor 是 scope=all 的分页位置，不能用于单个记录域', false, recovery)
-  }
-  return { beforeSequence: pageCursor.sequence }
-}
-
-/**
- * 单记录域的模型请求记录页在测试控制端点这一侧的形状。
- *
- * `nextCreatedAt` 与 `nextId` 不带出去：它们是联邦读取的续页键，单记录域按序号续页，同时给三个
- * 续页字段正是「哪个游标有效取决于另一个参数」的来源。翻译与调试记录那一份同理，见 ADR-0095。
- */
-function toModelRequestPage({ records, nextCursor, nextCreatedAt: _createdAt, nextId: _id, ...page }: SandboxModelRequestRecordsPage) {
-  return {
-    items: records,
-    ...(nextCursor === undefined ? {} : { nextPageCursor: encodePageCursor('model-request-records', { sequence: nextCursor }) }),
-    ...page,
-  }
-}
-
-async function listModelRequestRecords(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
-  assertPageCursorOnly(args)
-  const pageCursor = readPageCursor(args, 'model-request-records')
-  const query: GetSandboxModelRequestRecordsInput = {
-    botId: typeof args.botId === 'string' ? args.botId : undefined,
-    conversationId: typeof args.conversationId === 'string' ? args.conversationId : undefined,
-    interactionId: typeof args.interactionId === 'string' ? args.interactionId : undefined,
-    model: typeof args.model === 'string' ? args.model : undefined,
-    status: optionalEnum(args.status, 'status', MODEL_REQUEST_STATUSES),
-    order: optionalEnum(args.order, 'order', RECORD_ORDERS),
-    limit: optionalNumber(args.limit, 'limit', { min: 1, max: MAX_MODEL_REQUEST_PAGE_SIZE }),
-  }
-  try {
-    const scope = resolveModelRequestScope(args)
-    if (scope.kind === 'all') {
-      const federatedQuery = { ...query, ...toModelRequestPageQuery(pageCursor, true) }
-      const { next, records, ...page } = await runtime.scopes.federate(
-        (recordScope) => recordScope.records.getRecords(federatedQuery),
-        {
-          limit: requireNumber(query.limit, 'limit', { fallback: DEFAULT_MODEL_REQUEST_PAGE_SIZE, min: 1, max: MAX_MODEL_REQUEST_PAGE_SIZE }),
-          order: query.order === 'asc' ? 'asc' : 'desc',
-          tieBreak: ({ id }) => id,
-          nextCursor: ({ createdAt, id }) => encodePageCursor('model-request-records', { createdAt, id }),
-        },
-      )
-      // 联邦页的续页游标只在第二排序键跨记录域可比时给得出来，因此 `hasMore` 与它不是同一件事：
-      // 「还有更多但翻不过去」是一种真实状态，必须能看出来，而不是让消费者以为到底了。
-      return { items: records, ...(next === undefined ? {} : { nextPageCursor: next }), ...page }
-    }
-    const scoped = { ...query, ...toModelRequestPageQuery(pageCursor, false) }
-    if (scope.kind === 'unattributed') return toModelRequestPage(await runtime.requireUnattributedModelRequests().getRecords(scoped))
-    if (scope.kind === 'main') return toModelRequestPage(await runtime.control.getModelRequestStore().getRecords(scoped))
-    return toModelRequestPage(await runtime.resolveControl(scope.spaceId, false).getModelRequestStore().getRecords(scoped))
-  } catch (error) {
-    // 序号游标才会过期（联邦读取不按序号翻页），因此恢复建议给的是编码好的序号游标。
-    if (error instanceof SandboxModelRequestCursorExpiredError) throw toCursorExpiredError('model-request-records', error)
-    throw error
-  }
-}
-
-async function getModelRequestRecord(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
-  const recordId = requireString(args.recordId, 'recordId')
-  const scope = resolveModelRequestScope(args)
-  /*
-   * 「全部」范围刻意留在下面那个 catch 之外：它把任何异常都记成 record_not_found，一个记录域的
-   * 持久化故障会因此伪装成「记录不存在」。这里未命中显式表达成结构化错误，故障照原样抛出，
-   * 由错误归一化按 ADR-0027 归类。
-   *
-   * 记录标识本身唯一且读取无副作用，要求调用方先知道记录属于哪个空间说不通；清理类工具刻意
-   * 不跟着放开，这处能力不对等见 ADR-0083。
-   */
-  if (scope.kind === 'all') {
-    const hit = await runtime.scopes.findFirst((recordScope) => recordScope.records.getRecord(recordId))
-    if (!hit) throw new SandboxMcpError('record_not_found', `模型请求记录不存在：${recordId}`)
-    return { ...hit.value, source: describeRecordScope(hit.scope) }
-  }
-  try {
-    if (scope.kind === 'unattributed') return await runtime.requireUnattributedModelRequests().requireRecord(recordId)
-    if (scope.kind === 'main') return await runtime.control.getModelRequestStore().requireRecord(recordId)
-    return await runtime.resolveControl(scope.spaceId, false).getModelRequestStore().requireRecord(recordId)
-  } catch (error) {
-    if (error instanceof SandboxMcpError) throw error
-    throw new SandboxMcpError('record_not_found', error instanceof Error ? error.message : '模型请求记录不存在')
-  }
-}
-
-/**
- * 清理指定 AI 测试空间的模型请求记录。
- *
- * 清理目标只由 `spaceId` 决定，本工具不接受 `scope`。三个记录域里只有 AI 测试空间允许经测试控制
- * 端点清理，而未归属记录域根本没有空间标识，于是「清理未归属」在参数层面就不可表达——那比声明一个
- * 单成员枚举再在执行体里挑出一个非法取值来拒绝更清楚。读取侧允许跨记录域、清理侧不允许，这处能力
- * 不对等见 ADR-0083。
- *
- * 显式传了 `scope` 仍要拒绝而不是无声忽略：另外两个模型请求记录工具都以 `scope` 为必填判别式，
- * 照着它们的形状调用本工具是最可能发生的事，而被忽略的那个参数会让调用方以为自己指定了范围。
- */
-async function clearModelRequestRecords(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
-  if ('scope' in args) {
-    throw new SandboxMcpError('invalid_arguments', '本工具不接受 scope：清理目标由 spaceId 决定，未归属模型请求记录只能在 WebQQ 清理。')
-  }
-  // 缺 spaceId 交给空间解析报 `space_id_required`，与清理调试记录那一个同一个错误码与同一句恢复
-  // 建议；在这里自己抛 `invalid_arguments` 会让同一件事在两个清理工具上有两种说法。
-  return { cleared: await runtime.resolveControl(readSpaceId(args), true).getModelRequestStore().clear() }
 }
 
 // —— 执行体：测试调用记录 ——
@@ -2120,61 +1920,6 @@ const TOOL_ENTRIES: SandboxMcpToolEntry[] = [
     // 主环境的证据。这正是「算不算写操作不能从配额档推导」的那个反例。
     quota: 'read', spaceResolution: 'mutation', idempotent: false, requiresConfirmation: false,
     run: clearOneBotDebugRecords,
-  },
-  {
-    name: 'list_model_request_records',
-    scope: 'debug',
-    description: '读取模型请求记录',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        scope: RECORD_SCOPE,
-        spaceId: RECORD_SCOPE_SPACE,
-        botId: { type: 'string' },
-        conversationId: { type: 'string' },
-        interactionId: { type: 'string' },
-        model: { type: 'string' },
-        status: { type: 'string', enum: [...MODEL_REQUEST_STATUSES], description: '按请求结果筛选；省略时全部返回。pending 是还没收到响应的请求' },
-        order: { type: 'string', enum: [...RECORD_ORDERS], description: '按创建时间正序或倒序，默认倒序' },
-        limit: pageLimit(DEFAULT_MODEL_REQUEST_PAGE_SIZE, MAX_MODEL_REQUEST_PAGE_SIZE),
-        pageCursor: PAGE_CURSOR,
-      },
-      required: ['scope'],
-      oneOf: RECORD_SCOPE_VARIANTS,
-    },
-    quota: 'read', spaceResolution: 'none', idempotent: false, requiresConfirmation: false,
-    run: listModelRequestRecords,
-  },
-  {
-    name: 'get_model_request_record',
-    scope: 'debug',
-    description: '读取单条模型请求记录，含完整请求体和原始响应体；scope=all 时按记录 ID 跨全部已归属空间查找',
-    inputSchema: {
-      type: 'object',
-      description: '按记录 ID 读取完整模型请求与原始响应体；流式响应以 SSE 原文返回。',
-      properties: {
-        scope: { ...RECORD_SCOPE, description: 'all 按记录 ID 跨全部已归属记录域查找并在结果里标注来源，main 读取主环境，space 读取指定 AI 测试空间，unattributed 读取无法安全归属的记录' },
-        spaceId: RECORD_SCOPE_SPACE,
-        recordId: { type: 'string' },
-      },
-      required: ['scope', 'recordId'],
-      oneOf: RECORD_SCOPE_VARIANTS,
-    },
-    quota: 'read', spaceResolution: 'none', idempotent: false, requiresConfirmation: false,
-    run: getModelRequestRecord,
-  },
-  {
-    name: 'clear_model_request_records',
-    scope: 'debug',
-    description: '清理指定 AI 测试空间的模型请求记录',
-    inputSchema: {
-      type: 'object',
-      description: '清理目标只由 spaceId 决定，本工具不接受 scope：三个记录域里只有 AI 测试空间允许经本端点清理，未归属模型请求记录只能在 WebQQ 清理。',
-      properties: { spaceId: SPACE_REQUIRED },
-      required: ['spaceId'],
-    },
-    quota: 'read', spaceResolution: 'none', idempotent: false, requiresConfirmation: false,
-    run: clearModelRequestRecords,
   },
   {
     name: 'list_test_call_records',
