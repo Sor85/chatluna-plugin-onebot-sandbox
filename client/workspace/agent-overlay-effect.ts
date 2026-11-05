@@ -90,10 +90,12 @@ void main() { gl_Position = vec4(a_Position, 0.0, 1.0); }
 `
 
 // 内外两层光晕（CSS px 单位，运行时乘 dpr）。向内扩散 ≈ stroke/2 + blur；相位错半圈保证任意时刻
-// 整圈都有光带，反向滚动制造流动纵深 [推断]。
+// 整圈都有光带，反向滚动制造流动纵深 [推断]。光晕颜色不在预设里：取画布的 CSS color（spaces.css 设为
+// v2 主题的 --primary），ego 原版的蓝色 [0.27, 0.42, 0.85] 只在读不到时兜底。
+const FALLBACK_ACCENT: readonly [number, number, number] = [0.27, 0.42, 0.85]
 const GLOW_PRESETS = [
-  { stroke: 160, blur: 115, radius: 14, fade: 1, accent: [0.27, 0.42, 0.85, 1], scrollSpeed: 1 / 7, scrollPhase: 0 },
-  { stroke: 76, blur: 185, radius: 14, fade: 1, accent: [0.27, 0.42, 0.85, 1], scrollSpeed: -1 / 9, scrollPhase: 0.5 },
+  { stroke: 160, blur: 115, radius: 14, fade: 1, scrollSpeed: 1 / 7, scrollPhase: 0 },
+  { stroke: 76, blur: 185, radius: 14, fade: 1, scrollSpeed: -1 / 9, scrollPhase: 0.5 },
   // 这是原本的数据（按 ego 实机截屏标定的初版参数，后应需求加宽扩散后弃用，保留备查）：
   // { stroke: 110, blur: 80, radius: 14, fade: 1, accent: [0.27, 0.42, 0.85, 1], scrollSpeed: 1 / 7, scrollPhase: 0 },
   // { stroke: 50, blur: 130, radius: 14, fade: 0.85, accent: [0.27, 0.42, 0.85, 1], scrollSpeed: -1 / 9, scrollPhase: 0.5 },
@@ -140,6 +142,12 @@ function createProgram(gl: WebGLRenderingContext, fragment: string): GlProgram |
   return { program, uniforms }
 }
 
+// 计算样式里的 color 一律是 rgb()/rgba()（--primary 是十六进制色），取前三个分量归一到 0-1。
+function readAccent(canvas: HTMLCanvasElement): readonly [number, number, number] {
+  const match = getComputedStyle(canvas).color.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/)
+  return match ? [Number(match[1]) / 255, Number(match[2]) / 255, Number(match[3]) / 255] : FALLBACK_ACCENT
+}
+
 // 挂载 ego 式跑马灯特效。返回卸载函数；WebGL 不可用时返回 null（此时仅保留 CSS scrim 与点阵背景）。
 export function mountAgentOverlayEffect(canvas: HTMLCanvasElement): (() => void) | null {
   const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false })
@@ -161,6 +169,7 @@ export function mountAgentOverlayEffect(canvas: HTMLCanvasElement): (() => void)
   let frame = 0
   let disposed = false
   const start = performance.now()
+  let accent = readAccent(canvas)
 
   function resize() {
     const width = Math.max(1, Math.round(canvas.clientWidth * dpr))
@@ -194,7 +203,7 @@ export function mountAgentOverlayEffect(canvas: HTMLCanvasElement): (() => void)
       setFloat('uRadius', preset.radius * dpr)
       setFloat('uFade', preset.fade)
       const accentLoc = glow!.uniforms.uAccent
-      if (accentLoc) gl!.uniform4f(accentLoc, preset.accent[0], preset.accent[1], preset.accent[2], preset.accent[3])
+      if (accentLoc) gl!.uniform4f(accentLoc, accent[0], accent[1], accent[2], 1)
       setFloat('uScrollOffset', (time * preset.scrollSpeed + preset.scrollPhase) * height)
       gl!.drawArrays(gl!.TRIANGLES, 0, 3)
     }
@@ -206,6 +215,12 @@ export function mountAgentOverlayEffect(canvas: HTMLCanvasElement): (() => void)
     if (reducedMotion) render(performance.now())
   })
   observer?.observe(canvas)
+  // v2 切换亮暗主题改的是 <html> 的 class，--primary 随之变化，重新取色。
+  const themeObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+    accent = readAccent(canvas)
+    if (reducedMotion) render(performance.now())
+  })
+  themeObserver?.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] })
   // 首帧同步绘制：后台标签页的 rAF 可能被冻结，保证至少渲染出静态画面。
   render(performance.now())
 
@@ -213,6 +228,7 @@ export function mountAgentOverlayEffect(canvas: HTMLCanvasElement): (() => void)
     disposed = true
     cancelAnimationFrame(frame)
     observer?.disconnect()
+    themeObserver?.disconnect()
     // 只释放本次创建的资源，不调用 loseContext：开发模式的 StrictMode 会在同一个 canvas 上卸载再挂载一次，
     // 上下文一旦被主动丢弃，第二次 getContext 拿到的是已丢失的上下文，边缘光整个不显示。
     // canvas 卸载后上下文随元素一起回收。

@@ -210,7 +210,12 @@ export function SandboxApp() {
   return (
     <TooltipProvider>
       <SandboxProvider store={store} dialogs={dialogs}>
-        <div ref={root} className="relative flex h-full min-h-0 flex-col bg-background text-sm leading-6 text-foreground">
+        {/*
+          * 进出空间的缩放动画里，推近的总览与放大的卡片都会越出根节点；不裁掉的话 v2 外壳的滚动容器会把它们算进
+          * 可滚动范围，Chrome 随即冒出横竖滚动条、内容区变窄，动画终点跟着错位。用 clip 而不是 hidden：
+          * 根节点不成为滚动容器，也不像 filter 那样截断里面的毛玻璃采样。
+          */}
+        <div ref={root} className="relative flex h-full min-h-0 flex-col bg-background text-sm leading-6 text-foreground" style={{ overflow: 'clip' }}>
           {/* 页头用 v2 页面的标题与分段标签，压成一行，把高度留给工作区。 */}
           <Tabs
             ref={header}
@@ -236,7 +241,8 @@ export function SandboxApp() {
                   variant="ghost"
                   size="icon"
                   className={cn('ml-auto shrink-0 overflow-visible', view === 'spaces' && 'bg-accent text-accent-foreground')}
-                  style={mcpRunning ? { color: viewState.workspace?.appearance.sandboxAccentColor ?? '#2563eb' } : undefined}
+                  // 运行态与被控覆盖层同色，取 v2 主题的 --primary（spaces.css）。
+                  style={mcpRunning ? { color: 'var(--primary)' } : undefined}
                   aria-label={spacesLabel}
                   aria-current={view === 'spaces' ? 'page' : undefined}
                   onClick={() => selectView('spaces')}
@@ -272,15 +278,20 @@ export function SandboxApp() {
                   } as React.CSSProperties}
                 >
                   <WebqqView />
-                  {space?.status === 'running' && (
-                    <AgentObserveOverlay
-                      spaceName={space.name}
-                      busy={spaceBusy}
-                      onTakeOver={() => void actOnSpace('take-over', space.id)}
-                      onTerminate={() => void actOnSpace('terminate', space.id)}
-                    />
-                  )}
                 </div>
+              )}
+              {/* 被控覆盖层挂在根节点上，连页头一起罩住；不放进 .sandbox-stage，否则进入空间的缩放动画会把它一起缩放、裁成卡片形状。 */}
+              {view === 'messages' && space?.status === 'running' && (
+                <AgentObserveOverlay
+                  spaceName={space.name}
+                  busy={spaceBusy}
+                  style={{
+                    '--sandbox-accent': viewState.workspace.appearance.sandboxAccentColor,
+                    '--sandbox-page-header-height': `${headerHeight}px`,
+                  } as React.CSSProperties}
+                  onTakeOver={() => void actOnSpace('take-over', space.id)}
+                  onTerminate={() => void actOnSpace('terminate', space.id)}
+                />
               )}
               {view === 'debug' && <OneBotDebugPage />}
               {view === 'test-calls' && <TestCallPage />}

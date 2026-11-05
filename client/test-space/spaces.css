@@ -11,7 +11,9 @@
   --sandbox-muted: var(--muted-foreground);
   --sandbox-border: var(--border);
   --sandbox-hover: var(--muted);
-  --sandbox-accent-shadow: color-mix(in srgb, var(--sandbox-accent) 24%, transparent);
+  /* AI 控制相关的视觉（运行中的卡片、脉冲点、被控覆盖层、AI 光标）统一取 v2 主题的 --primary，不跟随插件强调色。 */
+  --sandbox-agent-color: var(--primary);
+  --sandbox-agent-shadow: color-mix(in srgb, var(--sandbox-agent-color) 24%, transparent);
 }
 
 .sandbox-space-overview {
@@ -58,8 +60,8 @@
 .sandbox-space-card:focus-visible { outline: 2px solid var(--sandbox-accent); outline-offset: 2px; }
 
 /* AI 控制中：accent 边框 + 光晕，切换时沿用卡片自身 180ms 过渡。 */
-.sandbox-space-card.is-running { border-color: var(--sandbox-accent); box-shadow: 0 20px 54px var(--sandbox-accent-shadow); }
-.sandbox-space-card.is-running:hover { box-shadow: 0 24px 60px var(--sandbox-accent-shadow); }
+.sandbox-space-card.is-running { border-color: var(--sandbox-agent-color); box-shadow: 0 20px 54px var(--sandbox-agent-shadow); }
+.sandbox-space-card.is-running:hover { box-shadow: 0 24px 60px var(--sandbox-agent-shadow); }
 
 .sandbox-space-card footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--sandbox-border); }
 .sandbox-space-card footer strong,
@@ -106,7 +108,8 @@
 .sandbox-agent-cursor { position: absolute; top: 38%; left: 55%; z-index: 26; pointer-events: none; transition: top 0.9s cubic-bezier(0.6, 0, 0.4, 1), left 0.9s cubic-bezier(0.6, 0, 0.4, 1); }
 .sandbox-agent-cursor-float { display: flex; align-items: flex-start; }
 /* ego #cursorImage 的双层光晕投影；transform-origin 50% 100% 让点击挤压向笔尖下压。 */
-.sandbox-agent-cursor-float svg { flex: none; color: var(--sandbox-accent); transform-origin: 50% 100%; filter: drop-shadow(2px 3px 5px rgb(79 161 255 / 100%)) drop-shadow(-1px -1px 2px rgb(52 107 241 / 100%)); }
+/* 光标与它的光晕跟覆盖层同色（v2 的 --primary），不用 ego 原版的蓝色。 */
+.sandbox-agent-cursor-float svg { flex: none; color: var(--sandbox-agent-color); transform-origin: 50% 100%; filter: drop-shadow(2px 3px 5px color-mix(in srgb, currentColor 70%, transparent)) drop-shadow(-1px -1px 2px currentColor); }
 .sandbox-agent-cursor-label { max-width: 240px; margin-top: 14px; margin-left: -4px; overflow: hidden; padding: 3px 10px; border-radius: 999px; color: var(--foreground); background: rgb(255 255 255 / 42%); box-shadow: 0 0 0 1px rgb(0 0 0 / 6%), 0 16px 48px rgb(0 0 0 / 35%); backdrop-filter: blur(10px); font-size: 12px; font-weight: 600; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
 .dark .sandbox-agent-cursor-label { color: rgb(255 255 255 / 90%); background: rgb(56 56 56 / 42%); }
 /* ego cursor-click：400ms ease-out 挤压（scale 0.85 + 下压 2px），即点击涟漪反馈。 */
@@ -118,18 +121,27 @@
 @media (prefers-reduced-motion: no-preference) { .sandbox-agent-cursor.is-loading .sandbox-agent-cursor-float { animation: sandbox-agent-loading-intro 750ms forwards, sandbox-agent-loading-loop 3200ms infinite 750ms; } }
 
 /* running 脉冲点：8px 圆点 + 呼吸光晕（4px@16% → 7px@4%，1.6s）。 */
-.sandbox-agent-pulse-dot { display: inline-block; flex: none; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--sandbox-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sandbox-accent) 16%, transparent); animation: sandbox-agent-pulse 1.6s cubic-bezier(0.34, 0.69, 0.1, 1) infinite; }
-@keyframes sandbox-agent-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--sandbox-accent) 4%, transparent); } }
+.sandbox-agent-pulse-dot { display: inline-block; flex: none; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--sandbox-agent-color); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sandbox-agent-color) 16%, transparent); animation: sandbox-agent-pulse 1.6s cubic-bezier(0.34, 0.69, 0.1, 1) infinite; }
+@keyframes sandbox-agent-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--sandbox-agent-color) 4%, transparent); } }
 
-/* 观察被控空间的覆盖层保留状态专属点阵；它不是页面底色，不能被通用纯色背景规范抹除。 */
-.sandbox-agent-observe { position: absolute; inset: 0; z-index: 25; min-width: 0; min-height: 0; pointer-events: none; background: rgb(37 99 235 / 24%); font-size: 13px; line-height: 20px; }
+/*
+ * 观察被控空间的覆盖层保留状态专属点阵；它不是页面底色，不能被通用纯色背景规范抹除。
+ * 覆盖层挂在沙盒根节点上（app.tsx），连页头一起罩住，z-index 25 高于页头的 20；任务栏按 --sandbox-page-header-height
+ * 在页头那一条里垂直居中。进入空间的缩放动画期间（zoom.ts 在 <html> 上加 sandbox-workspace-zooming）整层隐藏，
+ * 动画结束后淡入：工作区在缩放，罩层若同时显示会和缩放中的画面错位。
+ * 罩色与边缘光（agent-overlay-effect.ts 读画布的 color）都取 v2 主题的 --primary，随亮暗主题切换，不用 ego 原版的蓝色。
+ */
+.sandbox-agent-observe { position: absolute; inset: 0; z-index: 25; animation: sandbox-agent-observe-in 0.24s ease-out both; min-width: 0; min-height: 0; pointer-events: none; background: color-mix(in oklab, var(--sandbox-agent-color) 16%, transparent); font-size: 13px; line-height: 20px; }
+@keyframes sandbox-agent-observe-in { from { opacity: 0; } }
+/* animation 从 none 换回原值时重新播放，所以缩放一结束淡入就从头开始。 */
+.sandbox-workspace-zooming .sandbox-agent-observe { opacity: 0; animation: none; }
 .sandbox-agent-observe-dots { position: absolute; inset: 0; opacity: 0.5; background-image: radial-gradient(circle, rgb(55 55 55 / 10%) 1px, transparent 1px); background-size: 6px 6px; }
 .dark .sandbox-agent-observe-dots { background-image: radial-gradient(circle, rgb(255 255 255 / 15%) 1px, transparent 1px); }
-.sandbox-agent-observe-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sandbox-agent-observe-canvas { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--sandbox-agent-color); }
 .sandbox-agent-observe .sandbox-agent-cursor { z-index: 20; }
 
 /* ego 空间内任务栏（ego 在底部，本项目置顶）：#0009 深色胶囊，白字标题 + 浅蓝状态 + 白色接管 + 红字终止任务。 */
-.sandbox-agent-taskbar { position: absolute; top: 14px; left: 50%; z-index: 25; display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: 999px; color: #fff; background: rgb(0 0 0 / 60%); box-shadow: 0 16px 48px rgb(0 0 0 / 35%); backdrop-filter: blur(10px); pointer-events: auto; transform: translateX(-50%); }
+.sandbox-agent-taskbar { position: absolute; top: calc(var(--sandbox-page-header-height, 58px) / 2); left: 50%; z-index: 25; display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: 999px; color: #fff; background: rgb(0 0 0 / 60%); box-shadow: 0 16px 48px rgb(0 0 0 / 35%); backdrop-filter: blur(10px); pointer-events: auto; transform: translate(-50%, -50%); }
 .sandbox-agent-taskbar-pause { display: inline-flex; flex: none; color: rgb(255 255 255 / 55%); }
 .sandbox-agent-taskbar-control-icon { display: inline-flex; flex: none; overflow: visible; color: #fff; }
 .sandbox-agent-taskbar-text { display: flex; min-width: 0; flex-direction: column; margin-right: 4px; text-align: left; }
@@ -184,7 +196,8 @@
   .sandbox-agent-cursor-float svg,
   .sandbox-agent-pulse-dot,
   .sandbox-agent-control-icon-rays,
-  .sandbox-agent-control-orbit-band { animation: none; }
+  .sandbox-agent-control-orbit-band,
+  .sandbox-agent-observe { animation: none; }
 }
 
 @media (max-width: 720px) {

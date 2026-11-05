@@ -8,9 +8,11 @@ import { AgentControlIcon, AgentCursor } from './agent-visuals'
  * ego lite 被控空间覆盖层的 Web 复刻：scrim + 点阵纹理 + WebGL 边缘光 + agent 光标 + 顶部任务栏。
  * WebGL 不可用时只保留 scrim 与点阵。覆盖层本身不拦截指针，只有任务栏可点。
  */
-export function AgentObserveOverlay({ spaceName, busy, onTakeOver, onTerminate }: {
+export function AgentObserveOverlay({ spaceName, busy, style, onTakeOver, onTerminate }: {
   spaceName: string
   busy: boolean
+  /** 根节点上的 CSS 变量：强调色与页头高度（任务栏在页头那一条里居中）。 */
+  style?: React.CSSProperties
   onTakeOver(): void
   onTerminate(): void
 }) {
@@ -23,7 +25,7 @@ export function AgentObserveOverlay({ spaceName, busy, onTakeOver, onTerminate }
   }, [])
 
   return (
-    <div className="sandbox-agent-observe" aria-live="polite">
+    <div className="sandbox-agent-observe" style={style} aria-live="polite">
       <div className="sandbox-agent-observe-dots" aria-hidden="true" />
       <canvas ref={canvas} className="sandbox-agent-observe-canvas" aria-hidden="true" />
       <AgentCursor />
