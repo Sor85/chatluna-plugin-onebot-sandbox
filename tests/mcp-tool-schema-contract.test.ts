@@ -28,7 +28,7 @@ const TOOL_PARAMETERS: Record<string, string[]> = {
   list_pending_requests: ['spaceId', 'testRunId'],
   get_capability_matrix: ['spaceId', 'implementation', 'testRunId'],
   export_scene: ['spaceId', 'testRunId'],
-  get_wakeup_rules: ['spaceId', 'conversationId', 'testRunId'],
+  get_wakeup_rules: ['spaceId', 'conversationId', 'botId', 'operatorId', 'testRunId'],
   upload_media: ['spaceId', 'fileName', 'mimeType', 'dataBase64', 'sha256', 'testRunId'],
   send_message: ['spaceId', 'operatorId', 'conversationId', 'content', 'mediaIds', 'externalMediaUrls', 'replyToMessageId', 'idempotencyKey', 'testRunId'],
   send_forward_message: ['spaceId', 'operatorId', 'conversationId', 'messageIds', 'nodes', 'idempotencyKey', 'testRunId'],

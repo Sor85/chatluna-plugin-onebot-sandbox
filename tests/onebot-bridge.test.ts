@@ -682,6 +682,23 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
       data: { messages: expect.any(Array) },
     })
 
+    // 自定义节点同时带文字与嵌套转发时两者都保留：读回的节点、外层消息摘要都不丢文字。
+    const annotated = await bot.internal._request('send_forward_msg', {
+      group_id: 30020,
+      messages: [
+        { type: 'node', data: { user_id: 20001, nickname: 'ChatLuna', content: [{ type: 'text', data: { text: '附言' } }, { type: 'forward', data: { id: mixed.data.forward_id } }] } },
+      ],
+    }) as { data: { message_id: number; forward_id: string } }
+    const annotatedDetail = await bot.internal._request('get_forward_msg', { id: annotated.data.forward_id }) as {
+      data: { messages: Array<{ data: { content: Array<{ type: string; data: Record<string, string> }> } }> }
+    }
+    expect(annotatedDetail.data.messages[0].data.content).toEqual([
+      { type: 'text', data: { text: '附言' } },
+      { type: 'forward', data: { id: mixed.data.forward_id } },
+    ])
+    expect(control.getSnapshot().messages.find(({ id }) => getOneBotMessageSequence(id) === annotated.data.message_id)?.content)
+      .toBe('ChatLuna：附言 [合并转发]')
+
     // 自定义节点媒体支持 data URI，落盘后可被 get_forward_msg 读回。
     const imagePayload = Buffer.from('forward-node-image').toString('base64')
     const mediaForward = await bot.internal._request('send_forward_msg', {

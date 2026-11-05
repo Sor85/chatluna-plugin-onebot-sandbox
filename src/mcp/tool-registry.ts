@@ -125,7 +125,7 @@ export interface SandboxMcpToolRuntime {
   appendEvent(type: SandboxMcpEventType, data: unknown, spaceId?: string): SandboxMcpEventCursor
   waitFor(args: Record<string, unknown>, predicate: (event: SandboxMcpEvent) => boolean): Promise<SandboxMcpWaitResult>
   /** 被测机器人当前的唤醒规则；省略 `target` 时同时给出私聊与群聊两份通用规则。 */
-  readWakeupRules(target?: SandboxWakeupTarget): SandboxWakeupRules
+  readWakeupRules(targets?: readonly SandboxWakeupTarget[]): SandboxWakeupRules
   requireTestSpaces(): SandboxTestSpaceService
   requireUnattributedModelRequests(): SandboxModelRequestStore
   /** 按显式空间标识另取一个控制服务，供记录域由 `scope` 参数决定的工具使用。 */
@@ -150,7 +150,7 @@ export interface SandboxMcpToolEntry extends SandboxMcpToolCapability {
   readonly spaceResolution: SandboxMcpSpaceResolution
   /** 同键重放返回首次结果。参数里的 `idempotencyKey` 必填由执行体之外的治理读取。 */
   readonly idempotent: boolean
-  /** 需要版本绑定的一次性确认令牌，令牌校验与纪元轮转由治理负责。 */
+  /** 需要版本绑定的一次性确认令牌，令牌校验与作用域游标失效由治理负责。 */
   readonly requiresConfirmation: boolean
   run(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>): unknown
 }
@@ -482,7 +482,7 @@ const EVENT_CURSOR_RESULT = {
   type: 'object',
   properties: { epoch: { type: 'string' }, sequence: { type: 'number' } },
   required: ['epoch', 'sequence'],
-  description: '本次调用结束时的事件游标；破坏性操作会轮转纪元，此前取得的游标随之失效',
+  description: '本次调用结束时的事件游标；同一空间（或主场景）里发生破坏性操作后，此前取得的游标在该空间内失效，其他空间不受影响',
 }
 
 const EVENT_RESULT = {
@@ -589,7 +589,7 @@ const SEND_FORWARD_MESSAGE_OUTPUT = {
 /** 四个破坏性工具共用一份声明：它们对外都只答新版本与新游标，执行体只负责改场景。 */
 const DESTRUCTIVE_OUTPUT = {
   type: 'object',
-  description: '破坏性操作完成后事件纪元轮转，此前取得的事件游标与幂等键全部失效；结果只给新的场景版本与新纪元下的游标。',
+  description: '破坏性操作完成后，本空间（或主场景）此前取得的事件游标、幂等键与确认令牌全部失效，其他空间不受影响；结果给出新的场景版本与可继续使用的游标。',
   properties: {
     revision: { type: 'number', description: '操作后的场景版本' },
     cursor: EVENT_CURSOR_RESULT,
@@ -661,30 +661,67 @@ export function readCapabilityMatrix(control: SandboxControlService, implementat
 /**
  * 被测机器人当前的唤醒规则。
  *
- * 传了会话就按那条会话解析：群聊按群号，私聊按会话里那位普通用户的账号——两个被测响应插件都按这一维
- * 归档逐会话配置与白名单。会话实例继承根会话的参与者与群号，因此一个实例与它的根会话得到同一份答案，
- * 这与被测插件看不见实例这一级是同一件事。
- *
- * 省略会话时给出私聊与群聊两份通用规则：与会话键有关的判定会明确标成待判定，而不是替被测插件猜一个。
+ * 传了会话就按投递时的路由身份解析（机器人、群号、会话 ID、发言者，见 `readWakeupTargets`）：v2 的路由规则
+ * 可以按其中任意一维覆盖唤醒配置。会话实例用它自己的 ID，v2 把实例当作独立的频道路由，答案可能与根会话
+ * 不同。省略会话时给出私聊与群聊两份通用规则：按会话、机器人或发言者写的覆盖会明确标成待判定。
  */
 function getWakeupRules(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
-  if (args.conversationId === undefined) return runtime.readWakeupRules()
+  if (args.conversationId === undefined) {
+    if (args.botId !== undefined || args.operatorId !== undefined) {
+      throw new SandboxMcpError('invalid_arguments', 'botId 与 operatorId 只能与 conversationId 一起传')
+    }
+    return runtime.readWakeupRules()
+  }
   const conversationId = requireString(args.conversationId, 'conversationId')
   const snapshot = runtime.control.getSnapshot()
   const conversation = resolveConversation(snapshot, conversationId)
   if (!conversation) throw new SandboxMcpError('conversation_not_found', `会话不存在：${conversationId}`)
-  return { conversationId, ...runtime.readWakeupRules(readWakeupTarget(snapshot, conversation)) }
+  const botId = args.botId === undefined ? undefined : requireString(args.botId, 'botId')
+  const operatorId = args.operatorId === undefined ? undefined : requireString(args.operatorId, 'operatorId')
+  const targets = readWakeupTargets(snapshot, conversation, botId, operatorId)
+  return { conversationId, ...runtime.readWakeupRules(targets) }
 }
 
-function readWakeupTarget(snapshot: SandboxSnapshot, conversation: ResolvedConversation): SandboxWakeupTarget {
-  if (conversation.type === 'group') {
-    return { conversationType: 'group', ...(conversation.groupId ? { conversationKey: conversation.groupId } : {}) }
+/**
+ * 一条会话上每个被测机器人各自的路由身份。
+ *
+ * 字段与 `inbound-delivery.ts` 投递时构造的 Session 一致：频道 ID 是会话 ID，群聊带群号，用户是发言者。
+ * 同一条群消息会投给群里每个机器人，各自按自己的 selfId 解析规则，因此一个机器人一份答案；传了 botId
+ * 只答那一个。私聊的发言者就是会话里那位普通用户；群聊的发言者要调用方用 operatorId 指定。
+ */
+function readWakeupTargets(
+  snapshot: SandboxSnapshot,
+  conversation: ResolvedConversation,
+  botId: string | undefined,
+  operatorId: string | undefined,
+): SandboxWakeupTarget[] {
+  const isBot = (id: string) => snapshot.participants.find((participant) => participant.id === id)?.kind === 'bot'
+  const memberIds = conversation.type === 'group'
+    ? snapshot.groups.find(({ id }) => id === conversation.groupId)?.members.map(({ participantId }) => participantId) ?? []
+    : conversation.participantIds ?? []
+  const bots = memberIds.filter(isBot)
+  if (botId !== undefined && !bots.includes(botId)) {
+    throw new SandboxMcpError('participant_not_found', `会话 ${conversation.id} 里没有机器人 ${botId}`)
   }
-  // 私聊按发言者账号归档，因此取那位不是机器人的参与者：规则要答的是「这个人发消息会怎样」。
-  const speaker = conversation.participantIds?.find((id) => (
-    snapshot.participants.find((participant) => participant.id === id)?.kind !== 'bot'
-  ))
-  return { conversationType: 'direct', ...(speaker ? { conversationKey: speaker } : {}) }
+  if (operatorId !== undefined && !memberIds.includes(operatorId)) {
+    throw new SandboxMcpError('participant_not_found', `会话 ${conversation.id} 里没有参与者 ${operatorId}`)
+  }
+  if (conversation.type === 'group') {
+    return (botId ? [botId] : bots).map((id) => ({
+      conversationType: 'group',
+      ...(conversation.groupId ? { conversationKey: conversation.groupId, guildId: conversation.groupId } : {}),
+      botId: id,
+      channelId: conversation.id,
+      ...(operatorId ? { userId: operatorId } : {}),
+    }))
+  }
+  const speaker = operatorId ?? memberIds.find((id) => !isBot(id))
+  return (botId ? [botId] : bots).map((id) => ({
+    conversationType: 'direct',
+    ...(speaker ? { conversationKey: speaker, userId: speaker } : {}),
+    botId: id,
+    channelId: conversation.id,
+  }))
 }
 
 // —— 执行体：AI 测试空间 ——
@@ -1621,17 +1658,19 @@ const TOOL_ENTRIES: SandboxMcpToolEntry[] = [
   {
     name: 'get_wakeup_rules',
     scope: 'read',
-    description: '读取被测机器人当前的唤醒规则：哪个 ChatLuna 响应插件在回复、消息要怎么写才能唤醒它',
+    description: '读取被测机器人当前的唤醒规则：ChatLuna v2 按路由规则生效的引擎、激活判定器与唤醒条件，消息要怎么写才能唤醒它',
     inputSchema: {
       type: 'object',
       properties: {
         spaceId: SPACE_OPTIONAL,
         conversationId: {
           type: 'string',
-          description: '按这条会话解析：群聊按群号、私聊按对方账号判定白名单与逐会话配置；省略时返回私聊与群聊两份通用规则，与会话有关的判定标成待判定',
+          description: '按这条会话投递时的路由身份解析（机器人、群号、会话 ID、发言者）；会话里每个机器人各给一份。省略时返回私聊与群聊两份通用规则，按会话写的路由规则标成待判定',
         },
+        botId: { type: 'string', description: '只解析这个机器人；省略时会话里每个机器人各给一份。需要同时传 conversationId' },
+        operatorId: { type: 'string', description: '发言者参与者 ID：按用户写的路由规则要靠它判定；私聊省略时取会话里的普通用户。需要同时传 conversationId' },
       },
-      description: '发消息前先读一次：被测机器人只在唤醒条件成立时回复，条件由当前装着的 ChatLuna 响应插件决定，与沙盒无关。',
+      description: '发消息前先读一次：被测机器人只在唤醒条件成立时回复，条件由 ChatLuna v2 当前的路由规则（chat.activation 等）决定，与沙盒无关。',
     },
     quota: 'read', spaceResolution: 'read', idempotent: false, requiresConfirmation: false,
     run: getWakeupRules,

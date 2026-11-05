@@ -323,6 +323,17 @@ export type SandboxMessage = SandboxMessageBase & (
   | { lifecycle: SandboxRecalledMessageLifecycle }
 )
 
+/**
+ * 合并转发节点自己的正文。
+ *
+ * 自定义节点可以同时带文字、媒体与嵌套转发，文字照常保留；但带嵌套转发时，`[合并转发]` 占位与
+ * 引用一条合并转发消息带来的摘要都和嵌套卡片重复，不算正文。服务端摘要、OneBot 节点与界面共用这一条。
+ */
+export function forwardNodeText(node: Pick<SandboxForwardNode, 'content' | 'forwardId' | 'sourceMessageId'>): string {
+  if (node.forwardId && (node.sourceMessageId || node.content.trim() === '[合并转发]')) return ''
+  return node.content
+}
+
 export function isRecalledMessage(
   message: SandboxMessage | undefined | null,
 ): message is SandboxMessage & { lifecycle: SandboxRecalledMessageLifecycle } {
@@ -499,6 +510,14 @@ export class SandboxDomainError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'SandboxDomainError'
+  }
+}
+
+/** 指定的 AI 测试空间不存在；对外归一为 `space_not_found`（HTTP 404），而不是笼统的领域拒绝。 */
+export class SandboxSpaceNotFoundError extends SandboxDomainError {
+  constructor(spaceId: string) {
+    super(`AI 测试空间不存在：${spaceId}`)
+    this.name = 'SandboxSpaceNotFoundError'
   }
 }
 

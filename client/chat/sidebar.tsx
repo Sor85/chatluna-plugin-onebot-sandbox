@@ -216,7 +216,8 @@ export function ChatSidebar({ onSelectConversation, className }: {
                     </ContextMenuItem>
                   </>
                 )}
-                {currentGroup && !currentGroup.members.some(({ participantId }) => participantId === entry.id) && (
+                {/* 与服务端一致，只能邀请好友入群。 */}
+                {entry.isFriend && currentGroup && !currentGroup.members.some(({ participantId }) => participantId === entry.id) && (
                   <ContextMenuItem onClick={() => groupAction(t('sandbox.error.group'), { action: 'invite', groupId: currentGroup.id, targetId: entry.id })}>
                     <UserPlusIcon />{t('sandbox.menu.inviteToGroup')}<ExtensionMark />
                   </ContextMenuItem>

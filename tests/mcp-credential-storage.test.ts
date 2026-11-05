@@ -161,6 +161,10 @@ describe('测试凭证存储的健壮性', () => {
 
     // 修复前这里既收不到响应也拿不到状态码：异常在 try 之外抛出，请求一直挂到客户端超时。
     expect(response.status).toBe(401)
-    expect(await response.json()).toEqual({ error: 'unauthorized' })
+    expect(await response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32000, data: { code: 'unauthorized', retryable: false, recovery: expect.any(String) } },
+    })
   })
 })

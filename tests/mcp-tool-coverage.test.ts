@@ -322,6 +322,12 @@ describe('MCP 交互类工具', () => {
     expect((await snapshot()).requests).toContainEqual(expect.objectContaining({ id: join.requestId, subType: 'add', requesterId: '10004' }))
     expect(await members()).not.toContain('10004:member')
 
+    // 只能邀请好友：非好友 10004 被拒，加为好友后才能邀请。
+    await expect(service.callTool(credential.token, 'perform_group_action', {
+      operatorId: '10001', action: 'invite', groupId: '30001', targetId: '10004', idempotencyKey: 'group-invite-0',
+    })).rejects.toMatchObject({ code: 'domain_error', message: '只能邀请好友入群：10004 不是 10001 的好友' })
+    const friend = await control.performFriendAction({ action: 'request', operatorId: '10004', targetId: '10001' })
+    await control.performFriendAction({ action: 'handle-request', operatorId: '10001', requestId: friend.requestId!, approve: true })
     const invite = await service.callTool(credential.token, 'perform_group_action', {
       operatorId: '10001', action: 'invite', groupId: '30001', targetId: '10004', idempotencyKey: 'group-invite-1',
     }) as { requestId: string }
@@ -488,7 +494,7 @@ describe('MCP 空间生命周期工具', () => {
     const spaces = await service.callTool(credential.token, 'list_test_spaces', {}) as { items: Array<{ id: string }> }
     expect(spaces.items.map(({ id }) => id)).toEqual([kept.spaceId])
     await expect(service.callTool(credential.token, 'get_test_space', { spaceId: removed.spaceId }))
-      .rejects.toMatchObject({ code: 'domain_error' })
+      .rejects.toMatchObject({ code: 'space_not_found' })
   })
 })
 

@@ -6,3 +6,4 @@ dist
 .playwright-cli
 .playwright-mcp
 /data
+.env.local

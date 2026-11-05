@@ -37,6 +37,7 @@ import {
   resolveGroupConversationId,
 } from './conversation-resolution'
 import {
+  forwardNodeText,
   isRecalledMessage,
   isSandboxGroupMemberMuted,
   type SandboxForwardNodeInput,
@@ -63,6 +64,14 @@ interface OneBotActionTarget {
    * 重新推一遍寻址，也不会把「插件主动查另一个联系人的历史」误当成跟随。
    */
   addressedRootConversationId?: string
+}
+
+/** 合并转发节点 content 里一个 forward 段指向的资源 ID；不是 forward 段时返回 undefined。 */
+function readNestedForwardId(segment: unknown): string | undefined {
+  if (!segment || typeof segment !== 'object' || Reflect.get(segment, 'type') !== 'forward') return undefined
+  const data = Reflect.get(segment, 'data')
+  const id = data && typeof data === 'object' ? String(Reflect.get(data, 'id') ?? '') : ''
+  return id || undefined
 }
 
 // OneBot 用秒级到期时间戳表示禁言，未禁言固定为 0。
@@ -1332,31 +1341,20 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
       if (contentSource === undefined || contentSource === null) {
         throw new Error(`send_forward_msg 节点 #${index + 1} 缺少 content`)
       }
-      // 节点 content 可能本身是 forward 段；嵌套资源直接挂到 domain node.forwardId。
-      if (Array.isArray(contentSource) && contentSource.length === 1) {
-        const only = contentSource[0]
-        if (only && typeof only === 'object') {
-          const type = String(Reflect.get(only, 'type') ?? '')
-          const nestedData = Reflect.get(only, 'data')
-          const nestedId = nestedData && typeof nestedData === 'object'
-            ? String(Reflect.get(nestedData as object, 'id') ?? '')
-            : ''
-          if (type === 'forward' && nestedId) {
-            nodes.push({
-              type: 'custom',
-              userId,
-              nickname,
-              content: '[合并转发]',
-              forwardId: nestedId,
-              ...(typeof data.time === 'number' || typeof data.time === 'string'
-                ? { createdAt: new Date(Number(data.time) * 1000).toISOString() }
-                : {}),
-            })
-            continue
-          }
-        }
+      // 节点 content 里的 forward 段挂到 domain node.forwardId（嵌套资源）；同一节点里其余的文字与
+      // 媒体照常解析，不因为带了嵌套转发就丢掉。只有 forward 段时正文是 `[合并转发]` 占位。
+      const segments = Array.isArray(contentSource) ? contentSource : undefined
+      const forwardSegment = segments?.find((segment) => readNestedForwardId(segment))
+      const forwardId = forwardSegment ? readNestedForwardId(forwardSegment) : undefined
+      const rest = forwardSegment ? segments!.filter((segment) => !readNestedForwardId(segment)) : contentSource
+      const createdAt = typeof data.time === 'number' || typeof data.time === 'string'
+        ? { createdAt: new Date(Number(data.time) * 1000).toISOString() }
+        : {}
+      if (forwardId && Array.isArray(rest) && !rest.length) {
+        nodes.push({ type: 'custom', userId, nickname, content: '[合并转发]', forwardId, ...createdAt })
+        continue
       }
-      const outbound = parseOneBotOutboundMessage(contentSource)
+      const outbound = parseOneBotOutboundMessage(rest)
       // 自定义节点媒体与 send_msg 对齐：sandbox-media / base64 / data URI / http(s) 均可，落盘后再写入 node。
       const media = outbound.mediaSources.length
         ? await this.resolveForwardNodeMedia(outbound.mediaSources)
@@ -1367,9 +1365,8 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
         nickname,
         content: this.getOutboundMessageSummary(outbound) || (media?.length ? media.map((item) => `[${item.type === 'image' ? '图片' : item.type === 'audio' ? '语音' : item.type === 'video' ? '视频' : '文件'}] ${item.name}`).join(' ') : ''),
         ...(media ? { media } : {}),
-        ...(typeof data.time === 'number' || typeof data.time === 'string'
-          ? { createdAt: new Date(Number(data.time) * 1000).toISOString() }
-          : {}),
+        ...(forwardId ? { forwardId } : {}),
+        ...createdAt,
       })
     }
     return nodes
@@ -1399,9 +1396,10 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
   }
 
   private toOneBotForwardNode(node: NonNullable<ReturnType<SandboxControlService['getSnapshot']>['forwards']>[number]['nodes'][number]) {
-    const content = node.forwardId
-      ? [{ type: 'forward', data: { id: node.forwardId } }]
-      : toOneBotMessageSegments(node.content, node.media)
+    const content = [
+      ...toOneBotMessageSegments(forwardNodeText(node), node.media),
+      ...(node.forwardId ? [{ type: 'forward', data: { id: node.forwardId } }] : []),
+    ]
     return {
       type: 'node',
       data: {

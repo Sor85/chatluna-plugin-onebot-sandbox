@@ -136,6 +136,7 @@ import {
   type UpdateSandboxBotInput,
   type UpdateSandboxGroupInput,
   type UpdateSandboxUserInput,
+  forwardNodeText,
   isRecalledMessage,
   SandboxDomainError,
 } from './types'
@@ -858,7 +859,11 @@ export class SandboxControlService {
     // 直接 createDefaultScene() 会引入默认机器人 20001，与主场景在全局
     // 运行时注册表中的同 ID 机器人冲突，导致空间内 reset 必定失败。
     // initialScene 在构造时已经收敛到保留上限内，因此这里不必再次淘汰。
+    // 版本号继续递增而不是回到初始场景的值：expectedRevision 是乐观锁，版本回退会让重置前读到
+    // 同一个版本号的过期快照重新通过校验。
+    const revision = this.scene.revision + 1
     this.scene = structuredClone(this.initialScene)
+    this.scene.revision = revision
     this.ensureStableAvatars()
     this.mediaStorage.reclaimUnreferenced(this.getMediaReferences())
     this.syncRuntimeBots()
@@ -1369,6 +1374,8 @@ export class SandboxControlService {
     if (input.action === 'invite') {
       const target = this.getParticipant(input.targetId)
       if (group.members.some(({ participantId }) => participantId === target.id)) throw new SandboxDomainError('目标已经是群成员')
+      // 与 QQ 一致：只能从自己的好友里挑人邀请，非好友只能自己按群号申请入群。
+      if (!this.getFriendship(input.operatorId, target.id)) throw new SandboxDomainError(`只能邀请好友入群：${target.id} 不是 ${input.operatorId} 的好友`)
       if (this.scene.requests.some(({ type, subType, targetId, groupId }) => type === 'group'
         && subType === 'invite' && targetId === target.id && groupId === group.id)) {
         throw new SandboxDomainError('已有待处理的群邀请')
@@ -1929,13 +1936,15 @@ export class SandboxControlService {
   }
 
   private formatForwardPreview(nodes: SandboxForwardNode[]): string {
+    // 自定义节点可以同时带文字、媒体与嵌套转发，三者都要进摘要；与 client/webqq/forward-preview.ts 同步。
     const lines = nodes.slice(0, 4).map((node) => {
-      const summary = node.forwardId
-        ? '[合并转发]'
-        : node.content.replace(/\s+/g, ' ').trim() || (node.media?.length
-          ? node.media.map((item) => `[${this.getMediaLabel(item)}] ${item.name}`).join(' ')
-          : '[消息]')
-      return `${node.nickname}：${summary}`
+      const text = forwardNodeText(node).replace(/\s+/g, ' ').trim()
+      const parts = [
+        text,
+        ...(!text && node.media?.length ? node.media.map((item) => `[${this.getMediaLabel(item)}] ${item.name}`) : []),
+        ...(node.forwardId ? ['[合并转发]'] : []),
+      ].filter(Boolean)
+      return `${node.nickname}：${parts.join(' ') || '[消息]'}`
     })
     return lines.join('\n') || '[合并转发]'
   }
@@ -1945,11 +1954,10 @@ export class SandboxControlService {
       if (node.sourceMessageId) {
         return { type: 'node', data: { id: node.sourceMessageId } }
       }
-      const content = node.forwardId
-        ? [{ type: 'forward', data: { id: node.forwardId } }]
-        : [
-          ...toOneBotMessageSegments(node.content, node.media),
-        ]
+      const content = [
+        ...toOneBotMessageSegments(forwardNodeText(node), node.media),
+        ...(node.forwardId ? [{ type: 'forward', data: { id: node.forwardId } }] : []),
+      ]
       return {
         type: 'node',
         data: {

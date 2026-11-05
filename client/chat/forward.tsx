@@ -14,7 +14,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@chatluna/ui-kit'
-import type { SandboxForwardNode } from '../../src/types'
+import { forwardNodeText, type SandboxForwardNode } from '../../src/types'
 import { useT } from '../i18n'
 import { SandboxAvatar, type AvatarKind } from '../shared/avatar'
 import { useRetained } from '../shared/use-retained'
@@ -164,7 +164,11 @@ function ForwardFrameDialog({ stack, depth, imageOpen, onCloseFrom, onOpenForwar
   // 退场动画期间保留这一层的内容，不闪成「暂无消息」。
   const frame = useRetained(current)
   if (!frame) return null
-  const nodeText = (item: SandboxForwardNode) => item.media?.length === 1 && item.content === `[${getMediaLabel(item.media[0]!)}] ${item.media[0]!.name}` ? '' : item.content
+  // 媒体自动生成的标签与嵌套转发的占位都和画出来的内容重复，不再作为正文显示。
+  const nodeText = (item: SandboxForwardNode) => {
+    const text = forwardNodeText(item)
+    return item.media?.length === 1 && text === `[${getMediaLabel(item.media[0]!)}] ${item.media[0]!.name}` ? '' : text
+  }
   return (
     <Dialog open={!!current} onOpenChange={(open) => !open && !imageOpen && onCloseFrom(depth)}>
       <DialogContent className="flex max-h-[80vh] flex-col gap-3 overflow-hidden sm:max-w-lg">
@@ -186,7 +190,22 @@ function ForwardFrameDialog({ stack, depth, imageOpen, onCloseFrom, onOpenForwar
                 <div className="flex min-w-0 flex-col gap-1">
                   {!merged && <span className="text-[11px] text-muted-foreground">{item.nickname}</span>}
                   <div className="flex max-w-full flex-col gap-1.5 self-start rounded-2xl rounded-tl-md bg-muted px-3 py-2 text-[13px] leading-6 break-words whitespace-pre-wrap">
-                    {item.forwardId ? (
+                    {/* 自定义节点可以同时带媒体、文字与嵌套转发，按这个顺序全部画出来。 */}
+                    {item.media?.map((entry) => {
+                      const source = media[entry.id]
+                      if (!source) return <span key={entry.id} className="text-xs text-muted-foreground">{mediaFailures[entry.id] ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
+                      if (entry.type === 'image') return <button key={entry.id} type="button" aria-label={t('sandbox.media.viewImage')} onClick={() => onOpenImage(source)}><img src={source} alt={entry.name} className="max-h-56 max-w-56 rounded-lg object-cover" /></button>
+                      if (entry.type === 'audio') return <audio key={entry.id} src={source} controls preload="metadata" />
+                      if (entry.type === 'video') return <video key={entry.id} src={source} controls preload="metadata" className="max-h-56 rounded-lg" />
+                      return (
+                        <a key={entry.id} href={source} download={entry.name} className="flex items-center gap-2 rounded-lg bg-background/60 px-3 py-2">
+                          <PaperclipIcon className="size-4" />
+                          <span className="flex flex-col"><strong className="text-[13px] font-medium">{entry.name}</strong><small className="text-[11px] text-muted-foreground">{formatMediaSize(entry.size)}</small></span>
+                        </a>
+                      )
+                    })}
+                    {text && <span>{text}</span>}
+                    {item.forwardId && (
                       <button type="button" className="flex w-56 flex-col gap-0.5 text-left" aria-label={t('sandbox.forward.open')} onClick={() => item.forwardId && onOpenForward(item.forwardId)}>
                         <strong className="font-medium">{preview?.title ?? t('sandbox.forward.title')}</strong>
                         {preview
@@ -196,26 +215,10 @@ function ForwardFrameDialog({ stack, depth, imageOpen, onCloseFrom, onOpenForwar
                               <span className="mt-1 border-t border-border pt-1 text-[11px] text-muted-foreground">{t('sandbox.forward.total', { count: preview.total })}</span>
                             </>
                           )
-                          : <span className="text-xs text-muted-foreground">{item.content || t('sandbox.forward.placeholder')}</span>}
+                          : <span className="text-xs text-muted-foreground">{t('sandbox.forward.placeholder')}</span>}
                       </button>
-                    ) : (
-                      <>
-                        {item.media?.map((entry) => {
-                          const source = media[entry.id]
-                          if (!source) return <span key={entry.id} className="text-xs text-muted-foreground">{mediaFailures[entry.id] ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
-                          if (entry.type === 'image') return <button key={entry.id} type="button" aria-label={t('sandbox.media.viewImage')} onClick={() => onOpenImage(source)}><img src={source} alt={entry.name} className="max-h-56 max-w-56 rounded-lg object-cover" /></button>
-                          if (entry.type === 'audio') return <audio key={entry.id} src={source} controls preload="metadata" />
-                          if (entry.type === 'video') return <video key={entry.id} src={source} controls preload="metadata" className="max-h-56 rounded-lg" />
-                          return (
-                            <a key={entry.id} href={source} download={entry.name} className="flex items-center gap-2 rounded-lg bg-background/60 px-3 py-2">
-                              <PaperclipIcon className="size-4" />
-                              <span className="flex flex-col"><strong className="text-[13px] font-medium">{entry.name}</strong><small className="text-[11px] text-muted-foreground">{formatMediaSize(entry.size)}</small></span>
-                            </a>
-                          )
-                        })}
-                        {text ? <span>{text}</span> : !item.media?.length && <span className="text-muted-foreground">{t('sandbox.forward.emptyNode')}</span>}
-                      </>
                     )}
+                    {!text && !item.media?.length && !item.forwardId && <span className="text-muted-foreground">{t('sandbox.forward.emptyNode')}</span>}
                   </div>
                 </div>
               </article>

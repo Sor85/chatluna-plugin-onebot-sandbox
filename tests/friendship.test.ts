@@ -75,12 +75,12 @@ describe('模拟 QQ 环境好友关系', () => {
     expect(control.getSnapshot().friendships.some(({ participantIds }) => participantIds.includes('10001') && participantIds.includes('10002'))).toBe(false)
     expect(control.getSnapshot().conversations.find(({ id }) => id === 'private:10001:10002')?.messageIds).toEqual([directMessages[0].id])
     expect(control.getVisibleSnapshot('10001').conversations.some(({ id }) => id === 'private:10001:10002')).toBe(false)
-    expect(() => control.getMessageHistory({ operatorId: '10001', conversationId: 'private:10001:10002' })).toThrow('会话不存在')
+    expect(() => control.getMessageHistory({ operatorId: '10001', conversationId: 'private:10001:10002' })).toThrow('操作者 10001 与 10002 不是好友，私聊不可用')
     await expect(control.sendMessage({
       operatorId: '10002',
       conversationId: 'private:10001:10002',
       content: '关系删除后不可发送',
-    })).rejects.toThrow('会话不存在')
+    })).rejects.toThrow('操作者 10002 与 10001 不是好友，私聊不可用')
 
     const restoreRequest = await control.performFriendAction({ action: 'request', operatorId: '10002', targetId: '10001' })
     if (!restoreRequest.requestId) throw new Error('恢复好友申请未创建')

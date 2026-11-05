@@ -270,7 +270,8 @@ describe('沙盒场景持久化', () => {
 
     const { control: second } = await createControl(persistence)
     expect(second.getSnapshot().participants.map(({ id }) => id)).toEqual(['10001', '10002', '10003', '20001'])
-    expect(second.getSnapshot().revision).toBe(0)
+    // 重置不让版本号回退，否则重置前读到的同版本快照能重新通过乐观锁。
+    expect(second.getSnapshot().revision).toBe(2)
   })
 
   it('切换到内存模式时忽略数据库场景，再切回 Database 模式后继续恢复', async () => {

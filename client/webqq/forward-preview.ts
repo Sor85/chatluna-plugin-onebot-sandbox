@@ -1,19 +1,21 @@
-import type {
-  SandboxForward,
-  SandboxForwardNode,
-  SandboxForwardPreview,
-  SandboxMessage,
+import {
+  forwardNodeText,
+  type SandboxForward,
+  type SandboxForwardNode,
+  type SandboxForwardPreview,
+  type SandboxMessage,
 } from '../../src/types'
 import { getMediaLabel } from './message-presentation'
 
+// 自定义节点可以同时带文字、媒体与嵌套转发，三者都要进摘要；与服务端 formatForwardPreview 同步。
 function summarizeNode(node: SandboxForwardNode): string {
-  if (node.forwardId) return '[合并转发]'
-  const text = node.content.replace(/\s+/g, ' ').trim()
-  if (text) return text
-  if (node.media?.length) {
-    return node.media.map((item) => `[${getMediaLabel(item)}] ${item.name}`).join(' ')
-  }
-  return '[消息]'
+  const text = forwardNodeText(node).replace(/\s+/g, ' ').trim()
+  const parts = [
+    text,
+    ...(!text && node.media?.length ? node.media.map((item) => `[${getMediaLabel(item)}] ${item.name}`) : []),
+    ...(node.forwardId ? ['[合并转发]'] : []),
+  ].filter(Boolean)
+  return parts.join(' ') || '[消息]'
 }
 
 // 列表卡片只需要标题、总数和最多 4 行摘要；完整 node 仍由 SandboxForward 承载。

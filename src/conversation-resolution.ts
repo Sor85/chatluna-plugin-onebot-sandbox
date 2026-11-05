@@ -254,9 +254,33 @@ export function requireVisibleConversation(
   operatorId: string,
   conversationId: string,
 ): ResolvedConversation {
-  const conversation = findVisibleConversation(scene, operatorId, conversationId)
-  if (!conversation) throw new SandboxDomainError(`会话不存在：${conversationId}`)
-  return conversation
+  const conversation = resolveConversation(scene, conversationId)
+  if (conversation && isConversationVisible(scene, operatorId, conversation)) return conversation
+  throw new SandboxDomainError(describeInvisibleConversation(scene, operatorId, conversationId, conversation))
+}
+
+/**
+ * 会话对操作者不可用时的拒绝原因。
+ *
+ * 只在原因不泄露他人信息时说具体：群号本身是公开的（入群申请就按群号发起），操作者自己那条私聊
+ * 不可用只可能是两人不是好友；别人之间的私聊一律答「会话不存在」，不透露它是否存在。
+ */
+function describeInvisibleConversation(
+  scene: SandboxSnapshot,
+  operatorId: string,
+  conversationId: string,
+  conversation: ResolvedConversation | undefined,
+): string {
+  if (conversation?.type === 'group') return `操作者 ${operatorId} 不是群 ${conversation.groupId} 的成员：${conversationId}`
+  const pair = conversation?.type === 'direct'
+    ? conversation.participantIds
+    : /^private:(\d+):(\d+)$/.exec(conversationId)?.slice(1)
+  if (pair?.includes(operatorId)) {
+    const otherId = pair.find((id) => id !== operatorId) ?? operatorId
+    const friends = scene.friendships.some(({ participantIds }) => participantIds.includes(operatorId) && participantIds.includes(otherId))
+    if (!friends && scene.participants.some(({ id }) => id === otherId)) return `操作者 ${operatorId} 与 ${otherId} 不是好友，私聊不可用：${conversationId}`
+  }
+  return `会话不存在：${conversationId}`
 }
 
 export function listVisibleConversations(scene: SandboxSnapshot, operatorId: string): ResolvedConversation[] {

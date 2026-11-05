@@ -1,7 +1,7 @@
 import { errorDetail } from '../error-detail'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { CallToolRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { CallToolRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { BlockList, isIP } from 'node:net'
@@ -37,8 +37,8 @@ export interface SandboxTestEndpointServerConfig {
 /**
  * 传输层门禁的三类拒绝。
  *
- * MCP 分支沿用既有的 `{ error: <键> }` 简短形态；HTTP 分支把同一次拒绝转成与工具错误逐字同形的
- * 信封，让脚本只需要一条解析路径。状态码在 HTTP 分支由错误码推导，不在此重复声明。
+ * HTTP 分支把拒绝转成与工具错误逐字同形的信封；MCP 分支包成 JSON-RPC 错误（`jsonRpcRejection`），
+ * `error.data` 里是同一份信封，两种表述读到的码、原因与恢复建议一致。
  */
 const TRANSPORT_REJECTIONS = {
   source_forbidden: {
@@ -84,6 +84,23 @@ function sourceMatches(address: string, rule: string): boolean {
   }
   const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0
   return (ipv4ToNumber(address) & mask) === (ipv4ToNumber(network) & mask)
+}
+
+/** JSON-RPC 规定的「服务器自定义错误」区间起点；传输层拒绝发生在解析请求之前，没有请求 ID 可回。 */
+const JSON_RPC_TRANSPORT_ERROR = -32000
+/** MCP 规范为 resources/read 指定的「资源不存在」错误码。 */
+const JSON_RPC_RESOURCE_NOT_FOUND = -32002
+
+function jsonRpcRejection(error: SandboxMcpError, revision: number) {
+  return {
+    jsonrpc: '2.0' as const,
+    error: {
+      code: JSON_RPC_TRANSPORT_ERROR,
+      message: error.message,
+      data: { code: error.code, message: error.message, retryable: error.retryable, recovery: error.recovery, revision },
+    },
+    id: null,
+  }
 }
 
 function jsonContent(value: unknown) {
@@ -149,7 +166,11 @@ export class SandboxTestEndpointServer {
       const protocol = this.resolveProtocol(url.pathname)
       // 两个前缀都没命中时无从得知调用方想用哪种表述，因此保留简短形态而不是猜一种信封。
       if (!protocol) return this.writeJson(response, 404, { error: 'not_found' })
-      if (protocol === 'mcp' && request.method !== 'POST') return this.writeJson(response, 405, { error: 'method_not_allowed' })
+      // 无状态端点不开 SSE 推流，也没有会话可删，GET 与 DELETE 按 Streamable HTTP 规范答 405。
+      if (protocol === 'mcp' && request.method !== 'POST') {
+        const rejected = new SandboxMcpError('method_not_allowed', `MCP 端点只接受 POST：${request.method ?? ''}`, false, '请用 POST 发送 JSON-RPC 请求。')
+        return this.writeJson(response, 405, jsonRpcRejection(rejected, this.service.getRevision()), { allow: 'POST' })
+      }
 
       const sourceIp = normalizeAddress(request.socket.remoteAddress)
       const screened = this.screen(request, sourceIp)
@@ -159,7 +180,7 @@ export class SandboxTestEndpointServer {
           const rejected = toHttpApiErrorResponse(this.service, toError())
           return this.writeJson(response, rejected.status, rejected.body, rejected.headers)
         }
-        return this.writeJson(response, status, { error: screened.rejection })
+        return this.writeJson(response, status, jsonRpcRejection(toError(), this.service.getRevision()))
       }
       const token = screened
 
@@ -279,9 +300,16 @@ export class SandboxTestEndpointServer {
     server.setRequestHandler(ListResourcesRequestSchema, async () => ({
       resources: this.service.listResources(token).map(({ uri, name, mimeType }) => ({ uri, name, mimeType })),
     }))
-    server.setRequestHandler(ReadResourceRequestSchema, async (request) => ({
-      contents: [{ uri: request.params.uri, mimeType: 'application/json', text: JSON.stringify(this.service.readResource(token, request.params.uri)) }],
-    }))
+    server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+      try {
+        return { contents: [{ uri: request.params.uri, mimeType: 'application/json', text: JSON.stringify(this.service.readResource(token, request.params.uri)) }] }
+      } catch (error) {
+        // SDK 把处理函数抛出的普通异常一律答成 -32603（内部错误），资源不存在要按 MCP 规范答 -32002。
+        if (!(error instanceof SandboxMcpError)) throw error
+        const code = error.code === 'resource_not_found' ? JSON_RPC_RESOURCE_NOT_FOUND : JSON_RPC_TRANSPORT_ERROR
+        throw new McpError(code, error.message, { code: error.code, uri: request.params.uri, recovery: error.recovery })
+      }
+    })
     return server
   }
 

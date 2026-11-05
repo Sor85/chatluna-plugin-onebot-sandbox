@@ -685,7 +685,7 @@ describe('模拟 QQ 环境消息闭环', () => {
       operatorId: '10004',
       conversationId: 'group:30001',
       content: '非成员消息',
-    })).rejects.toThrow('会话不存在')
+    })).rejects.toThrow('操作者 10004 不是群 30001 的成员：group:30001')
   })
 
   it('机器人可以作为发送者写入当前会话且不触发自身中间件', async () => {

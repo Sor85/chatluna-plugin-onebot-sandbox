@@ -13,7 +13,7 @@ import type { SandboxModelRequestStore } from '../model-request'
 import { createScopeDirectory, type ScopeDirectory } from '../scope-directory'
 import type { SandboxTestSpaceService } from '../test-spaces'
 import type { SandboxMedia } from '../types'
-import { isRecalledMessage, SandboxDomainError } from '../types'
+import { isRecalledMessage, SandboxDomainError, SandboxSpaceNotFoundError } from '../types'
 import { argumentsFingerprint, asRecord, readSpaceId, requireNumber, requireString, stableValue } from './arguments'
 import {
   matchesTestCallRecordFilter,
@@ -205,21 +205,38 @@ function normalizeStoredCredential(value: unknown): SandboxTestCredential | unde
   }
 }
 
+interface IdempotencyEntry {
+  argumentsHash: string
+  result: unknown
+  expiresAt: number
+  /** 写入时所在的作用域；破坏性操作只清掉同一作用域的条目。 */
+  scope: string
+}
+
+/** 事件、幂等缓存与确认令牌的作用域键：测试空间按空间标识，主场景固定为 `main`。 */
+function scopeKey(spaceId: string | undefined): string {
+  return spaceId ?? 'main'
+}
+
 export class SandboxMcpService {
   private credentials: SandboxTestCredential[] = []
   private events: SandboxMcpEvent[] = []
   private callRecords: SandboxTestCallRecord[] = []
+  // 纪元只在进程启动时生成一次：序号在纪元内全局单调，游标跨空间通用。破坏性操作不再轮转纪元，
+  // 而是给它所在的作用域（某个测试空间或主场景）画一道失效线，见 `invalidateScope`。
   private epoch = randomUUID()
   private sequence = 0
+  /** 各作用域最近一次破坏性操作完成时的序号；早于它的游标只在该作用域内失效。 */
+  private scopeBarriers = new Map<string, number>()
   // 只缓存媒体元数据。正文由 SandboxMediaStorage 按内容寻址落盘，发送时从磁盘读取；
   // 在这里保留 dataBase64 既会让每次上传常驻十几 MB 内存，也会让附加字段随
   // send_message 一路写进场景快照与数据库。按插入顺序限量，避免长会话无界增长。
   private uploadedMedia = new Map<string, SandboxMedia>()
   // 幂等缓存同样按插入顺序限量并附带有效期。每条都持有结果的 structuredClone，而
-  // apply_environment_changes 的结果里带完整场景快照；只在 rotateEpoch 时清空意味着
+  // apply_environment_changes 的结果里带完整场景快照；只在 invalidateScope 时清空意味着
   // 不做破坏性操作的长跑会话会让它无界增长。上限与有效期见 ADR-0021。
-  private idempotency = new Map<string, { argumentsHash: string; result: unknown; expiresAt: number }>()
-  private confirmations = new Map<string, SandboxMcpConfirmation>()
+  private idempotency = new Map<string, IdempotencyEntry>()
+  private confirmations = new Map<string, SandboxMcpConfirmation & { scope: string }>()
   private credentialFile: string
   private eventLimit: number
   private callRecordLimit: number
@@ -431,7 +448,7 @@ export class SandboxMcpService {
     const validity = this.idempotencyTtlMs >= 60_000
       ? `${Math.round(this.idempotencyTtlMs / 60_000)} 分钟`
       : `${Math.round(this.idempotencyTtlMs / 1000)} 秒`
-    return `幂等键；使用相同键重放时参数必须逐字段一致。首次结果缓存有效期 ${validity}，且每个运行纪元最多保留 ${this.idempotencyLimit} 条、超出时淘汰最早写入的一条；超出有效期或被淘汰后，同键重放会重新执行操作而不是返回首次结果`
+    return `幂等键；使用相同键重放时参数必须逐字段一致。首次结果缓存有效期 ${validity}，且全实例最多保留 ${this.idempotencyLimit} 条、超出时淘汰最早写入的一条；超出有效期或被淘汰后，同键重放会重新执行操作而不是返回首次结果`
   }
 
   getCapabilityCatalog(): SandboxMcpCapabilityCatalog {
@@ -474,7 +491,7 @@ export class SandboxMcpService {
         ],
       },
       唤醒被测机器人: {
-        说明: '被测机器人只在唤醒条件成立时回复，条件由当前装着的 ChatLuna 响应插件决定，与沙盒无关。先读一次规则，再按它给出的方式写 content：不要假设 @ 一定有效（chatluna-character 在私聊里不判定 @），也不要假设回复一定即时（它可能要等静默若干秒，或按累计消息条数自动触发）。',
+        说明: '被测机器人只在唤醒条件成立时回复，条件由 ChatLuna v2 的路由规则（chat.activation、chat.engine、chat.merge）决定，与沙盒无关。先读一次规则，再按它给出的方式写 content：不要假设 @ 一定有效（激活判定器可以关掉它），也不要假设回复一定即时（等待发送完毕的合并方式要等发言者静默，character 引擎还会自主插话）。',
         步骤: [
           { tool: 'get_wakeup_rules', arguments: { spaceId: '<spaceId>', conversationId: 'group:30001' } },
           { tool: 'send_message', arguments: { spaceId: '<spaceId>', operatorId: '10001', conversationId: 'group:30001', content: '<at id="20002"/> 你好', idempotencyKey: 'example-wakeup-1' } },
@@ -619,7 +636,7 @@ export class SandboxMcpService {
   ): Promise<unknown> {
     const runtime = this.createToolRuntime(credential, entry, args, transport)
     if (entry.requiresConfirmation) return await this.withConfirmation(runtime, entry, args)
-    if (entry.idempotent) return await this.withIdempotency(credential.id, entry.name, args, async () => await entry.run(runtime, args))
+    if (entry.idempotent) return await this.withIdempotency(credential.id, entry.name, args, runtime.spaceId, async () => await entry.run(runtime, args))
     return await entry.run(runtime, args)
   }
 
@@ -643,13 +660,13 @@ export class SandboxMcpService {
       currentCursor: () => this.currentCursor(),
       appendEvent: (type, data, eventSpaceId = spaceId) => this.appendEvent(type, data, eventSpaceId),
       waitFor: (waitArgs, predicate) => this.waitFor(waitArgs, predicate),
-      readWakeupRules: (wakeupTarget) => this.wakeup.read(wakeupTarget),
+      readWakeupRules: (targets) => this.wakeup.read(targets),
       requireTestSpaces: () => this.requireTestSpaces(),
       requireUnattributedModelRequests: () => this.requireUnattributedModelRequests(),
       resolveControl: (targetSpaceId, mutation) => this.resolveControl({ spaceId: targetSpaceId }, mutation),
       rememberUploadedMedia: (mediaId, media) => this.rememberUploadedMedia(this.mediaCacheKey(spaceId, mediaId), media),
       findUploadedMedia: (mediaId) => this.uploadedMedia.get(this.mediaCacheKey(spaceId, mediaId)),
-      rememberConfirmation: (token, confirmation) => this.rememberConfirmation(token, confirmation),
+      rememberConfirmation: (token, confirmation) => this.rememberConfirmation(token, { ...confirmation, scope: scopeKey(spaceId) }),
       listCallRecords: (input) => this.listCallRecords(input),
       getCallRecord: (recordId) => this.getCallRecord(recordId),
       clearCallRecords: () => this.clearCallRecords(),
@@ -657,10 +674,13 @@ export class SandboxMcpService {
   }
 
   /**
-   * 校验版本绑定的一次性确认令牌，执行破坏性操作，随后轮转事件纪元。
+   * 校验版本绑定的一次性确认令牌，执行破坏性操作，随后让该作用域此前的游标失效。
    *
    * 返回的信封由这里统一给出而不是由执行体给出：四个破坏性工具对外都只答「新版本与新游标」，
-   * 执行体因此只负责改场景。轮转在执行之后，因此消费者拿到的游标必然属于新纪元。
+   * 执行体因此只负责改场景。失效线画在执行之后，因此消费者拿到的游标必然在线上。
+   *
+   * 令牌只在校验通过时消耗：参数或工具写错的调用不执行任何操作，令牌留给改正后的重试；
+   * 每种失败各给一句原因，调用方不必猜是令牌失效还是参数写错。
    */
   private async withConfirmation(
     runtime: SandboxMcpToolRuntime,
@@ -669,14 +689,29 @@ export class SandboxMcpService {
   ): Promise<{ revision: number; cursor: SandboxMcpEventCursor }> {
     const token = requireString(args.confirmationToken, 'confirmationToken')
     const confirmation = this.confirmations.get(token)
-    this.confirmations.delete(token)
+    const reissue = '请重新调用 prepare_destructive_action 获取令牌。'
+    if (!confirmation || confirmation.credentialId !== runtime.credentialId) {
+      throw new SandboxMcpError('confirmation_required', '破坏性操作需要有效的一次性确认令牌', false, reissue)
+    }
+    if (confirmation.expiresAt < Date.now()) {
+      this.confirmations.delete(token)
+      throw new SandboxMcpError('confirmation_required', '确认令牌已过期', false, reissue)
+    }
+    if (confirmation.tool !== entry.name) {
+      throw new SandboxMcpError('confirmation_required', `确认令牌签发给 ${confirmation.tool}，不能用于 ${entry.name}`, false, '令牌仍然有效，请用签发时的工具调用。')
+    }
+    if (confirmation.revision !== runtime.control.getSnapshot().revision) {
+      this.confirmations.delete(token)
+      throw new SandboxMcpError('confirmation_required', '签发确认令牌后场景版本已变化，令牌已作废', false, reissue)
+    }
     // 参数绑定取业务参数指纹：令牌自身与调用标注参数都不参与，因此签发时的 `arguments` 只需逐字段
     // 写出这次操作要做什么，不必连带复述编排标注（ADR-0097）。
-    if (!confirmation || confirmation.expiresAt < Date.now() || confirmation.credentialId !== runtime.credentialId || confirmation.tool !== entry.name || confirmation.revision !== runtime.control.getSnapshot().revision || confirmation.argumentsHash !== argumentsFingerprint(args)) {
-      throw new SandboxMcpError('confirmation_required', '破坏性操作需要有效的一次性确认令牌')
+    if (confirmation.argumentsHash !== argumentsFingerprint(args)) {
+      throw new SandboxMcpError('confirmation_required', '调用参数与签发确认令牌时的 arguments 不一致', false, '令牌仍然有效，请按签发时的 arguments 逐字段调用。')
     }
+    this.confirmations.delete(token)
     await entry.run(runtime, args)
-    this.rotateEpoch()
+    this.invalidateScope(runtime.spaceId)
     return { revision: runtime.control.getSnapshot().revision, cursor: this.currentCursor() }
   }
 
@@ -706,6 +741,7 @@ export class SandboxMcpService {
    */
   private normalizeToolError(tool: string, error: unknown): SandboxMcpError {
     if (error instanceof SandboxMcpError) return error
+    if (error instanceof SandboxSpaceNotFoundError) return new SandboxMcpError('space_not_found', error.message, false, '请调用 list_test_spaces 确认空间标识。')
     if (error instanceof SandboxDomainError) return new SandboxMcpError('domain_error', error.message)
     this.ctx.logger('onebot-sandbox').error('%s\n%s', `MCP 工具 ${tool} 抛出未预期异常。`, errorDetail(error))
     return new SandboxMcpError('internal_error', '工具调用发生未预期异常，详情见 Koishi 日志。', false, '请携带错误信封里的 traceId 反馈该缺陷。')
@@ -754,8 +790,12 @@ export class SandboxMcpService {
     // 也没有事件」，与真的没等到完全一样，消费者据此得出的是错的结论而不是一次可重试的失败。
     const sequence = requireNumber(cursor.sequence, 'cursor.sequence')
     if (this.events.length && sequence < this.events[0].cursor.sequence - 1) throw new SandboxMcpError('cursor_expired', '事件游标已离开缓冲区')
-    const timeoutMs = requireNumber(args.timeoutSeconds, 'timeoutSeconds', { fallback: 30, min: 1, max: 120 }) * 1000
     const spaceId = readSpaceId(args)
+    const barrier = this.scopeBarriers.get(scopeKey(spaceId))
+    if (barrier !== undefined && sequence < barrier) {
+      throw new SandboxMcpError('cursor_expired', '事件游标早于该作用域最近一次破坏性操作', false, '请改用破坏性操作返回的 cursor，或调用 get_server_info 取当前游标。')
+    }
+    const timeoutMs = requireNumber(args.timeoutSeconds, 'timeoutSeconds', { fallback: 30, min: 1, max: 120 }) * 1000
     const matches = () => this.events.find((event) => event.cursor.sequence > sequence && event.spaceId === spaceId && predicate(event))
     const existing = matches()
     if (existing) return { outcome: 'matched', event: existing, cursor: existing.cursor }
@@ -774,7 +814,7 @@ export class SandboxMcpService {
     })
   }
 
-  private async withIdempotency(credentialId: string, tool: string, args: Record<string, unknown>, action: () => Promise<unknown>) {
+  private async withIdempotency(credentialId: string, tool: string, args: Record<string, unknown>, spaceId: string | undefined, action: () => Promise<unknown>) {
     const key = requireString(args.idempotencyKey, 'idempotencyKey')
     const cacheKey = `${credentialId}:${this.epoch}:${tool}:${key}`
     const argumentsHash = argumentsFingerprint(args)
@@ -786,11 +826,11 @@ export class SandboxMcpService {
     // 过期的条目按 ADR-0021 视为不存在：重放会重新执行操作，因此这里先丢弃再往下走。
     if (cached) this.idempotency.delete(cacheKey)
     const result = await action()
-    this.rememberIdempotentResult(cacheKey, { argumentsHash, result: structuredClone(result), expiresAt: Date.now() + this.idempotencyTtlMs })
+    this.rememberIdempotentResult(cacheKey, { argumentsHash, result: structuredClone(result), expiresAt: Date.now() + this.idempotencyTtlMs, scope: scopeKey(spaceId) })
     return result
   }
 
-  private rememberIdempotentResult(cacheKey: string, entry: { argumentsHash: string; result: unknown; expiresAt: number }): void {
+  private rememberIdempotentResult(cacheKey: string, entry: IdempotencyEntry): void {
     const now = Date.now()
     for (const [key, cached] of this.idempotency) {
       if (cached.expiresAt <= now) this.idempotency.delete(key)
@@ -813,7 +853,7 @@ export class SandboxMcpService {
    * 永久留存。惰性清理纯属实现内务，行为零变化；不加条数上限，因为淘汰仍在有效期内的令牌会让
    * 已签发的确认凭空失效，那才是行为变更。留存量本身有界：签发要经状态修改档的频率上限。
    */
-  private rememberConfirmation(token: string, entry: SandboxMcpConfirmation): void {
+  private rememberConfirmation(token: string, entry: SandboxMcpConfirmation & { scope: string }): void {
     const now = Date.now()
     for (const [key, confirmation] of this.confirmations) {
       if (confirmation.expiresAt < now) this.confirmations.delete(key)
@@ -859,12 +899,22 @@ export class SandboxMcpService {
     return cursor
   }
 
-  private rotateEpoch() {
-    this.epoch = randomUUID()
-    this.sequence = 0
-    this.events = []
-    this.idempotency.clear()
-    this.confirmations.clear()
+  /**
+   * 破坏性操作后让该作用域此前的游标、事件、幂等结果与确认令牌失效，其他空间与主场景不受影响。
+   *
+   * 此前这里轮转全局纪元，一个测试空间里的 `clear_scene` 会让所有并行空间手里的游标同时过期。
+   * 序号继续全局递增，失效线就是当前序号：破坏性操作返回的游标恰好落在线上，仍然有效。
+   */
+  private invalidateScope(spaceId: string | undefined) {
+    const scope = scopeKey(spaceId)
+    this.scopeBarriers.set(scope, this.sequence)
+    this.events = this.events.filter((event) => scopeKey(event.spaceId) !== scope)
+    for (const [key, entry] of this.idempotency) {
+      if (entry.scope === scope) this.idempotency.delete(key)
+    }
+    for (const [token, confirmation] of this.confirmations) {
+      if (confirmation.scope === scope) this.confirmations.delete(token)
+    }
   }
 
   private requireStoredCredential(id: string): SandboxTestCredential {

@@ -85,6 +85,9 @@ async function seedGroupSystemMessages(control: SandboxControlService) {
   await control.performGroupAction({ action: 'request-join', operatorId: '10004', groupId: '30001', comment: '想加入' })
   await control.performGroupAction({ action: 'request-join', operatorId: '10006', groupId: '30001' })
   await control.performGroupAction({ action: 'request-join', operatorId: '10005', groupId: '30004' })
+  // 只能邀请好友入群，10001 与 10002 默认不是好友。
+  const friend = await control.performFriendAction({ action: 'request', operatorId: '10002', targetId: '10001' })
+  await control.performFriendAction({ action: 'handle-request', operatorId: '10001', requestId: friend.requestId!, approve: true })
   for (const targetId of ['20001', '20002', '10002']) {
     await control.performGroupAction({ action: 'invite', operatorId: '10001', groupId: '30005', targetId })
   }

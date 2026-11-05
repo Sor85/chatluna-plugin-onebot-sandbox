@@ -11,7 +11,7 @@ import type { SandboxModelRequestPersistence } from './model-request'
 import type { SandboxTestSpacePersistence, SandboxTestSpacePersistenceRecord } from './persistence'
 import { trimConversationMessages } from './conversation-resolution'
 import type { SandboxSnapshot } from './types'
-import { SandboxDomainError } from './types'
+import { SandboxDomainError, SandboxSpaceNotFoundError } from './types'
 
 export type SandboxTestSpaceStatus = 'running' | 'taken-over' | 'completed' | 'failed'
 
@@ -362,7 +362,7 @@ export class SandboxTestSpaceService {
 
   private requireSpace(spaceId: string): SandboxTestSpaceRecord {
     const space = this.spaces.get(spaceId)
-    if (!space) throw new SandboxDomainError(`AI 测试空间不存在：${spaceId}`)
+    if (!space) throw new SandboxSpaceNotFoundError(spaceId)
     return space
   }
 

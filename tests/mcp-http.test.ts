@@ -84,7 +84,27 @@ describe('MCP Streamable HTTP', () => {
       .toMatchObject({ type: 'object', properties: expect.objectContaining({ outcome: expect.anything() }) })
     expect(tools.find(({ name }) => name === 'get_scene_snapshot')).not.toHaveProperty('outputSchema')
     expect((await client.listResources()).resources.map(({ uri }) => uri)).toEqual(MCP_RESOURCE_URIS)
+    // 资源不存在按 MCP 规范答 -32002，而不是 SDK 默认的 -32603 内部错误。
+    await expect(client.readResource({ uri: 'onebot-sandbox://nope' })).rejects.toMatchObject({ code: -32002 })
     await client.close()
+  })
+
+  it('非 POST 请求与传输层拒绝都答 JSON-RPC 错误信封', async () => {
+    const { credential, url } = await startHttpServer('信封凭证', ['read'])
+    const get = await fetch(url, { headers: { authorization: `Bearer ${credential.token}` } })
+    expect(get.status).toBe(405)
+    expect(get.headers.get('allow')).toBe('POST')
+    expect(await get.json()).toMatchObject({ jsonrpc: '2.0', id: null, error: { code: -32000, data: { code: 'method_not_allowed' } } })
+    const unauthorized = await fetch(url, {
+      method: 'POST',
+      headers: { authorization: 'Bearer wrong', 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    })
+    expect(unauthorized.status).toBe(401)
+    expect(await unauthorized.json()).toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: -32000, data: { code: 'unauthorized', retryable: false, recovery: expect.any(String), revision: expect.any(Number) } },
+    })
   })
 
   it('超出能力范围的工具调用在传输层返回结构化错误信封', async () => {

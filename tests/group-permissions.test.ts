@@ -247,9 +247,9 @@ describe('模拟 QQ 环境群权限操作', () => {
     expect(control.getSnapshot().conversations.find(({ id }) => id === 'group:30001')?.messageIds).toEqual([message.id])
     expect(control.getVisibleSnapshot('10001').conversations).toContainEqual(expect.objectContaining({ groupId: '30001' }))
     expect(control.getVisibleSnapshot('10003').conversations).not.toContainEqual(expect.objectContaining({ groupId: '30001' }))
-    expect(() => control.getMessageHistory({ operatorId: '10003', conversationId: 'group:30001' })).toThrow('会话不存在')
+    expect(() => control.getMessageHistory({ operatorId: '10003', conversationId: 'group:30001' })).toThrow('操作者 10003 不是群 30001 的成员')
     await expect(control.sendMessage({ operatorId: '10003', conversationId: 'group:30001', content: '被踢后发送' }))
-      .rejects.toThrow('会话不存在')
+      .rejects.toThrow('操作者 10003 不是群 30001 的成员')
 
     const request = await control.performGroupAction({ action: 'request-join', operatorId: '10003', groupId: group.id })
     if (!request.requestId) throw new Error('重新入群申请未创建')
