@@ -219,7 +219,7 @@ const MAX_CONVERSATION_PAGE_SIZE = 200
 
 const OPERATOR_ID = { type: 'string', description: '操作者参与者 ID（十进制数字字符串）' }
 const PARTICIPANT_ID = { type: 'string', description: '参与者 ID（十进制数字字符串）' }
-const IMPLEMENTATION = { type: 'string', enum: ['napcat', 'llbot'] }
+const IMPLEMENTATION = { type: 'string', enum: ['napcat', 'llbot', 'snowluma'] }
 // 调用标注参数：每次调用都被写进测试调用记录，也是 list_test_call_records 的筛选维度。它对全部
 // 工具生效而非某个工具的业务参数，因此由 withTestRunId 统一注入，不逐个工具书写。
 const TEST_RUN_ID = { type: 'string', description: '本次测试编排的标识；写入测试调用记录，可用 list_test_call_records 按它回溯同一轮编排的全部调用' }
@@ -613,8 +613,8 @@ const SERVER_INFO_OUTPUT = {
 
 function requireImplementation(value: unknown): SandboxImplementationProfile {
   // 非法值必须显式失败：静默回落到 napcat 会让测试控制器以为自己在测另一个协议。
-  if (value === 'napcat' || value === 'llbot') return value
-  throw new SandboxMcpError('invalid_arguments', `implementation 必须是 napcat 或 llbot：${String(value)}`)
+  if (value === 'napcat' || value === 'llbot' || value === 'snowluma') return value
+  throw new SandboxMcpError('invalid_arguments', `implementation 必须是 napcat、llbot 或 snowluma：${String(value)}`)
 }
 
 function requireCapabilityList(value: unknown): string[] | undefined {
@@ -648,7 +648,7 @@ function toMcpConversation(snapshot: SandboxSnapshot, conversation: ResolvedConv
  * 两种协议表述都只把它当文档暴露、不做参数校验，校验责任落在工具执行体内部。implementation 在
  * get_capability_matrix 上是可选参数，省略时仍默认 napcat。
  *
- * 导出供 `onebot-sandbox://capabilities/*` 两个只读资源复用：那两条路径与本工具答的是同一件事。
+ * 导出供 `onebot-sandbox://capabilities/*` 各实现的只读资源复用：那几条路径与本工具答的是同一件事。
  */
 export function readCapabilityMatrix(control: SandboxControlService, implementation: unknown) {
   const profile = implementation === undefined ? 'napcat' : requireImplementation(implementation)
@@ -1634,16 +1634,16 @@ const TOOL_ENTRIES: SandboxMcpToolEntry[] = [
   {
     name: 'get_capability_matrix',
     scope: 'read',
-    description: '读取 NapCat 或 LLBot 能力覆盖',
+    description: '读取 NapCat、LLBot 或 SnowLuma 能力覆盖',
     inputSchema: {
       type: 'object',
       properties: {
         spaceId: SPACE_OPTIONAL,
-        implementation: { type: 'string', enum: ['napcat', 'llbot'], description: '默认 napcat' },
+        implementation: { ...IMPLEMENTATION, description: '默认 napcat' },
       },
     },
     quota: 'read', spaceResolution: 'read', idempotent: false, requiresConfirmation: false,
-    // 包一层只加在工具这一侧：`onebot-sandbox://capabilities/*` 两条只读资源复用同一份矩阵，而
+    // 包一层只加在工具这一侧：`onebot-sandbox://capabilities/*` 各条只读资源复用同一份矩阵，而
     // 资源正文本来就是文本序列化、不受 structuredContent 的约束，跟着包会让已经在读资源的消费者白改一次。
     run: (runtime, args) => ({ items: readCapabilityMatrix(runtime.control, args.implementation) }),
   },

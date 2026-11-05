@@ -51,6 +51,7 @@ import { SandboxAvatar } from '../shared/avatar'
 import { useSandbox } from '../workspace/context'
 import { errorText, invoke } from '../workspace/store'
 import { useTestSpaces } from '../workspace/use-test-spaces'
+import { implementationLabel } from '../shared/implementation'
 
 type Direction = 'all' | 'action' | 'event'
 
@@ -301,7 +302,7 @@ export function DebugDetail({ record, botName }: { record: SandboxConsoleOneBotD
       <MetaList>
         <MetaRow icon={BotIcon} label={t('sandbox.debug.bot')} value={<>{botName} <span className="font-mono font-normal text-muted-foreground">{record.botId}</span></>} />
         <MetaRow icon={BoxIcon} label={t('sandbox.debug.source')} value={sourceName(t, record.source)} />
-        <MetaRow icon={CpuIcon} label={t('sandbox.debug.implementation')} value={record.implementation === 'napcat' ? 'NapCat' : 'LLBot'} />
+        <MetaRow icon={CpuIcon} label={t('sandbox.debug.implementation')} value={implementationLabel(record.implementation)} />
         {record.action !== record.requestedAction && <MetaRow icon={ArrowRightIcon} label={t('sandbox.debug.action')} value={<span className="font-mono">{record.action}</span>} />}
         {record.matchedAlias && <MetaRow icon={TagIcon} label={t('sandbox.debug.alias')} value={<span className="font-mono">{record.matchedAlias}</span>} />}
         <MetaRow

@@ -7,8 +7,8 @@ import {
 } from './chatluna/character-context'
 import type { ResolvedConversation } from './conversation-resolution'
 import { createOneBotDebugError, type AppendOneBotDebugRecordInput } from './onebot-debug'
-import type { SandboxOneBotMessageSegment } from './onebot-message'
-import { getOneBotMessageEventFields } from './onebot-profiles'
+import { toOneBotRawMessage, type SandboxOneBotMessageSegment } from './onebot-message'
+import { getOneBotMessageEventFields, getOneBotMessageId, getOneBotMessageSequence } from './onebot-profiles'
 import {
   SandboxDomainError,
   type SandboxBotDelivery,
@@ -140,6 +140,8 @@ export interface DeliverInboundMessageInput {
   readonly segments: SandboxOneBotMessageSegment[]
   readonly rawMessage: string
   readonly quote?: InboundQuotedMessage
+  /** 被回复消息的沙盒 ID；回复段里的 message_id 要按接收机器人的实现重新给出。 */
+  readonly replyToMessageId?: string
 }
 
 export interface InboundDeliveryInput {
@@ -320,9 +322,16 @@ export function createInboundDelivery({
 
   const deliverToBot = async (
     recipientBot: SandboxBotProfile,
-    { context, messageId, elements, segments, rawMessage, quote }: DeliverInboundMessageInput,
+    { context, messageId, elements, segments: sourceSegments, rawMessage: sourceRawMessage, quote, replyToMessageId }: DeliverInboundMessageInput,
   ): Promise<void> => {
     const startedAt = Date.now()
+    // 调用方按消息序号组装回复段，NapCat 与 LLBot 原样可用；SnowLuma 的 message_id 是哈希值，换掉回复段并重算 raw_message。
+    const replyId = replyToMessageId ? getOneBotMessageId(recipientBot.implementation, replyToMessageId) : undefined
+    const localized = replyToMessageId && replyId !== getOneBotMessageSequence(replyToMessageId)
+    const segments = localized
+      ? sourceSegments.map((segment) => segment.type === 'reply' ? { ...segment, data: { ...segment.data, id: String(replyId) } } : segment)
+      : sourceSegments
+    const rawMessage = localized ? toOneBotRawMessage(segments) : sourceRawMessage
     // 载荷先于运行时机器人构造：它只依赖已落库的消息与收件机器人，因此「取不到运行时」这类派发前
     // 失败也能带着完整载荷进调试记录，而不是只留一句话，看记录的人照样知道那条消息是什么。
     const payload = {

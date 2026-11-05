@@ -46,7 +46,7 @@ export interface DeleteSandboxUserInput {
   id: string
 }
 
-export type SandboxImplementationProfile = 'napcat' | 'llbot'
+export type SandboxImplementationProfile = 'napcat' | 'llbot' | 'snowluma'
 
 // 机器人运行资料：实现配置、启用状态和能力覆盖，独立于账号资料。
 export interface SandboxBotRuntimeProfile {
@@ -1105,8 +1105,8 @@ export interface ListGroupAnnouncementsInput {
 /**
  * 一条群系统消息：待审批的入群申请或群邀请，按调用方机器人能看见的那些投影出来。
  *
- * 字段是领域事实而不是 OneBot 字段名——两种实现配置对同一件事用的键并不相同（LLBot 的入群
- * 申请是 `requester_uin`，两边的群邀请都是 `invitor_uin`，NapCat 两个桶还共用同一份 schema），
+ * 字段是领域事实而不是 OneBot 字段名——各实现配置对同一件事用的键并不相同（LLBot 的入群
+ * 申请是 `requester_uin`，NapCat 两个桶共用同一份 schema，SnowLuma 干脆不分桶），
  * 翻译留在机器人适配器里。
  */
 export interface SandboxGroupSystemMessage {

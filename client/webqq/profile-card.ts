@@ -8,6 +8,7 @@ import type {
   SandboxUser,
 } from '../../src/types'
 import { isSandboxBot } from '../../src/types'
+import { implementationLabel } from '../shared/implementation'
 
 /** 字段名与取值都经插件文案翻译；纯逻辑模块不依赖 React，由调用方传入 `t`。 */
 export type ProfileCardTranslate = (key: string, params?: Record<string, unknown>) => string
@@ -122,7 +123,7 @@ function getGroupMemberFields(t: ProfileCardTranslate, group: SandboxGroup, memb
 function getBotRuntimeFields(t: ProfileCardTranslate, bot: SandboxBotProfile): ProfileCardField[] {
   const label = (name: string) => t(`sandbox.profileCard.field.${name}`)
   const fields: ProfileCardField[] = [
-    { group: 'bot-runtime', label: label('implementation'), value: bot.implementation === 'napcat' ? 'NapCat' : 'LLBot' },
+    { group: 'bot-runtime', label: label('implementation'), value: implementationLabel(bot.implementation) },
     { group: 'bot-runtime', label: label('enabled'), value: t(bot.enabled ? 'sandbox.env.enabled' : 'sandbox.env.disabled') },
   ]
   if (bot.disabledCapabilities?.length) {

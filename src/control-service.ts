@@ -68,7 +68,7 @@ import {
   type MessageCapabilityDenial,
   type MessageCapabilityInput,
 } from './message-capabilities'
-import { getOneBotCapabilityMatrix, getOneBotMessageSequence, normalizeDisabledCapabilities, resolveOneBotMessageId, type SandboxOneBotCapability } from './onebot-profiles'
+import { getOneBotCapabilityMatrix, getOneBotMessageId, getOneBotMessageSequence, normalizeDisabledCapabilities, resolveOneBotMessageId, type SandboxOneBotCapability } from './onebot-profiles'
 import {
   createRelationshipActions,
   denyGroupAuthority,
@@ -105,6 +105,7 @@ import {
   type SandboxBotDelivery,
   type SandboxAccountSex,
   type SandboxBotProfile,
+  type SandboxImplementationProfile,
   type SandboxChatLunaState,
   type SandboxConversation,
   type SandboxForward,
@@ -1722,7 +1723,7 @@ export class SandboxControlService {
       const result = await this.getRuntimeBot(bot.id).internal._request('send_forward_msg', params) as {
         data?: { message_id?: number | string; forward_id?: string; res_id?: string }
       }
-      const messageId = resolveOneBotMessageId(result?.data?.message_id, this.scene.messages.map(({ id }) => id))
+      const messageId = resolveOneBotMessageId(bot.implementation, result?.data?.message_id, this.scene.messages.map(({ id }) => id))
         ?? String(result?.data?.message_id ?? '')
       const message = this.scene.messages.find(({ id }) => id === messageId)
       const forwardId = message?.forwardId
@@ -1821,7 +1822,7 @@ export class SandboxControlService {
 
   private resolveForwardIdFromMessage(operatorId: string, rawMessageId?: string): string | undefined {
     if (!rawMessageId?.trim()) return undefined
-    const messageId = resolveOneBotMessageId(rawMessageId, this.scene.messages.map(({ id }) => id)) ?? rawMessageId
+    const messageId = resolveOneBotMessageId(this.implementationOf(operatorId), rawMessageId, this.scene.messages.map(({ id }) => id)) ?? rawMessageId
     const message = this.scene.messages.find(({ id }) => id === messageId)
     if (!message?.forwardId) throw new SandboxDomainError(`消息不是合并转发：${rawMessageId}`)
     if (!findVisibleConversation(this.scene, operatorId, message.conversationId)) {
@@ -2058,6 +2059,7 @@ export class SandboxControlService {
       segments: onebotMessage,
       rawMessage,
       quote: context.reply ? this.resolveInboundQuote(context.reply) : undefined,
+      replyToMessageId: context.reply?.id,
     })
   }
 
@@ -2247,7 +2249,7 @@ export class SandboxControlService {
   }
 
   async recallBotMessage(botId: string, rawMessageId: string, conversationId?: string): Promise<void> {
-    const messageId = resolveOneBotMessageId(rawMessageId, this.scene.messages.map(({ id }) => id))
+    const messageId = resolveOneBotMessageId(this.implementationOf(botId), rawMessageId, this.scene.messages.map(({ id }) => id))
     await this.recallVisibleMessage(botId, messageId ?? rawMessageId, conversationId)
   }
 
@@ -2276,11 +2278,12 @@ export class SandboxControlService {
     }
     this.commitSceneMutation()
     if (group) {
-      await this.dispatchGroupNotice(group, 'group_recall', {
+      // message_id 按每个接收机器人的实现给：SnowLuma 是哈希 ID，不是消息序号。
+      await this.dispatchGroupNotice(group, 'group_recall', (botId) => ({
         user_id: Number(message.authorId),
         operator_id: Number(operatorId),
-        message_id: getOneBotMessageSequence(message.id),
-      }, { messageId: message.id })
+        message_id: getOneBotMessageId(this.implementationOf(botId), message.id),
+      }), { messageId: message.id })
       return
     }
     if (conversation.type !== 'direct') return
@@ -2310,7 +2313,7 @@ export class SandboxControlService {
         post_type: 'notice',
         notice_type: 'friend_recall',
         user_id: Number(peerId),
-        message_id: getOneBotMessageSequence(messageId),
+        message_id: getOneBotMessageId(this.implementationOf(botId), messageId),
       },
     })
     await this.inboundDelivery.dispatchEvent(bot, session)
@@ -2833,6 +2836,11 @@ export class SandboxControlService {
 
   private isBot(id: string | undefined): boolean {
     return !!id && this.getBots().some((bot) => bot.id === id)
+  }
+
+  /** 操作者是机器人时取它的实现配置；WebQQ 用户的操作不经 OneBot，按默认的 NapCat 口径解析数字 ID。 */
+  private implementationOf(participantId: string): SandboxImplementationProfile {
+    return this.getBots().find(({ id }) => id === participantId)?.implementation ?? 'napcat'
   }
 
   private async dispatchFriendRequest(botId: string, userId: string, flag: string, comment?: string) {

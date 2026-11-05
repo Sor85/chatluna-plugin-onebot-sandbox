@@ -18,6 +18,7 @@ import {
   toOneBotLoginInfo,
 } from './account-profile'
 import {
+  getOneBotMessageId,
   getOneBotMessageSequence,
   getOneBotProfileBaseline,
   resolveOneBotAction,
@@ -106,6 +107,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
   internal: SandboxBot.Internal
   private implementation: SandboxImplementationProfile
   private disabledCapabilities: string[]
+  private readonly startedAt = Date.now()
 
   constructor(
     ctx: Context,
@@ -135,7 +137,16 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
         const action = capability.handler
         if (action === 'get_status') {
           const online = this.status === 1
-          return { status: 'ok', retcode: 0, data: { online, good: online && !this.error } }
+          return {
+            status: 'ok',
+            retcode: 0,
+            data: {
+              online,
+              good: online && !this.error,
+              // SnowLuma 另给实例运行时长（整秒）。
+              ...(this.implementation === 'snowluma' ? { time: Math.floor((Date.now() - this.startedAt) / 1000) } : {}),
+            },
+          }
         }
         if (action === 'get_login_info') {
           const self = this.control.getSnapshot().participants.find(({ id }) => id === this.selfId)
@@ -163,32 +174,10 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           return { status: 'ok', retcode: 0, data: toOneBotAccountProfile(participant) }
         }
         if (action === 'get_friend_list') {
-          const friends = await this.getFriendList()
-          const snapshot = this.control.getSnapshot()
-          return {
-            status: 'ok',
-            retcode: 0,
-            data: friends.data.map(({ user, nick }) => {
-              const userId = user?.id ?? '0'
-              const participant = snapshot.participants.find(({ id }) => id === userId)
-              return {
-                ...toOneBotAccountProfile(participant ?? { id: userId, name: user?.name ?? userId }),
-                remark: nick ?? '',
-              }
-            }),
-          }
+          return { status: 'ok', retcode: 0, data: await this.listOneBotFriends() }
         }
         if (action === 'get_friends_with_category') {
-          const friends = await this.getFriendList()
-          const snapshot = this.control.getSnapshot()
-          const buddyList = friends.data.map(({ user, nick }) => {
-            const userId = user?.id ?? '0'
-            const participant = snapshot.participants.find(({ id }) => id === userId)
-            return {
-              ...toOneBotAccountProfile(participant ?? { id: userId, name: user?.name ?? userId }),
-              remark: nick ?? '',
-            }
-          })
+          const buddyList = await this.listOneBotFriends()
           return {
             status: 'ok',
             retcode: 0,
@@ -214,6 +203,8 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           }
         }
         if (action === 'get_recent_contact') {
+          // SnowLuma 上游是空实现，照答空数组：插件在沙盒上读到的最近会话不能比真实环境多。
+          if (this.implementation === 'snowluma') return { status: 'ok', retcode: 0, data: [] }
           const limit = this.resolveCountParam(params.count, 10)
           const snapshot = this.control.getVisibleSnapshot(this.selfId, 1)
           const participants = new Map(snapshot.participants.map((participant) => [participant.id, participant]))
@@ -277,7 +268,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           const conversationId = this.resolveDirectConversationId(String(params.user_id ?? ''))
           const messageId = await this.deliverOutboundMessage(conversationId, parseOneBotOutboundMessage(params.message))
           target.conversationId = conversationId
-          return { status: 'ok', retcode: 0, data: { message_id: getOneBotMessageSequence(messageId) } }
+          return { status: 'ok', retcode: 0, data: { message_id: getOneBotMessageId(this.implementation, messageId) } }
         }
         if (action === 'send_group_msg') {
           const groupId = this.normalizeOneBotGroupId(params.group_id)
@@ -285,7 +276,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           const conversationId = this.resolveGroupConversationId(groupId)
           const messageId = await this.deliverOutboundMessage(conversationId, parseOneBotOutboundMessage(params.message))
           target.conversationId = conversationId
-          return { status: 'ok', retcode: 0, data: { message_id: getOneBotMessageSequence(messageId) } }
+          return { status: 'ok', retcode: 0, data: { message_id: getOneBotMessageId(this.implementation, messageId) } }
         }
         if (action === 'send_msg') {
           const targetAction = params.message_type === 'group' || params.group_id !== undefined
@@ -305,14 +296,18 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
             target,
             this.resolveDirectConversationId(String(params.user_id ?? '')),
           )
-          return this.getOneBotMessageHistory(conversationId, params)
+          return this.implementation === 'snowluma'
+            ? this.getSnowLumaMessageHistory(conversationId, params)
+            : this.getOneBotMessageHistory(conversationId, params)
         }
         if (action === 'get_group_msg_history') {
           const conversationId = this.resolveHistoryConversation(
             target,
             this.resolveGroupConversationId(this.normalizeOneBotGroupId(params.group_id)),
           )
-          return this.getOneBotMessageHistory(conversationId, params)
+          return this.implementation === 'snowluma'
+            ? this.getSnowLumaMessageHistory(conversationId, params)
+            : this.getOneBotMessageHistory(conversationId, params)
         }
         if (action === 'delete_msg') {
           await this.control.recallBotMessage(this.selfId, String(params.message_id ?? ''))
@@ -338,7 +333,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           })
         }
         if (action === 'batch_kick_group_members') {
-          const rawUserIds = this.implementation === 'napcat' ? params.user_id : params.user_ids
+          const rawUserIds = this.implementation === 'llbot' ? params.user_ids : params.user_id
           if (!Array.isArray(rawUserIds) || !rawUserIds.length) {
             throw new Error(`${capability.action} 需要至少一个群成员 ID`)
           }
@@ -367,7 +362,8 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           })
         }
         if (action === 'delete_group_notice') {
-          const noticeId = String(params.notice_id ?? '')
+          // SnowLuma 的公告 ID 也可以写在 fid。
+          const noticeId = String(params.notice_id ?? (this.implementation === 'snowluma' ? params.fid : undefined) ?? '')
           if (!noticeId) throw new Error(`${capability.action} 缺少 notice_id`)
           this.control.deleteGroupAnnouncement({
             operatorId: this.selfId,
@@ -381,6 +377,25 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
             operatorId: this.selfId,
             groupId: this.normalizeOneBotGroupId(params.group_id),
           })
+          if (this.implementation === 'snowluma') {
+            return {
+              status: 'ok',
+              retcode: 0,
+              data: announcements.map(({ id, authorId, content, createdAt }) => ({
+                notice_id: id,
+                sender_id: Number(authorId),
+                publish_time: Math.floor(new Date(createdAt).getTime() / 1000),
+                message: { text: content, image: [], images: [] },
+                // SnowLuma 原样透传 QQ 网页接口的 settings，且 read_num、type、pinned 都是必给字段；
+                // 沙盒没有对应状态，按网页接口的键名给 0，type 取普通公告的 6。
+                settings: { is_show_edit_card: 0, remind_ts: 0, tip_window_type: 0, confirm_required: 0 },
+                read_num: 0,
+                type: 6,
+                pinned: 0,
+                send_to_new_members: false,
+              })),
+            }
+          }
           return {
             status: 'ok',
             retcode: 0,
@@ -414,6 +429,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
         }
         if (action === 'get_group_system_msg') {
           const messages = this.control.getBotGroupSystemMessages(this.selfId)
+          if (this.implementation === 'snowluma') return this.getSnowLumaGroupSystemMessages(messages, params)
           // count 只有 NapCat 声明，且它限的是「一次取多少条系统消息」的总量，分桶发生在截断之后；
           // LLBot 上游对没有 payloadSchema 的 action 一律不校验参数，传了要忽略而不是报错。
           const visible = this.implementation === 'napcat'
@@ -442,14 +458,17 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           })
         }
         if (action === 'set_qq_profile') {
-          if (typeof params.nickname !== 'string' || !params.nickname.trim()) throw new Error('机器人昵称不能为空')
-          // NapCat 接受 sex，LLOneBot 只允许 nickname/personal_note；不支持时必须明确失败。
+          // SnowLuma 三项都可选、只改传入的字段；NapCat 与 LLOneBot 的昵称必填。
+          const nicknameOptional = this.implementation === 'snowluma' && params.nickname === undefined
+          if (!nicknameOptional && (typeof params.nickname !== 'string' || !params.nickname.trim())) throw new Error('机器人昵称不能为空')
+          // NapCat 接受 sex，SnowLuma 只收 0–2 的整数，LLOneBot 只允许 nickname/personal_note；不支持时必须明确失败。
           if (params.sex !== undefined) {
-            if (this.implementation !== 'napcat') throw new Error('当前实现配置不支持修改性别')
+            if (this.implementation === 'llbot') throw new Error('当前实现配置不支持修改性别')
+            if (this.implementation === 'snowluma' && !/^[0-2]$/.test(String(params.sex))) throw new Error('性别参数无效')
             if (normalizeAccountSex(params.sex) === undefined) throw new Error('性别参数无效')
           }
           return this.control.updateBotSelfProfile(this.selfId, {
-            name: params.nickname,
+            ...(typeof params.nickname === 'string' ? { name: params.nickname } : {}),
             ...(typeof params.personal_note === 'string' ? { personalNote: params.personal_note } : {}),
             ...(params.sex !== undefined ? { sex: normalizeAccountSex(params.sex) } : {}),
           })
@@ -464,7 +483,8 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           return this.control.handleBotFriendRequest(this.selfId, {
             flag: typeof params.flag === 'string' ? params.flag : '',
             approve: params.approve === true,
-            remark: typeof params.remark === 'string' ? params.remark : undefined,
+            // SnowLuma 的 set_friend_add_request 没有 remark 参数，传了也不生效。
+            remark: typeof params.remark === 'string' && this.implementation !== 'snowluma' ? params.remark : undefined,
           })
         }
         if (action === 'set_group_add_request') {
@@ -528,6 +548,17 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           const groupId = this.normalizeOneBotGroupId(params.group_id)
           await this.getGuild(groupId)
           const group = this.control.getSnapshot().groups.find(({ id }) => id === groupId)!
+          if (this.implementation === 'snowluma') {
+            return {
+              status: 'ok',
+              retcode: 0,
+              data: group.members.filter((member) => isSandboxGroupMemberMuted(member)).map((member) => ({
+                user_id: Number(member.participantId),
+                nickname: this.control.getSnapshot().participants.find(({ id }) => id === member.participantId)?.name ?? member.participantId,
+                shut_up_time: getGroupMemberMuteTimestamp(member),
+              })),
+            }
+          }
           return {
             status: 'ok',
             retcode: 0,
@@ -543,6 +574,9 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
         }
         if (action === 'set_msg_emoji_like') {
           const message = this.findAccessibleMessage(String(params.message_id ?? ''))
+          if (this.implementation === 'snowluma' && resolveConversation(this.control.getSnapshot(), message.conversationId)?.type !== 'group') {
+            throw new Error('SnowLuma 不支持私聊消息的表情回应')
+          }
           // bot action 直接写入领域状态，避免再经 setMessageReaction 回绕到 OneBot action。
           this.control.applyMessageReaction({
             operatorId: this.selfId,
@@ -557,7 +591,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
           const message = this.requireReadableMessage(String(params.message_id ?? ''))
           const emojiId = this.resolveEmojiLikeEmojiId(capability.action, params)
           const participantIds = message.reactions?.find((reaction) => reaction.emojiId === emojiId)?.participantIds ?? []
-          const page = participantIds.slice(0, this.resolveCountParam(params.count, 20))
+          const page = participantIds.slice(0, this.resolveCountParam(params.count, this.implementation === 'snowluma' ? 10 : 20))
           const participants = new Map(this.control.getSnapshot().participants.map((participant) => [participant.id, participant]))
           return {
             status: 'ok',
@@ -573,7 +607,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
               cookie: '',
               isLastPage: page.length === participantIds.length,
               isFirstPage: true,
-              ...(this.implementation === 'napcat' ? { result: 0, errMsg: '' } : {}),
+              ...(this.implementation === 'llbot' ? {} : { result: 0, errMsg: '' }),
             },
           }
         }
@@ -595,7 +629,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
             status: 'ok',
             retcode: 0,
             data: {
-              message_id: getOneBotMessageSequence(result.messageId),
+              message_id: getOneBotMessageId(this.implementation, result.messageId),
               // 不同实现分别返回 res_id / forward_id；沙盒同时提供二者，方便插件兼容。
               res_id: result.forwardId,
               forward_id: result.forwardId,
@@ -875,7 +909,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
         status: 'success',
         durationMs: Date.now() - startedAt,
         payload,
-        result: { status: 'ok', retcode: 0, data: { message_id: getOneBotMessageSequence(messageId) } },
+        result: { status: 'ok', retcode: 0, data: { message_id: getOneBotMessageId(this.implementation, messageId) } },
         ...(conversationObservation ? { conversationObservation } : {}),
       })
       return [messageId]
@@ -1088,6 +1122,38 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     }
   }
 
+  /**
+   * SnowLuma 的群系统消息是一个不分桶的数组，入群申请与群邀请共用一份 schema。
+   *
+   * `requester_*` 是这条请求的发起人（申请人，或邀请机器人入群的人），`invitor_*` 只在群邀请里
+   * 有值、入群申请为 0 与空串；审批用的是 `flag`。`count` 是 1–100 的整数，越界时上游参数校验即拒绝。
+   * 沙盒只保存待处理申请，`only_pending` 不改变结果。
+   */
+  private getSnowLumaGroupSystemMessages(messages: SandboxGroupSystemMessage[], params: Record<string, unknown>) {
+    const count = Number(params.count ?? 50)
+    if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error('get_group_system_msg 的 count 必须是 1 到 100 的整数')
+    const groupId = params.group_id === undefined ? undefined : this.normalizeOneBotGroupId(params.group_id)
+    return {
+      status: 'ok',
+      retcode: 0,
+      data: messages
+        .filter((message) => groupId === undefined || message.groupId === groupId)
+        .slice(0, count)
+        .map((message) => ({
+          group_id: Number(message.groupId),
+          group_name: message.groupName,
+          request_id: message.requestId,
+          requester_uin: Number(message.initiatorId),
+          requester_nick: message.initiatorName,
+          invitor_uin: message.kind === 'invite' ? Number(message.initiatorId) : 0,
+          invitor_nick: message.kind === 'invite' ? message.initiatorName : '',
+          message: message.comment,
+          checked: message.checked,
+          flag: message.requestId,
+        })),
+    }
+  }
+
   /** 入群申请项：LLBot 用 `requester_*`，NapCat 的共用 schema 里申请人落在 `invitor_*` 上。 */
   private toOneBotGroupJoinRequest(message: SandboxGroupSystemMessage) {
     const common = {
@@ -1113,6 +1179,8 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
    * `emojiType` 只做必填校验、不参与查找：`participantIds` 按 emojiId 聚合，类型不影响命中；
    * 类型与 emojiId 明显矛盾时上游也不校验，沙盒不该更严。
    *
+   * SnowLuma 与 NapCat 一样只认 `emojiId`，但不要 `emojiType`。
+   *
    * 两边都对取值 trim：`applyMessageReaction` 存的就是 trim 过的 emojiId，读取不跟着归一化会让
    * 「贴了带空白的表情、再按同一个参数查」查不到自己刚写的那条回应。
    */
@@ -1121,6 +1189,11 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
       if (params.emojiId === undefined || params.emojiId === null) throw new Error(`${actionName} 缺少 emojiId`)
       if (params.emojiType === undefined || params.emojiType === null) throw new Error(`${actionName} 缺少 emojiType`)
       return String(params.emojiId).trim()
+    }
+    if (this.implementation === 'snowluma') {
+      const emojiId = String(params.emojiId ?? '').trim()
+      if (!emojiId) throw new Error(`${actionName} 缺少 emojiId`)
+      return emojiId
     }
     const emojiId = String(params.emoji_id ?? params.emojiId ?? '').trim()
     if (!emojiId) throw new Error(`${actionName} 缺少 emoji_id`)
@@ -1217,7 +1290,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
       visibleConversationIds.has(conversationId)
       && (!readableMessageIds || readableMessageIds.has(id))
     ))
-    const messageId = resolveOneBotMessageId(rawMessageId, visibleMessages.map(({ id }) => id))
+    const messageId = resolveOneBotMessageId(this.implementation, rawMessageId, visibleMessages.map(({ id }) => id))
     const message = visibleMessages.find(({ id }) => id === messageId)
     if (!message) throw new Error(`消息不存在：${rawMessageId}`)
     return message
@@ -1255,6 +1328,52 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     return { status: 'ok', retcode: 0, data: { messages } }
   }
 
+  /**
+   * SnowLuma 的历史查询以 `message_id` 为锚，且结果包含锚点本身。
+   *
+   * `reverse_order` 缺省为 true，取锚点及更旧的消息；false 取锚点及更新的消息；不带锚点（缺省或 0）
+   * 时取最新一页。锚点查不到时上游答空列表而不是报错。`count` 缺省或不是正数时为 20，上限 200。
+   * 结果始终按时间正序。
+   */
+  private getSnowLumaMessageHistory(conversationId: string, params: Record<string, unknown>) {
+    const count = Math.trunc(Number(params.count))
+    const limit = Number.isFinite(count) && count > 0 ? Math.min(count, 200) : 20
+    const snapshot = this.control.getSnapshot()
+    const conversation = this.getVisibleConversation(conversationId, snapshot)
+    const messageIds = readConversationMessageIds(snapshot, conversation.id)
+    const anchor = Number(params.message_id ?? 0)
+    let window: string[]
+    if (!Number.isInteger(anchor) || anchor === 0) {
+      window = messageIds.slice(-limit)
+    } else {
+      const index = messageIds.findIndex((messageId) => getOneBotMessageId(this.implementation, messageId) === anchor)
+      if (index < 0) return { status: 'ok', retcode: 0, data: { messages: [] } }
+      const newer = ['false', '0', 'no', 'off'].includes(String(params.reverse_order ?? true).toLowerCase())
+      window = newer ? messageIds.slice(index, index + limit) : messageIds.slice(Math.max(0, index + 1 - limit), index + 1)
+    }
+    const messagesById = new Map(snapshot.messages.map((message) => [message.id, message]))
+    // 历史查询同样不得泄露撤回原文，直接隐藏已撤回消息。
+    const messages = window.flatMap((messageId) => messagesById.get(messageId) ?? [])
+      .filter((message) => !isRecalledMessage(message))
+      .map((message) => this.toOneBotMessage(message))
+    return { status: 'ok', retcode: 0, data: { messages } }
+  }
+
+  /** get_friend_list 与 get_friends_with_category 的好友项；SnowLuma 的好友项另带分组 ID。 */
+  private async listOneBotFriends() {
+    const friends = await this.getFriendList()
+    const snapshot = this.control.getSnapshot()
+    return friends.data.map(({ user, nick }) => {
+      const userId = user?.id ?? '0'
+      const participant = snapshot.participants.find(({ id }) => id === userId)
+      return {
+        ...toOneBotAccountProfile(participant ?? { id: userId, name: user?.name ?? userId }),
+        remark: nick ?? '',
+        ...(this.implementation === 'snowluma' ? { category_id: 0 } : {}),
+      }
+    })
+  }
+
   private async toUniversalMessage(message: ReturnType<SandboxControlService['getSnapshot']>['messages'][number]): Promise<Universal.Message> {
     const snapshot = this.control.getSnapshot()
     const conversation = resolveConversation(snapshot, message.conversationId)
@@ -1288,6 +1407,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     const conversation = resolveConversation(snapshot, message.conversationId)
     const directPeerId = conversation ? resolveConversationPeerId(conversation, this.selfId) : undefined
     const sequence = getOneBotMessageSequence(message.id)
+    const messageId = getOneBotMessageId(this.implementation, message.id)
     const participant = snapshot.participants.find(({ id }) => id === message.authorId)
     const groupMember = conversation?.groupId
       ? snapshot.groups.find(({ id }) => id === conversation.groupId)?.members.find(({ participantId }) => participantId === message.authorId)
@@ -1296,15 +1416,15 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     const onebotMessage: Array<{ type: string; data: Record<string, string> }> = message.forwardId
       ? [{ type: 'forward', data: { id: message.forwardId } }]
       : [
-        ...(message.replyToMessageId ? [{ type: 'reply', data: { id: String(getOneBotMessageSequence(message.replyToMessageId)) } }] : []),
+        ...(message.replyToMessageId ? [{ type: 'reply', data: { id: String(getOneBotMessageId(this.implementation, message.replyToMessageId)) } }] : []),
         ...toOneBotMessageSegments(message.content, message.media),
       ]
     return {
       time: Math.floor(new Date(message.createdAt).getTime() / 1000),
       message_type: conversation?.type === 'group' ? 'group' : 'private',
-      message_id: sequence,
+      message_id: messageId,
       message_seq: sequence,
-      real_id: sequence,
+      real_id: messageId,
       sender: {
         user_id: Number(message.authorId),
         nickname: participant?.name ?? this.user?.name ?? message.authorId,
@@ -1312,8 +1432,11 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
       },
       user_id: Number(conversation?.type === 'group' ? message.authorId : directPeerId ?? message.authorId),
       group_id: conversation?.groupId ? Number(conversation.groupId) : undefined,
+      // SnowLuma 的群消息带群名，且 get_msg 与历史消息都不带 message_format。
+      ...(this.implementation === 'snowluma'
+        ? conversation?.groupId ? { group_name: snapshot.groups.find(({ id }) => id === conversation.groupId)?.name ?? '' } : {}
+        : { message_format: 'array' }),
       message: onebotMessage,
-      message_format: 'array',
       font: 0,
       raw_message: toOneBotRawMessage(onebotMessage),
     }
@@ -1407,7 +1530,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
         nickname: node.nickname,
         content,
         time: Math.floor(new Date(node.createdAt).getTime() / 1000),
-        ...(node.sourceMessageId ? { id: String(getOneBotMessageSequence(node.sourceMessageId)) } : {}),
+        ...(node.sourceMessageId ? { id: String(getOneBotMessageId(this.implementation, node.sourceMessageId)) } : {}),
       },
     }
   }

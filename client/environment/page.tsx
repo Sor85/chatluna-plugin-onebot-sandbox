@@ -9,6 +9,7 @@ import { useWorkspace } from '../workspace/context'
 import { invoke } from '../workspace/store'
 import { useTestSpaces } from '../workspace/use-test-spaces'
 import { buildEnvironmentDirectoryModel } from './directory-model'
+import { implementationLabel } from '../shared/implementation'
 
 type Section = 'users' | 'bots' | 'groups' | 'credentials' | 'mcp' | 'http'
 
@@ -77,7 +78,7 @@ export function EnvironmentPage() {
                     key={bot.source.type === 'main' ? `main:${bot.id}` : `space:${bot.source.spaceId}:${bot.id}`}
                     avatar={<SandboxAvatar kind="bot" name={bot.name} src={bot.avatar} className="size-9" />}
                     title={bot.name}
-                    subtitle={`${bot.id} · ${bot.implementation === 'napcat' ? 'NapCat' : 'LLBot'}`}
+                    subtitle={`${bot.id} · ${implementationLabel(bot.implementation)}`}
                     badges={(
                       <>
                         <Badge variant="outline" className="max-w-40"><span className="truncate">{sourceName(t, bot.source)}</span></Badge>

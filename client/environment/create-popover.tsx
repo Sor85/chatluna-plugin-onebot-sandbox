@@ -19,6 +19,7 @@ import { SandboxAvatar } from '../shared/avatar'
 import { useSandbox } from '../workspace/context'
 import { errorText } from '../workspace/store'
 import { AvatarPicker } from './avatar-picker'
+import { implementationOptions } from '../shared/implementation'
 
 export type EnvironmentCreateType = 'user' | 'bot' | 'group' | 'participant'
 
@@ -209,13 +210,17 @@ export function ImplementationSelect({ value, onChange }: {
       <Label>{t('sandbox.field.implementation')}</Label>
       <Select
         value={value}
-        onValueChange={(next) => next && onChange(next === 'llbot' ? 'llbot' : 'napcat')}
-        items={[{ value: 'napcat', label: 'NapCat' }, { value: 'llbot', label: 'LLBot' }]}
+        onValueChange={(next) => {
+          const option = implementationOptions.find(({ value }) => value === next)
+          if (option) onChange(option.value)
+        }}
+        items={implementationOptions}
       >
         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
         <SelectContent className="sandbox-glass">
-          <SelectItem value="napcat">NapCat</SelectItem>
-          <SelectItem value="llbot">LLBot</SelectItem>
+          {implementationOptions.map(({ value, label }) => (
+            <SelectItem key={value} value={value}>{label}</SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </div>

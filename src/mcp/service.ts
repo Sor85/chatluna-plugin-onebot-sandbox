@@ -88,6 +88,7 @@ const READ_RESOURCES = [
   { uri: 'onebot-sandbox://scene-schema', name: '场景 JSON Schema' },
   { uri: 'onebot-sandbox://capabilities/napcat', name: 'NapCat 能力基线' },
   { uri: 'onebot-sandbox://capabilities/llbot', name: 'LLBot 能力基线' },
+  { uri: 'onebot-sandbox://capabilities/snowluma', name: 'SnowLuma 能力基线' },
   { uri: 'onebot-sandbox://errors', name: '稳定错误码' },
   // 事件类型与错误码对称：两者都是封闭词汇，消费者都只能从对外声明学到全集。
   { uri: 'onebot-sandbox://events', name: '事件类型' },
@@ -473,6 +474,7 @@ export class SandboxMcpService {
     if (uri === 'onebot-sandbox://scene-schema') return { testApiVersion: { const: 1 }, scene: { type: 'object' } }
     if (uri === 'onebot-sandbox://capabilities/napcat') return readCapabilityMatrix(this.control, 'napcat')
     if (uri === 'onebot-sandbox://capabilities/llbot') return readCapabilityMatrix(this.control, 'llbot')
+    if (uri === 'onebot-sandbox://capabilities/snowluma') return readCapabilityMatrix(this.control, 'snowluma')
     if (uri === 'onebot-sandbox://errors') return [...STABLE_ERROR_CODES]
     if (uri === 'onebot-sandbox://events') return [...SANDBOX_MCP_EVENT_TYPES]
     if (uri === 'onebot-sandbox://examples') return {

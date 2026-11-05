@@ -28,7 +28,7 @@ export interface SandboxOneBotMessageEventFields {
   message_id: number
   message_seq: number
   real_id?: number
-  message_format: 'array'
+  message_format?: 'array'
   font: number
 }
 
@@ -142,8 +142,10 @@ const nativeActions: SandboxOneBotCapability[] = [
   },
 ]
 
+/** 实现配置里与共享能力同 id 的条目原位替换共享条目（别名或说明不同的实现），其余追加在后。 */
 function createCapabilities(profileCapabilities: SandboxOneBotCapability[]): SandboxOneBotCapability[] {
-  return [
+  const overrides = new Map(profileCapabilities.map((capability) => [capability.id, capability]))
+  const shared = [
     ...Object.entries(standardActions).map(([action, description]) => ({
       id: action,
       action,
@@ -153,8 +155,9 @@ function createCapabilities(profileCapabilities: SandboxOneBotCapability[]): San
       supported: true,
     })),
     ...nativeActions,
-    ...profileCapabilities,
-  ]
+  ].map((capability) => overrides.get(capability.id) ?? capability)
+  const sharedIds = new Set(shared.map(({ id }) => id))
+  return [...shared, ...profileCapabilities.filter(({ id }) => !sharedIds.has(id))]
 }
 
 const baselines: Record<SandboxImplementationProfile, SandboxOneBotProfileBaseline> = {
@@ -254,6 +257,115 @@ const baselines: Record<SandboxImplementationProfile, SandboxOneBotProfileBaseli
       },
     ]),
   },
+  snowluma: {
+    id: 'snowluma',
+    label: 'SnowLuma',
+    snapshotDate: '2026-11-03',
+    sourceRevision: 'e44e4ced17c5911b9aa9db449ba29f2d9e567d2a',
+    appName: 'SnowLuma',
+    appVersion: 'sandbox-2026.11.03',
+    capabilities: createCapabilities([
+      {
+        id: 'message.history.friend',
+        action: 'get_friend_msg_history',
+        handler: 'get_friend_msg_history',
+        description: '获取指定好友的私聊历史消息；以 message_id 为锚且包含锚点，reverse_order 缺省为 true 取锚点及更旧的消息，false 取更新的消息，锚点不存在时返回空列表',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'message.history.group',
+        action: 'get_group_msg_history',
+        handler: 'get_group_msg_history',
+        description: '获取指定群的群聊历史消息；以 message_id 为锚且包含锚点，reverse_order 缺省为 true 取锚点及更旧的消息，false 取更新的消息，锚点不存在时返回空列表',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'group.member.shut-list',
+        action: 'get_group_shut_list',
+        handler: 'get_group_shut_list',
+        description: '获取指定群当前处于禁言状态的成员列表；每项只有 user_id、nickname 与禁言到期时间 shut_up_time',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'group.notice.list',
+        action: '_get_group_notice',
+        handler: 'get_group_notice',
+        description: '获取指定群的公告列表；沙盒公告没有图片、发布设置与阅读数，image 与 images 返回空数组，上游原样透传的 settings 各项与 read_num 按 0 返回',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'group.system-msg',
+        action: 'get_group_system_msg',
+        handler: 'get_group_system_msg',
+        description: '获取机器人有权审批的入群申请与发给它的群邀请；返回不分桶的数组，可按 group_id 过滤，每项的 flag 可直接作为 set_group_add_request 的 flag',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'message.emoji-like',
+        action: 'set_msg_emoji_like',
+        handler: 'set_msg_emoji_like',
+        description: '给群消息贴表情回应；SnowLuma 不支持私聊消息的表情回应，沙盒按 emoji 保存回应参与者',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'message.emoji-like.list',
+        action: 'fetch_emoji_like',
+        handler: 'fetch_emoji_like',
+        description: '获取消息上某个 emoji 的表情回应参与者；沙盒不分页，cookie 恒为空串；nickName 刻意返回参与者真名，而不是复刻 SnowLuma 上游的空串',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'contact.recent.list',
+        action: 'get_recent_contact',
+        handler: 'get_recent_contact',
+        description: '获取当前机器人的最近会话；SnowLuma 上游是空实现，沙盒同样恒返回空数组',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'group.notice.delete',
+        action: '_del_group_notice',
+        handler: 'delete_group_notice',
+        description: '删除指定群公告；公告 ID 可写在 notice_id 或 fid',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'group.member.kick-batch',
+        action: 'set_group_kick_members',
+        handler: 'batch_kick_group_members',
+        description: '一次将多个普通成员踢出群聊',
+        surface: 'native',
+        supported: true,
+      },
+      {
+        id: 'group.album.list',
+        action: 'get_group_album_list',
+        handler: 'get_group_album_list',
+        description: '获取指定群的相册列表',
+        aliases: ['get_qun_album_list'],
+        surface: 'native',
+        supported: false,
+        reason: '沙盒未模拟 SnowLuma 群相册资源',
+      },
+      {
+        id: 'group.ai.characters',
+        action: 'get_ai_characters',
+        handler: 'get_ai_characters',
+        description: '获取 SnowLuma 群聊 AI 声聊角色列表',
+        surface: 'native',
+        supported: false,
+        reason: '沙盒未模拟 SnowLuma 群聊 AI 声聊资源',
+      },
+    ]),
+  },
 }
 
 export function getOneBotProfileBaseline(profile: SandboxImplementationProfile): SandboxOneBotProfileBaseline {
@@ -305,15 +417,44 @@ export function getOneBotMessageSequence(messageId: string): number {
   return Number.parseInt(messageId, 16)
 }
 
-export function resolveOneBotMessageId(rawMessageId: unknown, messageIds: Iterable<string>): string | undefined {
+/**
+ * SnowLuma 的 message_id 是消息键的 int32 哈希：常为负数、从不为 0，与 message_seq 对不上。
+ *
+ * 上游用 sha1，这里用 FNV-1a：客户端也加载本模块，不能依赖 node:crypto；要模拟的只是「与序号无关、
+ * 可能为负」这两点，插件把 message_seq 当 message_id 用时才会在沙盒里失败。
+ */
+function hashOneBotMessageId(messageId: string): number {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < messageId.length; index += 1) {
+    hash ^= messageId.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash | 0) || 1
+}
+
+/** 一条沙盒消息在某个实现里的 OneBot message_id；NapCat 与 LLBot 就是消息序号。 */
+export function getOneBotMessageId(profile: SandboxImplementationProfile, messageId: string): number {
+  return profile === 'snowluma' ? hashOneBotMessageId(messageId) : getOneBotMessageSequence(messageId)
+}
+
+/**
+ * 把插件传来的 message_id 解析回沙盒消息 ID：沙盒自身的消息 ID 原样认，数字按该实现的 message_id 口径匹配。
+ *
+ * SnowLuma 下只认哈希 ID、不认消息序号，这正是要暴露的差异。
+ */
+export function resolveOneBotMessageId(
+  profile: SandboxImplementationProfile,
+  rawMessageId: unknown,
+  messageIds: Iterable<string>,
+): string | undefined {
   const value = String(rawMessageId ?? '').trim()
   if (!value) return
   const ids = [...messageIds]
   if (ids.includes(value)) return value
-  if (!/^\d+$/.test(value)) return
-  const sequence = Number(value)
-  if (!Number.isSafeInteger(sequence)) return
-  return ids.find((id) => getOneBotMessageSequence(id) === sequence)
+  if (!/^-?\d+$/.test(value)) return
+  const numeric = Number(value)
+  if (!Number.isSafeInteger(numeric)) return
+  return ids.find((id) => getOneBotMessageId(profile, id) === numeric)
 }
 
 export function getOneBotMessageEventFields(
@@ -321,6 +462,10 @@ export function getOneBotMessageEventFields(
   messageId: string,
 ): SandboxOneBotMessageEventFields {
   const sequence = getOneBotMessageSequence(messageId)
-  const common = { message_id: sequence, message_seq: sequence, message_format: 'array' as const, font: 0 }
-  return profile === 'napcat' ? { ...common, real_id: sequence } : common
+  const common = { message_id: getOneBotMessageId(profile, messageId), message_seq: sequence, font: 0 }
+  // SnowLuma 的消息事件不带 message_format 与 real_id，real_id 只出现在 get_msg 与历史消息里。
+  if (profile === 'snowluma') return common
+  return profile === 'napcat'
+    ? { ...common, real_id: sequence, message_format: 'array' }
+    : { ...common, message_format: 'array' }
 }

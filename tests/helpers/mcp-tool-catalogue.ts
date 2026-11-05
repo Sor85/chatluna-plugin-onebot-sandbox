@@ -80,6 +80,7 @@ export const MCP_RESOURCE_URIS: string[] = [
   'onebot-sandbox://scene-schema',
   'onebot-sandbox://capabilities/napcat',
   'onebot-sandbox://capabilities/llbot',
+  'onebot-sandbox://capabilities/snowluma',
   'onebot-sandbox://errors',
   'onebot-sandbox://events',
   'onebot-sandbox://examples',
