@@ -374,8 +374,11 @@ describe('原始 OneBot action 的会话观察', () => {
 
     expect(control.getSnapshot().messages.find(({ content }) => content === '标准路径回复')?.conversationId)
       .toBe(conversationId)
-    // 标准发送路径不经过 OneBot action，因此根本不产生机器人动作记录。
-    expect((await control.getOneBotDebugStore().getRecords({ direction: 'action' })).records).toEqual([])
+    // 标准发送路径（Satori sendMessage）按真实适配器的形态补记一条 send_private_msg，回到实例本身不带偏离观察。
+    const { records } = await control.getOneBotDebugStore().getRecords({ direction: 'action' })
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({ requestedAction: 'sendMessage', action: 'send_private_msg', status: 'success' })
+    expect(records[0]).not.toHaveProperty('conversationObservation')
   })
 
   /** 收到消息后按账号或群号查历史——chatluna-character 冷启动回填走的正是这条路径。 */

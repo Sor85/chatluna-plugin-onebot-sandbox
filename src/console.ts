@@ -9,6 +9,7 @@ import type {
 import type { SandboxControlService } from './control-service'
 import type { SandboxHttpApiCapabilityCatalog } from './mcp/http-api'
 import type { SandboxMcpService } from './mcp/service'
+import type { SandboxMcpEndpointDescription } from './mcp/types'
 import { trimSnapshotMessages, type SandboxTestSpaceService } from './test-spaces'
 import {
   DEFAULT_MODEL_REQUEST_PAGE_SIZE,
@@ -116,6 +117,7 @@ export interface SandboxConsoleRegistrar {
 export interface SandboxConsoleTestEndpoint {
   mcp: SandboxMcpService
   httpApi: SandboxHttpApiCapabilityCatalog
+  mcpEndpoint: SandboxMcpEndpointDescription
 }
 
 export function registerConsole(
@@ -481,12 +483,12 @@ export function registerConsole(
   registerListener('onebot-sandbox.model-request-trajectory', getModelRequestTrajectory, { authority: 4 })
   registerListener('onebot-sandbox.clear-model-request-records', clearModelRequestRecords, { authority: 4 })
   if (endpoint) {
-    const { mcp, httpApi } = endpoint
+    const { mcp, httpApi, mcpEndpoint } = endpoint
     mcp.onActivity((running) => {
       void console.broadcast('onebot-sandbox.mcp-activity', { running })
     })
     registerListener('onebot-sandbox.mcp-activity', () => ({ running: mcp.isActivityRunning() }), { authority: 4 })
-    registerListener('onebot-sandbox.mcp-capabilities', () => mcp.getCapabilityCatalog(), { authority: 4 })
+    registerListener('onebot-sandbox.mcp-capabilities', () => ({ ...mcp.getCapabilityCatalog(), endpoint: mcpEndpoint }), { authority: 4 })
     registerListener('onebot-sandbox.http-capabilities', () => httpApi, { authority: 4 })
     registerListener('onebot-sandbox.test-call-records', (input = {}) => mcp.listCallRecords(input), { authority: 4 })
     registerListener('onebot-sandbox.test-call-record', (input) => mcp.getCallRecord(input.recordId), { authority: 4 })

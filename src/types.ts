@@ -274,6 +274,8 @@ export interface SandboxForward {
   id: string
   authorId: string
   createdAt: string
+  /** 卡片标题。从私聊多选转发时为「A和B的聊天记录」；缺省（群聊来源、自定义节点）显示「群聊的聊天记录」。 */
+  title?: string
   nodes: SandboxForwardNode[]
 }
 

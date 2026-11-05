@@ -935,6 +935,22 @@
   }
 }
 
+/* 暗色：身份标签改成半透明底，亮色的实色底块在深色背景上过于刺眼。 */
+.dark .sandbox-message-role-badge.is-owner {
+  color: #fbbf24;
+  background: rgb(251 191 36 / 14%);
+}
+
+.dark .sandbox-message-role-badge.is-admin {
+  color: #4ade80;
+  background: rgb(74 222 128 / 12%);
+}
+
+.dark .sandbox-message-role-badge.is-title {
+  color: #38bdf8;
+  background: rgb(56 189 248 / 14%);
+}
+
 /* 暗色：沿用源插件暗色模式的气泡、引用与转发卡片配色。 */
 .dark .sandbox-message-bubble {
   --sandbox-bubble-bg: rgb(57 57 63);

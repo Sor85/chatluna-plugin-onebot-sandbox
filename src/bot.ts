@@ -81,6 +81,7 @@ export namespace SandboxBot {
 
   export interface Internal {
     _request(action: string, params: Record<string, unknown>): Promise<unknown>
+    _get(action: string, params?: Record<string, unknown>): Promise<unknown>
     getGroupInfo(groupId: string | number, noCache?: boolean): Promise<unknown>
     getGroupMemberList(groupId: string | number): Promise<unknown[]>
     getGroupMemberInfo(groupId: string | number, userId: string | number, noCache?: boolean): Promise<unknown>
@@ -662,6 +663,13 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     }
     const internal: SandboxBot.Internal = {
       _request: request,
+      // 与 Koishi OneBot 适配器的 Internal._get 同义：发出 action、只返回 data，retcode 非 0 时抛错。
+      // ChatLuna 的 OneBot 插件经它读取合并转发；不声明时 Proxy 会把 `_get` 当成 action 名转发。
+      _get: async (action, params = {}) => {
+        const response = await request(action, params) as { retcode?: number, data?: unknown }
+        if (response.retcode === 0) return response.data
+        throw new Error(`OneBot action ${action} 返回 retcode ${response.retcode}`)
+      },
       // Koishi 的 OneBot 适配器提供 camelCase 便捷方法；不显式声明时会被下方 Proxy
       // 当作原始 action 名转发，导致 getGroupInfo 这类调用报「不支持的 action」。
       getGroupInfo: async (groupId, noCache = false) => {
@@ -841,7 +849,41 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     const transformed = await renderSession.transform(h.normalize(fragment))
     const message = parseKoishiOutboundMessage(transformed)
     if (!message.content && !message.mediaSources.length) return []
-    return [await this.deliverOutboundMessage(channelId, message)]
+    // ChatLuna 与 Koishi 插件经 Satori sendMessage 发消息，不经过 action 层；真实适配器在这里会发出
+    // send_group_msg / send_private_msg，调试页按这一形态补记，否则机器人的回复在调试记录里不可见。
+    const action = resolveConversation(this.control.getSnapshot(), channelId)?.type === 'group' ? 'send_group_msg' : 'send_private_msg'
+    const payload = { channel_id: channelId, message: transformed.join('') }
+    const startedAt = Date.now()
+    try {
+      const messageId = await this.deliverOutboundMessage(channelId, message)
+      const conversationObservation = this.observeConversation({ conversationId: channelId })
+      this.control.recordOneBotDebug({
+        botId: this.selfId,
+        implementation: this.implementation,
+        direction: 'action',
+        requestedAction: 'sendMessage',
+        action,
+        status: 'success',
+        durationMs: Date.now() - startedAt,
+        payload,
+        result: { status: 'ok', retcode: 0, data: { message_id: getOneBotMessageSequence(messageId) } },
+        ...(conversationObservation ? { conversationObservation } : {}),
+      })
+      return [messageId]
+    } catch (error) {
+      this.control.recordOneBotDebug({
+        botId: this.selfId,
+        implementation: this.implementation,
+        direction: 'action',
+        requestedAction: 'sendMessage',
+        action,
+        status: 'error',
+        durationMs: Date.now() - startedAt,
+        payload,
+        error: createOneBotDebugError(error),
+      })
+      throw error
+    }
   }
 
   private async deliverOutboundMessage(conversationId: string, message: SandboxOutboundMessage): Promise<string> {

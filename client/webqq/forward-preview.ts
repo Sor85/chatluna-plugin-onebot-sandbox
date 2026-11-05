@@ -19,7 +19,7 @@ function summarizeNode(node: SandboxForwardNode): string {
 // 列表卡片只需要标题、总数和最多 4 行摘要；完整 node 仍由 SandboxForward 承载。
 export function buildForwardPreview(forward: SandboxForward): SandboxForwardPreview {
   return {
-    title: '群聊的聊天记录',
+    title: forward.title ?? '群聊的聊天记录',
     total: forward.nodes.length,
     lines: forward.nodes.slice(0, 4).map((node) => `${node.nickname}：${summarizeNode(node)}`),
   }

@@ -83,6 +83,8 @@ export function ChatSidebar({ onSelectConversation, className }: {
     ? getGroupDirectory(snapshot, operatorId).filter(({ id, name }) => !needle || id.includes(needle) || name.toLowerCase().includes(needle))
     : []
   const empty = tab === 'recent' ? !tree.length : tab === 'friends' ? !friends.length : !groups.length
+  // 新建的测试空间没有任何账号，也就没有发送框里的「添加测试账号」入口；会话栏顶部先给一个。
+  const noAccount = !operator && tab !== 'groups'
 
   const friendAction = (label: string, input: Parameters<typeof store.performFriendAction>[0]) => run(label, () => store.performFriendAction(input))
   const groupAction = (label: string, input: Parameters<typeof store.performGroupAction>[0]) => run(label, () => store.performGroupAction(input))
@@ -141,6 +143,20 @@ export function ChatSidebar({ onSelectConversation, className }: {
       )}
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-0.5 px-2 pb-3">
+          {noAccount && (
+            <CreateEntityPopover
+              type="participant"
+              trigger={(
+                <button type="button" className="flex items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent">
+                  <span className="flex size-9 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground"><PlusIcon className="size-4" /></span>
+                  <span className="flex min-w-0 flex-col">
+                    <strong className="text-[13px] font-medium">{t('sandbox.create.participant')}</strong>
+                    <small className="text-xs text-muted-foreground">{t('sandbox.sidebar.addAccountHint')}</small>
+                  </span>
+                </button>
+              )}
+            />
+          )}
           {tab === 'groups' && (
             <CreateEntityPopover
               type="group"
@@ -177,7 +193,10 @@ export function ChatSidebar({ onSelectConversation, className }: {
                   avatar={resolveAvatar(entry.avatar)}
                   active={!!entry.conversationId && entry.conversationId === conversation?.id}
                   status={t(entry.isFriend ? 'sandbox.sidebar.added' : entry.pendingOutgoing || entry.pendingIncoming ? 'sandbox.sidebar.pending' : 'sandbox.sidebar.notAdded')}
-                  onClick={() => entry.conversationId && onSelectConversation(entry.conversationId)}
+                  // 还没有私聊会话（非好友）时打开资料卡，加好友等操作在资料卡与右键菜单里。
+                  onClick={(event) => entry.conversationId
+                    ? onSelectConversation(entry.conversationId)
+                    : dialogs.openProfile(entry.id, { x: event.clientX, y: event.clientY })}
                 />
               )} />
               <ContextMenuContent className="sandbox-glass">
@@ -233,7 +252,11 @@ export function ChatSidebar({ onSelectConversation, className }: {
               </ContextMenuContent>
             </ContextMenu>
           ))}
-          {empty && <p className="px-3 py-8 text-center text-xs text-muted-foreground">{t('sandbox.sidebar.empty')}</p>}
+          {empty && (
+            <p className="px-3 py-8 text-center text-xs text-muted-foreground">
+              {t(needle ? 'sandbox.sidebar.empty' : `sandbox.sidebar.none.${tab}`)}
+            </p>
+          )}
         </div>
       </ScrollArea>
     </aside>
@@ -296,7 +319,7 @@ function ConversationNode({ node, activeId, expanded, onToggle, onSelect }: {
               avatar={node.avatar}
               time={node.time}
               active={node.id === activeId}
-              className={count ? 'pr-12' : undefined}
+              className={count ? 'pr-12!' : undefined}
               onClick={() => onSelect(node.id)}
             />
             {count > 0 && (

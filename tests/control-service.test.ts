@@ -755,6 +755,8 @@ describe('模拟 QQ 环境消息闭环', () => {
       { content: '较早消息', sourceMessageId: older.messageId },
       { content: '较晚消息', sourceMessageId: newer.messageId },
     ])
+    // 全部选自同一个私聊：卡片标题与 QQ 一致写成「A和B的聊天记录」，而不是「群聊的聊天记录」。
+    expect(control.getForwardMessage({ operatorId: '10001', forwardId: result.forwardId }).title).toBe('测试用户1和ChatLuna的聊天记录')
 
     await control.performFriendAction({
       action: 'poke',

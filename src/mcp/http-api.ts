@@ -205,7 +205,7 @@ export interface SandboxHttpApiEndpoint {
  * 在部分环境里连不上的基址。在 Koishi 主机上等价的目的地是回环地址，从别的机器访问时要
  * 换成这台机器的实际 IP——那个值只有部署者知道，因此这里只保证本机可用。
  */
-function toHttpApiBaseUrl({ host, port, tls }: Pick<SandboxHttpApiEndpoint, 'host' | 'port' | 'tls'>): string {
+export function toHttpApiBaseUrl({ host, port, tls }: Pick<SandboxHttpApiEndpoint, 'host' | 'port' | 'tls'>): string {
   const address = !host || host === '0.0.0.0' ? '127.0.0.1' : host === '::' ? '::1' : host
   // IPv6 字面量在 URL 里必须加方括号，否则冒号会被当成端口分隔符。
   return `${tls ? 'https' : 'http'}://${address.includes(':') ? `[${address}]` : address}:${port}`

@@ -43,7 +43,8 @@ export function WebqqView() {
 
   return (
     // 强调色由插件设置决定，消息气泡与发送框（`messages.css`、`composer.css`）都从这里继承。
-    <div ref={root} className="sandbox-webqq flex min-h-0 flex-1 border-t border-border" style={{ '--sandbox-accent': workspace.appearance.sandboxAccentColor } as React.CSSProperties}>
+    // min-w-0 不能省：否则最小内容宽度（会话栏 + 聊天区）把根节点撑出容器，测得的宽度永远进不了窄屏档。
+    <div ref={root} className="sandbox-webqq flex min-h-0 min-w-0 flex-1 border-t border-border" style={{ '--sandbox-accent': workspace.appearance.sandboxAccentColor } as React.CSSProperties}>
       <ChatSidebar
         className={cn(narrow && region !== 'contacts' && 'hidden', narrow && 'w-full')}
         onSelectConversation={(conversationId) => {

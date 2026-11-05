@@ -6,6 +6,7 @@ import { SchemaForm, useFormValidation } from '@chatluna/ui-schema-form/client'
 import type { SchemaDocument, SchemaDocumentNode } from '@chatluna/schema'
 import { useT } from '../i18n'
 import { OverlayScrollbar } from '../shared/overlay-scrollbar'
+import { settingsDraft, useSettingsDraft } from './draft'
 import './settings.css'
 
 type Values = Record<string, unknown>
@@ -62,6 +63,8 @@ function sectionsOf(document: SchemaDocument, fallbackTitle: string): SettingsSe
  *
  * 各分区的表单都挂载着（未选中的隐藏），共用同一个校验，保存时不会漏掉看不见的分区。
  *
+ * 草稿存在 `draft.ts`，离开设置页再回来不会丢；页头的「设置」标签据此标出未保存修改。
+ *
  * 保存后插件按新配置重启，实时 state 要等重启完成才推来新值；这段时间里表单先显示刚保存的值，
  * 文件戳一变再换成服务端读回的值，避免先闪回旧值。
  */
@@ -69,7 +72,8 @@ export function SettingsPage() {
   const t = useT()
   const live = useLive('onebot-sandbox.settings')
   const validation = useFormValidation()
-  const [draft, setDraft] = React.useState<Values>()
+  const draft = useSettingsDraft().value
+  const setDraft = settingsDraft.setValue
   const [pending, setPending] = React.useState<{ revision: string, value: Values }>()
   const [saving, setSaving] = React.useState(false)
   const [active, setActive] = React.useState(0)
@@ -78,6 +82,10 @@ export function SettingsPage() {
   const saved = pending && pending.revision === data?.revision ? pending.value : data?.value
   const value = draft ?? saved ?? {}
   const dirty = draft !== undefined && !sameValues(draft, saved)
+  // 只在已读到保存值时同步：加载期间 saved 为空，不能把留下的草稿误判成已改动或未改动。
+  React.useEffect(() => {
+    if (data) settingsDraft.setDirty(dirty)
+  }, [data, dirty])
   const fallbackTitle = t('sandbox.nav.settings')
   const sections = React.useMemo(() => data ? sectionsOf(data.schema, fallbackTitle) : [], [data, fallbackTitle])
   const current = sections[Math.min(active, sections.length - 1)]

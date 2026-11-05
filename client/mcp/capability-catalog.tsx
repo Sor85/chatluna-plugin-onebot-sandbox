@@ -99,9 +99,33 @@ export function McpCapabilityCatalog({ catalog, loading, error, onRetry }: {
     && (!needle || [tool.name, tool.description, scopeLabel(tool.scope)].some((value) => value.toLocaleLowerCase().includes(needle))))
   const resources = catalog.resources.filter((resource) => !needle || [resource.name, resource.uri, resource.mimeType].some((value) => value.toLocaleLowerCase().includes(needle)))
   const flags = catalog.serverCapabilities
+  const endpoint = catalog.endpoint
+  // 与 HTTP 能力页的 curl 示例对应：给出能直接粘进 MCP 客户端配置的 Streamable HTTP 条目。
+  const clientConfig = endpoint && JSON.stringify({
+    mcpServers: {
+      'onebot-sandbox': {
+        type: 'streamable-http',
+        url: endpoint.url,
+        headers: { Authorization: `Bearer <${t('sandbox.env.http.tokenPlaceholder')}>` },
+      },
+    },
+  }, null, 2)
+  const code = (text: string) => <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">{text}</code>
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      {endpoint && !endpoint.enabled && (
+        <p className="rounded-lg bg-amber-500/10 p-3 text-xs leading-5 text-amber-800 dark:text-amber-300">{t('sandbox.env.mcp.disabledNotice')}</p>
+      )}
+      {endpoint && (
+        <section className="flex flex-col gap-2">
+          <h3 className="text-xs font-medium">{t('sandbox.env.mcp.connect')}</h3>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {t('sandbox.env.mcp.connectBefore')}{code(endpoint.url)}{t('sandbox.env.mcp.connectAfter')}
+          </p>
+          <pre className="overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-[11px] leading-5">{clientConfig}</pre>
+        </section>
+      )}
       <Summary items={[
         { value: catalog.tools.length, label: t('sandbox.env.mcp.tools') },
         { value: catalog.resources.length, label: t('sandbox.env.mcp.resources') },

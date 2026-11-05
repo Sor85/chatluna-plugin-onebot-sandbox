@@ -31,3 +31,17 @@
   border-top: 1px solid var(--border);
   padding-top: 20px;
 }
+
+/*
+ * SchemaForm 的字段标题是 16px（text-base）、说明是 14px（text-sm），比沙盒其他页面的 13px 正文大一档；
+ * 设置页嵌在沙盒里，统一压到 13px 标题、12px 说明。小节标题由上面的规则单独处理（选择器更具体）。
+ */
+.sandbox-settings-form .text-base {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.sandbox-settings-form .text-sm.text-muted-foreground {
+  font-size: 12px;
+  line-height: 18px;
+}

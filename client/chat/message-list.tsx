@@ -123,6 +123,8 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
   const box = React.useRef<HTMLDivElement>(null)
   const content = React.useRef<HTMLOListElement>(null)
   const sticky = React.useRef(true)
+  /** 上一次滚动事件时的 scrollTop；只有它变小（用户往上滚）才解除贴底。 */
+  const lastTop = React.useRef(0)
   const anchor = React.useRef<{ messageId: string, offset: number } | undefined>(undefined)
   const [historyLoading, setHistoryLoading] = React.useState(false)
   const [highlighted, setHighlighted] = React.useState('')
@@ -154,6 +156,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
     sticky.current = !memory || memory.bottom
     if (sticky.current) scrollToBottom()
     else if (box.current) box.current.scrollTop = memory!.top
+    lastTop.current = box.current?.scrollTop ?? 0
     const key = props.scrollKey
     const element = box.current
     return () => {
@@ -187,10 +190,15 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
     return () => observer.disconnect()
   }, [props.scrollKey, props.messages.length > 0])
 
+  // 程序置底后的滚动事件下一帧才派发，期间图片加载会把内容撑高；只看离底距离会把这次长高误判成
+  // 用户离开底部，ResizeObserver 随之不再跟随。内容长高不会让 scrollTop 变小，用户往上滚才会。
   const handleScroll = () => {
     const element = box.current
     if (!element) return
-    sticky.current = element.scrollHeight - element.scrollTop - element.clientHeight < BOTTOM_THRESHOLD
+    const top = element.scrollTop
+    if (element.scrollHeight - top - element.clientHeight < BOTTOM_THRESHOLD) sticky.current = true
+    else if (top < lastTop.current) sticky.current = false
+    lastTop.current = top
   }
 
   const loadEarlier = async () => {
@@ -400,7 +408,6 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                       event.stopPropagation()
                       props.onToggleSelection(message.id)
                     }}
-                    onContextMenu={(event) => event.stopPropagation()}
                   >
                     {reply && (
                       <button
@@ -498,7 +505,8 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                           <div className="sandbox-message-body">
                             <div className="sandbox-message-stack">
                               <ContextMenu disabled={recalled || props.selectionMode}>
-                                <ContextMenuTrigger render={<div className="sandbox-message-bubble-trigger" />}>
+                                {/* 拦截冒泡放在触发器上：放在气泡里会连这一层菜单也收不到事件；放在这里只挡住外层列表的「清空会话记录」菜单。 */}
+                                <ContextMenuTrigger render={<div className="sandbox-message-bubble-trigger" onContextMenu={(event) => event.stopPropagation()} />}>
                                   {bubble}
                                 </ContextMenuTrigger>
                                 <ContextMenuContent className="sandbox-glass">

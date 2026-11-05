@@ -121,7 +121,7 @@ function DirectoryList({ empty, children }: { empty: string, children: React.Rea
 
 function DirectoryRow({ avatar, title, subtitle, badges }: { avatar: React.ReactNode, title: string, subtitle: string, badges?: React.ReactNode }) {
   return (
-    <article className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent/60">
+    <article className="flex items-center gap-3 rounded-lg px-3 py-2">
       {avatar}
       <span className="flex min-w-0 flex-1 flex-col">
         <strong className="truncate text-[13px] font-medium">{title}</strong>

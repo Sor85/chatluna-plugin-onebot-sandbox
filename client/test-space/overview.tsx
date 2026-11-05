@@ -5,6 +5,7 @@ import type { SandboxTestSpaceStatus, SandboxTestSpaceSummary } from '../../src/
 import type { SandboxWorkspaceState } from '../../src/types'
 import { WebqqView } from '../chat/webqq-view'
 import { useT } from '../i18n'
+import { ConfirmDialog, type ConfirmRequest } from '../shared/confirm-dialog'
 import { SandboxProvider, useSandbox, type SandboxDialogs } from '../workspace/context'
 import { WorkspaceStore } from '../workspace/store'
 import { AgentCursor } from './agent-visuals'
@@ -51,6 +52,7 @@ export function SpaceOverview({ spaces, mainStore, captures, exitZoom, launching
 }) {
   const t = useT()
   const [filter, setFilter] = React.useState<Filter>('all')
+  const [confirm, setConfirm] = React.useState<ConfirmRequest>()
   const overview = React.useRef<HTMLElement>(null)
   const mainView = React.useSyncExternalStore(mainStore.subscribe, mainStore.getView, mainStore.getView)
   const base = mainView.workspace
@@ -141,7 +143,12 @@ export function SpaceOverview({ spaces, mainStore, captures, exitZoom, launching
                   {(space.status === 'completed' || space.status === 'failed') && (
                     <button type="button" className="sandbox-space-card-pill" onClick={() => onAction('reactivate', space.id)}>{t('sandbox.spaces.reactivate')}</button>
                   )}
-                  <Button size="icon-xs" variant="ghost" aria-label={t('sandbox.spaces.delete')} onClick={() => onAction('delete', space.id)}><Trash2Icon /></Button>
+                  <Button size="icon-xs" variant="ghost" aria-label={t('sandbox.spaces.delete')} onClick={() => setConfirm({
+                    title: t('sandbox.spaces.deleteTitle', { name: space.name }),
+                    description: t('sandbox.spaces.deleteDescription'),
+                    action: t('sandbox.spaces.delete'),
+                    onConfirm: () => onAction('delete', space.id),
+                  })}><Trash2Icon /></Button>
                 </div>
               </footer>
             </article>
@@ -153,6 +160,7 @@ export function SpaceOverview({ spaces, mainStore, captures, exitZoom, launching
           <strong className="font-medium">{t('sandbox.spaces.create')}</strong>
         </button>
       </div>
+      <ConfirmDialog request={confirm} onClose={() => setConfirm(undefined)} />
     </section>
   )
 }

@@ -29,8 +29,9 @@ import {
 import type { SandboxOneBotDebugPersistence } from './onebot-debug'
 import { DEFAULT_MODEL_REQUEST_RECORD_MAX_BYTES, MAIN_MODEL_REQUEST_SCOPE_ID, SandboxModelRequestStore, UNATTRIBUTED_MODEL_REQUEST_SCOPE_ID, type SandboxModelRequestPersistence } from './model-request'
 import { SandboxTestEndpointServer, type SandboxTestEndpointProtocolConfig, type SandboxTestEndpointServerConfig } from './mcp/server'
-import { describeHttpApiCapabilities, type SandboxHttpApiCapabilityCatalog } from './mcp/http-api'
+import { describeHttpApiCapabilities, toHttpApiBaseUrl, type SandboxHttpApiCapabilityCatalog } from './mcp/http-api'
 import { SandboxMcpService, type SandboxMcpQuotaConfig } from './mcp/service'
+import type { SandboxMcpEndpointDescription } from './mcp/types'
 import { SandboxTestSpaceService } from './test-spaces'
 import { createScopeDirectory } from './scope-directory'
 import { resolve } from 'node:path'
@@ -285,6 +286,7 @@ export function apply(ctx: Context, config: Config) {
     mcp: SandboxMcpService
     server: SandboxTestEndpointServer
     httpApi: SandboxHttpApiCapabilityCatalog
+    mcpEndpoint: SandboxMcpEndpointDescription
   } | undefined
   try {
     const mcp = new SandboxMcpService(ctx, control, {
@@ -320,6 +322,14 @@ export function apply(ctx: Context, config: Config) {
         port: config.testEndpoint.shared.port,
         tls: Boolean(config.testEndpoint.shared.tlsCertPath && config.testEndpoint.shared.tlsKeyPath),
       }),
+      mcpEndpoint: {
+        enabled: config.testEndpoint.mcp.enabled,
+        url: `${toHttpApiBaseUrl({
+          host: config.testEndpoint.shared.host,
+          port: config.testEndpoint.shared.port,
+          tls: Boolean(config.testEndpoint.shared.tlsCertPath && config.testEndpoint.shared.tlsKeyPath),
+        })}${config.testEndpoint.mcp.path}`,
+      },
     }
   } catch (error) {
     ctx.logger.error('%s\n%s', 'test endpoint init failed; the workspace stays available', errorDetail(error))

@@ -6,6 +6,7 @@ import { useT } from './i18n'
 import { WebqqView } from './chat/webqq-view'
 import { EnvironmentPage } from './environment/page'
 import { OneBotDebugPage } from './onebot-debug/page'
+import { useSettingsDraft } from './settings/draft'
 import { SettingsPage } from './settings/page'
 import { TestCallPage } from './test-call/page'
 import { AgentControlIcon } from './test-space/agent-visuals'
@@ -83,6 +84,7 @@ export function SandboxApp() {
   // 与源插件一致，入口图标跟随 MCP 服务器活动：有测试调用正在进行时转动并带光环。
   const mcpRunning = signal.data?.mcpRunning ?? false
   const spacesLabel = t(mcpRunning ? 'sandbox.nav.spacesRunning' : 'sandbox.nav.spaces')
+  const settingsDirty = useSettingsDraft().dirty
 
   React.useEffect(() => {
     store.activate()
@@ -218,7 +220,13 @@ export function SandboxApp() {
           >
             <h1 className="shrink-0 text-lg font-semibold">{t('onebot-sandbox.title')}</h1>
             <TabsList className="sandbox-scroll-strip min-w-0 max-w-full justify-start overflow-x-auto" aria-label={t('sandbox.nav.label')}>
-              {(spaceId ? SPACE_TAB_VIEWS : TAB_VIEWS).map((id) => <TabsTrigger key={id} value={id}>{t(`sandbox.nav.${id}`)}</TabsTrigger>)}
+              {(spaceId ? SPACE_TAB_VIEWS : TAB_VIEWS).map((id) => (
+                <TabsTrigger key={id} value={id}>
+                  {t(`sandbox.nav.${id}`)}
+                  {/* 离开设置页时草稿保留（settings/draft.ts），这里提示还有没保存的修改。 */}
+                  {id === 'settings' && settingsDirty && <span role="img" aria-label={t('sandbox.settings.unsaved')} className="size-1.5 shrink-0 rounded-full bg-primary" />}
+                </TabsTrigger>
+              ))}
             </TabsList>
             {/* Badge 是 inline-flex，text-overflow 对它无效；省略号要落在内层的块上。 */}
             {space && <Badge variant="secondary" className="min-w-0 max-w-60"><span className="truncate">{t('sandbox.spaces.current', { name: space.name })}</span></Badge>}

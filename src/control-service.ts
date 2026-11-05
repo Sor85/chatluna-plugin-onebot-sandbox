@@ -1738,10 +1738,12 @@ export class SandboxControlService {
       conversationId: input.conversationId,
     })
     const nodes = this.buildForwardNodes(input)
+    const title = this.resolveForwardTitle(input)
     const forward: SandboxForward = {
       id: Random.id(),
       authorId: context.operator.id,
       createdAt: new Date().toISOString(),
+      ...(title ? { title } : {}),
       nodes,
     }
     this.getForwards().push(forward)
@@ -1820,6 +1822,21 @@ export class SandboxControlService {
     }
     if (isRecalledMessage(message)) throw new SandboxDomainError(`消息已撤回：${rawMessageId}`)
     return message.forwardId
+  }
+
+  /**
+   * 与 QQ 一致：消息全部选自同一个私聊时标题是「A和B的聊天记录」，其余情况（群聊、跨会话、自定义节点）
+   * 不写标题，卡片显示默认的「群聊的聊天记录」。调用前 buildForwardNodes 已校验过消息可见。
+   */
+  private resolveForwardTitle(input: SendForwardMessageInput): string | undefined {
+    if (!input.messageIds?.length || input.nodes?.length) return undefined
+    const conversationIds = new Set(input.messageIds.map((id) => this.scene.messages.find((message) => message.id === id.trim())?.conversationId))
+    if (conversationIds.size !== 1) return undefined
+    const [conversationId] = conversationIds
+    const conversation = conversationId ? findVisibleConversation(this.scene, input.operatorId, conversationId) : undefined
+    if (conversation?.type !== 'direct' || !conversation.participantIds) return undefined
+    const names = conversation.participantIds.map((id) => this.scene.participants.find((participant) => participant.id === id)?.name ?? id)
+    return `${names[0]}和${names[1]}的聊天记录`
   }
 
   private buildForwardNodes(input: SendForwardMessageInput): SandboxForwardNode[] {

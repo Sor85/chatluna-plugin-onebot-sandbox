@@ -24,7 +24,15 @@ export interface SandboxMcpResourceCapability {
   requiredScopes: SandboxMcpScope[]
 }
 
+/** MCP Streamable HTTP 端点的连接地址；与 HTTP 测试接口共用监听器，基址同样只保证本机可用。 */
+export interface SandboxMcpEndpointDescription {
+  enabled: boolean
+  url: string
+}
+
 export interface SandboxMcpCapabilityCatalog {
+  /** 控制台读取时附上；MCP 服务本身不知道监听地址。 */
+  endpoint?: SandboxMcpEndpointDescription
   serverCapabilities: {
     tools: boolean
     resources: boolean

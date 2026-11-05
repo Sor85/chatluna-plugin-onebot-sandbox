@@ -610,6 +610,19 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     }) as { data: { message_id: number; res_id: string; forward_id: string } }
     expect(mixed.data.forward_id).toBeTruthy()
     expect(mixed.data.res_id).toBe(mixed.data.forward_id)
+    // 含自定义节点的转发不写标题，卡片沿用默认的「群聊的聊天记录」。
+    expect(control.getForwardMessage({ operatorId: '10001', forwardId: mixed.data.forward_id }).title).toBeUndefined()
+
+    // ChatLuna 的 OneBot 插件经适配器的 internal._get 读取转发：只返回 data，调试记录按真实 action 名记账。
+    const viaGet = await bot.internal._get('get_forward_msg', { message_id: mixed.data.forward_id, id: mixed.data.forward_id }) as {
+      messages: unknown[]
+    }
+    expect(viaGet.messages).toHaveLength(3)
+    expect((await control.getOneBotDebugStore().getRecords({ direction: 'action' })).records[0]).toMatchObject({
+      requestedAction: 'get_forward_msg',
+      action: 'get_forward_msg',
+      status: 'success',
+    })
 
     const outer = await bot.internal._request('get_msg', { message_id: mixed.data.message_id }) as {
       data: { message: Array<{ type: string; data: Record<string, string> }> }
@@ -820,6 +833,20 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     control.replaceScene(snapshot)
     expect(control.getSnapshot().groups.find(({ id }) => id === '30004')!.members
       .find(({ participantId }) => participantId === '10003')!.title).toBe('元老')
+  })
+
+  it('Satori sendMessage 按真实适配器的 send_*_msg 形态记入调试记录', async () => {
+    const { control } = await createControl()
+
+    const [messageId] = await control.bot.sendMessage('group:30001', '经 Satori 发出的群消息')
+    const { records } = await control.getOneBotDebugStore().getRecords({ direction: 'action' })
+    expect(records[0]).toMatchObject({
+      requestedAction: 'sendMessage',
+      action: 'send_group_msg',
+      status: 'success',
+      payload: { channel_id: 'group:30001', message: '经 Satori 发出的群消息' },
+      result: { retcode: 0, data: { message_id: getOneBotMessageSequence(messageId) } },
+    })
   })
 
   it('camelCase 便捷方法映射到真实 OneBot action 而不是未知 action', async () => {

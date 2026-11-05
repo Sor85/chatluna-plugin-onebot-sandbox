@@ -16,6 +16,7 @@ import {
 import { readStored, writeStored } from '@chatluna/ui-storage'
 import { useT } from '../i18n'
 import { SandboxAvatar } from '../shared/avatar'
+import { ConfirmDialog, type ConfirmRequest } from '../shared/confirm-dialog'
 import { getGroupMemberDisplayName } from '../webqq/group-display'
 import { errorText } from '../workspace/store'
 import { useSandbox, useWorkspace } from '../workspace/context'
@@ -52,6 +53,7 @@ export function DetailsPanel({ onClose, onMention, className }: {
   const [draft, setDraft] = React.useState('')
   const [sending, setSending] = React.useState(false)
   const [deleting, setDeleting] = React.useState('')
+  const [confirm, setConfirm] = React.useState<ConfirmRequest>()
   const [error, setError] = React.useState('')
   const [defaultLayout] = React.useState(loadDetailsLayout)
 
@@ -146,7 +148,12 @@ export function DetailsPanel({ onClose, onMention, className }: {
                   className="absolute top-1.5 right-1.5 opacity-0 group-hover/notice:opacity-100 focus-visible:opacity-100"
                   disabled={deleting === announcement.id}
                   aria-label={t('sandbox.details.deleteAnnouncement', { content: announcement.content })}
-                  onClick={() => remove(announcement.id)}
+                  onClick={() => setConfirm({
+                    title: t('sandbox.details.deleteAnnouncementTitle'),
+                    description: t('sandbox.details.deleteAnnouncementDescription', { content: announcement.content }),
+                    action: t('sandbox.common.delete'),
+                    onConfirm: () => void remove(announcement.id),
+                  })}
                 >
                   <Trash2Icon />
                 </Button>
@@ -183,6 +190,7 @@ export function DetailsPanel({ onClose, onMention, className }: {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      <ConfirmDialog request={confirm} onClose={() => setConfirm(undefined)} />
     </aside>
   )
 }
