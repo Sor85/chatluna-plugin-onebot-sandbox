@@ -7,6 +7,7 @@ import type { SchemaDocument, SchemaDocumentNode } from '@chatluna/schema'
 import { useT } from '../i18n'
 import { OverlayScrollbar } from '../shared/overlay-scrollbar'
 import { settingsDraft, useSettingsDraft } from './draft'
+import { localizeSchema } from './localize'
 import './settings.css'
 
 type Values = Record<string, unknown>
@@ -87,7 +88,7 @@ export function SettingsPage() {
     if (data) settingsDraft.setDirty(dirty)
   }, [data, dirty])
   const fallbackTitle = t('sandbox.nav.settings')
-  const sections = React.useMemo(() => data ? sectionsOf(data.schema, fallbackTitle) : [], [data, fallbackTitle])
+  const sections = React.useMemo(() => data ? sectionsOf(localizeSchema(data.schema, t), fallbackTitle) : [], [data, t, fallbackTitle])
   const current = sections[Math.min(active, sections.length - 1)]
 
   const discard = () => {

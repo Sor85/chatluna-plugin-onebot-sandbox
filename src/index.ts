@@ -174,23 +174,29 @@ const endpointFields = {
     mcp: protocolSchema('/mcp', '路径', '按完整路径精确匹配。AI 客户端填写`http://<监听地址>:<端口><路径>`').description('MCP 端点'),
     http: protocolSchema('/api', '路径前缀', '前缀为`/api`时，`/api/v1/tools`列出工具，`/api/v1/tools/<工具名>`调用工具，`/api/v1/resources`读取只读资源').description('HTTP 端点'),
     shared: Schema.intersect([
-      Schema.object(endpointListenFields).description('监听与访问'),
-      Schema.object(endpointQuotaFields).description('调用配额').collapse(),
+      Schema.object(endpointListenFields).extra('i18n', 'group.endpointListen').description('监听与访问'),
+      Schema.object(endpointQuotaFields).extra('i18n', 'group.endpointQuota').description('调用配额').collapse(),
     ]) as Schema<SandboxTestEndpointSharedConfig>,
   }),
 }
 
-/** 插件设置的完整 schema，由沙盒工作台的「设置」页渲染（`src/settings.ts`）。 */
+/**
+ * 插件设置的完整 schema，由沙盒工作台的「设置」页渲染（`src/settings.ts`）。
+ *
+ * 这里的中文是兜底原文，设置页按当前语言换成 `client/locales` 里 `sandbox.settings.schema.` 下的文案
+ * （`client/settings/localize.ts`）：字段按配置路径取键，分区与小节没有自己的配置键，用 `extra('i18n')` 起名。
+ * 改动文案或字段时两份语言文件要一起改（`tests/settings-locale.test.ts`）。
+ */
 export const Settings = Schema.intersect([
-  Schema.object(appearanceFields).extra('label', '外观')
+  Schema.object(appearanceFields).extra('i18n', 'group.appearance').extra('label', '外观')
     .description('WebQQ 界面的颜色与气泡样式，只影响沙盒内的展示'),
   Schema.intersect([
     Schema.object(storageModeFields),
-    Schema.object(sceneMessageFields).description('场景消息'),
-    Schema.object(modelRequestFields).description('模型请求记录'),
-  ]).extra('label', '数据存储')
+    Schema.object(sceneMessageFields).extra('i18n', 'group.sceneMessages').description('场景消息'),
+    Schema.object(modelRequestFields).extra('i18n', 'group.modelRequests').description('模型请求记录'),
+  ]).extra('i18n', 'group.storage').extra('label', '数据存储')
     .description('模拟环境的保存位置，以及消息与模型请求记录的保留上限。上限按主环境与每个 AI 测试空间分别计算'),
-  Schema.object(endpointFields).extra('label', '测试端点')
+  Schema.object(endpointFields).extra('i18n', 'group.endpoint').extra('label', '测试端点')
     .description('供 AI 客户端操控沙盒的 MCP 与 HTTP 接口。两个端点共用监听器、访问限制与调用配额，配额按测试凭证分别计数，超出返回 429'),
 ]) as unknown as Schema<Config>
 
@@ -204,6 +210,15 @@ export const Config = Schema.object(
       .map(([key, field]) => [key, (field as Schema).hidden()]),
   ),
 ).description('设置在 OneBot 沙盒工作台的「设置」页编辑') as unknown as Schema<Config>
+
+declare global {
+  namespace Schemastery {
+    interface Meta {
+      /** 设置页的文案 ID（`client/settings/localize.ts`），只给没有配置键的分区与小节起名。 */
+      i18n?: string
+    }
+  }
+}
 
 declare module 'cordis' {
   interface Context {
