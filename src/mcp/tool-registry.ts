@@ -173,7 +173,7 @@ const ONEBOT_DEBUG_STATUSES: readonly SandboxOneBotDebugStatus[] = ['success', '
 // 模型请求多一个「还在飞」的状态，因此它的筛选集合比另外两族记录宽一项，不合并成一份。
 const MODEL_REQUEST_STATUSES: readonly SandboxModelRequestStatus[] = ['pending', 'success', 'error']
 const TEST_CALL_STATUSES: readonly SandboxTestCallRecord['status'][] = ['success', 'error']
-const TEST_CALL_TRANSPORTS: readonly SandboxTestCallTransport[] = ['mcp', 'http']
+const TEST_CALL_TRANSPORTS: readonly SandboxTestCallTransport[] = ['mcp', 'http', 'chatluna']
 const MODEL_REQUEST_SCOPES: readonly ('all' | 'main' | 'space' | 'unattributed')[] = ['all', 'main', 'space', 'unattributed']
 
 const SPACE_REQUIRED = { type: 'string', description: 'AI 测试空间 ID，由 create_test_space 返回；修改与等待类操作必填' }
@@ -602,7 +602,7 @@ const SERVER_INFO_OUTPUT = {
   properties: {
     name: { type: 'string' },
     testApiVersion: { type: 'number', description: '测试 API 版本；破坏性变更走新版本而不是原地改' },
-    transport: { type: 'string', enum: ['streamable-http', 'http'], description: '承载本次调用的协议表述：streamable-http 是 MCP，http 是 HTTP 测试接口。据此决定错误信封按 JSON-RPC 还是按 HTTP 状态码解析' },
+    transport: { type: 'string', enum: ['streamable-http', 'http', 'chatluna'], description: '承载本次调用的协议表述：streamable-http 是 MCP，http 是 HTTP 测试接口，chatluna 是注册给 ChatLuna 机器人的工具。据此决定错误信封按 JSON-RPC 还是按 HTTP 状态码解析，chatluna 没有信封，错误以工具错误文本给出' },
     stateless: { type: 'boolean' },
     cursor: { ...EVENT_CURSOR_RESULT, description: '当前事件游标：从当前位置开始等待时传它' },
   },
@@ -732,7 +732,7 @@ function getServerInfo(runtime: SandboxMcpToolRuntime) {
   return {
     name: 'onebot-sandbox',
     testApiVersion: 1,
-    transport: runtime.transport === 'http' ? 'http' : 'streamable-http',
+    transport: runtime.transport === 'mcp' ? 'streamable-http' : runtime.transport,
     stateless: true,
     cursor: runtime.currentCursor(),
   }
@@ -2185,7 +2185,7 @@ const TOOL_ENTRIES: SandboxMcpToolEntry[] = [
       properties: {
         tool: { type: 'string' },
         credentialName: { type: 'string' },
-        transport: { type: 'string', enum: [...TEST_CALL_TRANSPORTS], description: '按承载调用的协议表述筛选；省略时同时返回 MCP 与 HTTP 两种来路的记录' },
+        transport: { type: 'string', enum: [...TEST_CALL_TRANSPORTS], description: '按承载调用的协议表述筛选：mcp 是 MCP 客户端，http 是 HTTP 接口，chatluna 是 ChatLuna 机器人工具；省略时返回全部来路的记录' },
         spaceId: { type: 'string', description: '按测试调用记录中的空间筛选；省略时返回全部记录' },
         testRunId: { type: 'string' },
         status: { type: 'string', enum: [...TEST_CALL_STATUSES], description: '按调用结果筛选；省略时两种结果都返回' },

@@ -14,7 +14,7 @@ export interface SchemaText {
 }
 
 /**
- * 按配置路径给 schema 节点分配文案 ID：字段用点分路径（`testEndpoint.shared.host`），单选项用
+ * 按配置路径给 schema 节点分配文案 ID：字段用点分路径（`testEndpoint.shared.host`），单选与多选的选项用
  * `<路径>.option.<值>`。分区与小节没有自己的配置键（intersect 成员与所在字段共用路径），在 `src/index.ts`
  * 里用 `extra('i18n', 'group.<名称>')` 显式起名；没起名的 intersect 成员不翻译，免得与所在字段撞键。
  */
@@ -31,6 +31,9 @@ function visit(document: SchemaDocument, id: number, textId: string | undefined,
     }
   } else if (node.type === 'intersect') {
     for (const child of node.list ?? []) visit(document, child, undefined, path, found)
+  } else if (node.type === 'array' && node.inner !== undefined) {
+    // 多选（`role('checkbox')`）的选项是数组元素上的 union，与单选项共用 `<路径>.option.<值>`。
+    visit(document, node.inner, undefined, path, found)
   } else if (node.type === 'union') {
     for (const child of node.list ?? []) {
       const option = document.refs[child]

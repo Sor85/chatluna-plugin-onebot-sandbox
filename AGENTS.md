@@ -11,7 +11,7 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 
 ## 目录
 
-- `src/`：服务端。领域与场景（`control-service.ts`、`types.ts`）、虚拟 OneBot 机器人（`bot.ts`、`inbound-delivery.ts`）、持久化、AI 测试空间、MCP/HTTP 测试端点（`mcp/`）。
+- `src/`：服务端。领域与场景（`control-service.ts`、`types.ts`）、虚拟 OneBot 机器人（`bot.ts`、`inbound-delivery.ts`）、持久化、AI 测试空间、MCP/HTTP 测试端点（`mcp/`）、注册给 ChatLuna 机器人的工具（`chatluna/tools.ts`）。
 - `src/webui.ts`：把控制台契约（`console-contract.ts`）注册为 `chatluna_webui` 的 action；场景变更折叠成实时 state `onebot-sandbox.signal`，客户端收到信号后重读工作区。
 - `src/settings.ts`：插件设置的读写（state `onebot-sandbox.settings`、action `onebot-sandbox.settings.save`），经 `chatluna_config.save` 写回 chatluna.yml 中本插件条目。
 - `src/lifecycle.ts`：Cordis 4 没有 `ready`/`dispose` 事件，启动任务推迟到下一轮宏任务，收尾挂在 Fiber effect 上。
@@ -41,6 +41,7 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 - 机器人 internal（`src/bot.ts`）：Koishi OneBot 适配器的方法（`_get`、camelCase 便捷方法）要显式声明，未声明的属性会被兜底 Proxy 当成 action 名转发。Satori `sendMessage` 不经过 action 层，调试记录按真实适配器的 `send_group_msg` / `send_private_msg` 形态补记（`requestedAction` 为 `sendMessage`）。
 - 唤醒规则（`src/chatluna/wakeup.ts`，MCP `get_wakeup_rules` 与 `send_message` 说明里的指引）：v2 只有 `ctx.chat` 一条对话管线，读 `ctx.chat.binding(identity).resolution.values` 里生效的 `chat.engine`、`chat.activation`、`chat.preset`、`chat.merge`、`chat.proactive`，`ctx.chat.activationDeciders()` 过滤掉未注册与不适用于当前引擎的判定器，`ctx.routing.rules()` 判断有没有按调用方没给出的维度（机器人、会话、发言者、消息内容）写的覆盖，有就标 `conditional`。不调用 `ctx.chat.decide`：它会登记去重、开合并窗口，`activity`/`judge` 判定器还会改状态、调模型。路由身份与 `inbound-delivery.ts` 投递时的 Session 一致（channelId 是会话 ID，会话实例用实例自己的 ID；guildId 是群号；selfId 是接收的机器人），同一会话里每个机器人各答一份。三项服务按名称经 `findChatLunaRuntime` 现取，不写进 `inject`；v2 的 `chatluna` 服务是 AI 动词服务，与回复无关，不据它判断已加载。`rule` 判定器的口径与默认值照抄 `decideActivation`：消息内含昵称只在昵称开头开着时判定，私聊关掉无需命令后 @ 同样算数。
 - MCP/HTTP 测试端点（`src/mcp/`）：事件纪元只在进程启动时生成一次，序号全局递增；破坏性操作（`withConfirmation`）只给所在作用域（某个测试空间或主场景）画失效线（`invalidateScope`），清掉该作用域的事件、幂等结果与确认令牌，不轮转全局纪元，否则并行空间手里的游标会一起过期。确认令牌只在校验通过时消耗，令牌无效、过期、工具不符、版本已变、参数不一致各报一句原因；工具不符与参数不一致不作废令牌，改正后可以重试。MCP 表述下的传输层拒绝（来源、Origin、凭证、非 POST）答 JSON-RPC 错误信封，`error.data` 与 HTTP 信封同形；`resources/read` 找不到资源答 MCP 规范的 -32002。测试空间不存在抛 `SandboxSpaceNotFoundError`，归一为 `space_not_found`（HTTP 404）。
+- 工具调用（注册给 ChatLuna 机器人的工具，`src/chatluna/tools.ts`，设置 `botTools`，默认关闭；在设置页「测试端点」分区里排在调用配额之后，配置键仍在顶层而不进 `testEndpoint`，它不经监听器）：把 MCP 工具以 `sandbox_<工具名>` 注册到 v2 的 `ctx.tools`。调用经 `SandboxMcpService.createInternalCaller` 走与网络表述同一条 `invokeTool`，权限范围、配额、幂等、确认令牌与测试调用记录不另写一份；内部凭证不进凭证列表、摘要为空，网络端点认不出它；记录来路是 `chatluna`（`SandboxTestCallTransport`，界面筛选与 `get_server_info` 同步）。`tools` 不进 `inject`，开启时才用 `ctx.inject(['tools'])` 子作用域注册，理由同 `findChatLunaRuntime`。参数 schema 经 `toSupportedJsonSchema` 去掉 v2 不认的关键字（取值范围改写进说明，`type` 数组拆成 oneOf），新增工具 schema 用到别的关键字时 `tests/bot-tools.test.ts` 会红。v2 只把错误 message 交给模型，错误码、恢复建议与 traceId 写进正文（`formatToolError`）。
 - 领域规则（`control-service.ts`、`conversation-resolution.ts`）：群邀请只能邀请好友，界面的「邀请入群」菜单同样只对好友显示。会话对操作者不可用时，群聊说明不是群成员、操作者自己的私聊说明两人不是好友；别人之间的私聊仍答「会话不存在」，不透露它是否存在（`describeInvisibleConversation`）。重置场景时版本号继续递增，不回到初始场景的值，否则重置前的同版本快照能重新通过乐观锁。合并转发的自定义节点可以同时带文字、媒体与嵌套转发，服务端摘要、OneBot 节点（出站与 `get_forward_msg`）与界面都经 `forwardNodeText` 取正文，`[合并转发]` 占位与引用转发消息带来的摘要不算正文。
 - 模型请求出处：`src/chatluna/state.ts` 订阅 `chat/receive` 建立「ChatLuna 会话 ID → 机器人 + 会话」映射，`chatluna/agent-step` 记下最近一步的 `turn`/`step`，机器人发消息时写进 `message.chatLuna.trace`，前端链接到 `/traces/<sessionId>?turn=&step=`。v2 回复经异步渲染队列发出，可能晚于 agent 转 idle，所以出处在发消息时标注而不是回合结束时回填；会话出现新的用户消息即清空，命令回复不沿用上一轮。
 - 数据目录：`data/chatluna/onebot-sandbox`；数据库表名前缀 `onebot_sandbox_`；MCP 资源 URI 前缀 `onebot-sandbox://`。
@@ -56,5 +57,5 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 
 ## 迁移进度
 
-- 已完成：场景/机器人/投递/持久化/测试空间/MCP 与 HTTP 端点的服务端；WebQQ 聊天界面（会话树、消息、发送框、搜索、多选转发、表情回应、群公告、资料卡、实体编辑）；OneBot 调试、测试调用、环境管理（目录、测试凭证、MCP/HTTP 能力目录）、插件设置页面；AI 测试空间（总览、缩略图、进出缩放、被控覆盖层与任务栏）；等待态、用量与模型请求出处接 v2 agent 事件与 trace 页。
+- 已完成：场景/机器人/投递/持久化/测试空间/MCP 与 HTTP 端点的服务端；WebQQ 聊天界面（会话树、消息、发送框、搜索、多选转发、表情回应、群公告、资料卡、实体编辑）；OneBot 调试、测试调用、环境管理（目录、测试凭证、MCP/HTTP 能力目录）、插件设置页面；AI 测试空间（总览、缩略图、进出缩放、被控覆盖层与任务栏）；等待态、用量与模型请求出处接 v2 agent 事件与 trace 页；MCP 能力经「工具调用」注册给 ChatLuna 机器人。
 - 待完成：`tests/phase2/` 按 v2 重写；测试宿主的定时器清理泄漏（vitest 报 370 个未处理错误，用例本身通过）。

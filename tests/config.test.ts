@@ -35,9 +35,11 @@ describe('插件持久化配置', () => {
 
   it('每个顶层字段都有标题', () => {
     for (const [key, field] of Object.entries(Config.dict ?? {})) {
-      if (key === 'testEndpoint') continue
+      // 两个分组各是所在分区的唯一字段，分区标题就是它的标题；分组里的字段另外核对。
+      if (key === 'testEndpoint' || key === 'botTools') continue
       expect(labelOf(field), key).toMatch(/\S/)
     }
+    for (const [key, field] of Object.entries(Config.dict?.botTools.dict ?? {})) expect(labelOf(field), key).toMatch(/\S/)
   })
 
   /**
@@ -45,10 +47,10 @@ describe('插件持久化配置', () => {
    * 根上下文里不存在 `chatluna_usage`。一旦有人把它写回服务声明，插件配置页就会长期显示
    * 「可选服务: chatluna_usage (未加载)」，而功能其实一直正常——纯展示性错误，别的测试不会变红。
    */
-  it('包元数据的服务声明与入口 inject 一致，Database 与设置页用的 chatluna_config 只作为可选服务出现', () => {
+  it('包元数据的服务声明与入口 inject 一致，Database、设置页用的 chatluna_config 与机器人工具用的 tools 只作为可选服务出现', () => {
     const manifest = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
     expect(manifest.cordis.service.required).toEqual(inject)
-    expect(manifest.cordis.service.optional).toEqual(['chatluna_config', 'database'])
+    expect(manifest.cordis.service.optional).toEqual(['chatluna_config', 'database', 'tools'])
   })
 
   it('场景消息保留上限可配置，且描述说明会丢弃历史消息', () => {
@@ -147,7 +149,7 @@ describe('测试控制端点配置', () => {
     const endpoint = Config.dict?.testEndpoint.dict
     if (!endpoint) throw new Error('测试控制端点配置分组缺失')
 
-    const descriptions = [Config.dict, endpoint.mcp.dict, endpoint.http.dict, fieldsOf(endpoint.shared)]
+    const descriptions = [Config.dict, endpoint.mcp.dict, endpoint.http.dict, fieldsOf(endpoint.shared), Config.dict?.botTools.dict]
       .flatMap((group) => Object.values(group ?? {}).map((field) => field.meta.description))
       .filter((text): text is string => typeof text === 'string')
 

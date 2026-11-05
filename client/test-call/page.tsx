@@ -118,6 +118,7 @@ export function TestCallPage() {
     { value: 'all', label: t('sandbox.testCall.transport.all') },
     { value: 'mcp', label: transportLabel('mcp') },
     { value: 'http', label: transportLabel('http') },
+    { value: 'chatluna', label: transportLabel('chatluna') },
   ]
 
   return (

@@ -121,8 +121,9 @@ export interface SandboxTestCallRecordError {
  *
  * 两种表述共用同一套测试凭证、配额与测试调用记录，因此只看凭证名与来源 IP 分不出调用来路——
  * 同一个凭证既可能被 MCP 客户端使用，也可能被 HTTP 脚本使用。复盘时必须能区分，故单独建模。
+ * `chatluna` 不经网络：工具注册给 ChatLuna 机器人，由进程内调用方发起（`src/chatluna/tools.ts`）。
  */
-export type SandboxTestCallTransport = 'mcp' | 'http'
+export type SandboxTestCallTransport = 'mcp' | 'http' | 'chatluna'
 
 export interface SandboxTestCallRecordListItem {
   id: string

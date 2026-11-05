@@ -206,6 +206,24 @@ function normalizeStoredCredential(value: unknown): SandboxTestCredential | unde
   }
 }
 
+function hasContentArgument(declaration: SandboxMcpToolCapability): boolean {
+  return Boolean((declaration.inputSchema as { properties?: Record<string, unknown> }).properties?.content)
+}
+
+/**
+ * 进程内调用方：按创建时给定的权限范围看到并调用工具，见 `SandboxMcpService.createInternalCaller`。
+ * 权限范围在创建时定死，改动要重建调用方（插件按新配置重启即是）。
+ */
+export interface SandboxInternalCaller {
+  readonly scopes: readonly SandboxMcpScope[]
+  /** 权限范围内的工具声明，说明按实例配置与当前唤醒规则改写过，与 `tools/list` 同源。 */
+  listTools(): SandboxMcpToolCapability[]
+  /** 单个工具的当前声明；只读一次唤醒规则，供需要随时刷新说明的调用方使用。 */
+  describeTool(tool: string): SandboxMcpToolCapability | undefined
+  /** 失败时抛出带 traceId 的 `SandboxMcpError`，与网络表述的错误信封同源。 */
+  callTool(tool: string, args: unknown): Promise<unknown>
+}
+
 interface IdempotencyEntry {
   argumentsHash: string
   result: unknown
@@ -428,12 +446,12 @@ export class SandboxMcpService {
    * 路径（`listTools`、`getCapabilityCatalog`、`onebot-sandbox://guide`）都经这里，声明因此不可能与
    * 实际配置漂移。
    */
-  private describeTools(): SandboxMcpToolCapability[] {
+  private describeTools(declarations: readonly SandboxMcpToolCapability[] = SANDBOX_MCP_TOOL_DECLARATIONS): SandboxMcpToolCapability[] {
     const window = this.idempotencyWindowDescription()
     // 唤醒指引整份清单只读一次：一次 tools/list 里的每个工具都问一遍运行时既无必要，也会让同一次
-    // 响应里出现两份不同时刻的答案。
-    const wakeup = this.wakeup.read().guidance
-    return SANDBOX_MCP_TOOL_DECLARATIONS.map((declaration) => {
+    // 响应里出现两份不同时刻的答案。只在清单里真有带正文的工具时才读。
+    const wakeup = declarations.some(hasContentArgument) ? this.wakeup.read().guidance : undefined
+    return declarations.map((declaration) => {
       const clone = structuredClone(declaration)
       const schema = clone.inputSchema as { description?: string; properties?: Record<string, { description?: string }> }
       if (schema.properties?.idempotencyKey) schema.properties.idempotencyKey.description = window
@@ -443,6 +461,34 @@ export class SandboxMcpService {
       if (schema.properties?.content) schema.description = [schema.description, wakeup].filter(Boolean).join(' ')
       return clone
     })
+  }
+
+  /**
+   * 进程内的调用方（ChatLuna 机器人工具）：没有 Bearer 凭证，但权限范围、配额、并发、幂等、确认令牌
+   * 与测试调用记录照样经 `invokeTool` 这一条路径，与两种网络表述没有第二份实现。
+   *
+   * 它的凭证不进凭证列表也不落盘：摘要为空，`authenticate` 永远匹配不到，网络端点因此拿不到它的权限。
+   * 配额按它自己的标识计数，不与任何测试凭证共用额度。
+   */
+  createInternalCaller(input: { id: string; name: string; scopes: readonly SandboxMcpScope[]; transport: SandboxTestCallTransport }): SandboxInternalCaller {
+    const credential: SandboxTestCredential = {
+      id: `internal:${input.id}`,
+      name: input.name,
+      scopes: normalizeScopes(input.scopes),
+      enabled: true,
+      tokenDigest: '',
+      createdAt: new Date().toISOString(),
+    }
+    const declarations = SANDBOX_MCP_TOOL_DECLARATIONS.filter(({ scope }) => credential.scopes.includes(scope))
+    return {
+      scopes: [...credential.scopes],
+      listTools: () => this.describeTools(declarations),
+      describeTool: (tool) => {
+        const declaration = declarations.find(({ name }) => name === tool)
+        return declaration ? this.describeTools([declaration])[0] : undefined
+      },
+      callTool: (tool, args) => this.invokeTool(credential, tool, args, { transport: input.transport }),
+    }
   }
 
   private idempotencyWindowDescription(): string {
@@ -596,7 +642,10 @@ export class SandboxMcpService {
    * 能力与额度。
    */
   async callTool(token: string, tool: string, argumentsValue: unknown, context: SandboxTestCallContext = {}): Promise<unknown> {
-    const credential = this.requireCredential(token)
+    return await this.invokeTool(this.requireCredential(token), tool, argumentsValue, context)
+  }
+
+  private async invokeTool(credential: SandboxTestCredential, tool: string, argumentsValue: unknown, context: SandboxTestCallContext): Promise<unknown> {
     const args = asRecord(argumentsValue)
     const transport = context.transport ?? 'mcp'
     const startedAt = Date.now()

@@ -33,6 +33,7 @@ import { describeHttpApiCapabilities, toHttpApiBaseUrl, type SandboxHttpApiCapab
 import { SandboxMcpService, type SandboxMcpQuotaConfig } from './mcp/service'
 import type { SandboxMcpEndpointDescription } from './mcp/types'
 import { SandboxTestSpaceService } from './test-spaces'
+import { registerSandboxBotTools, type SandboxBotToolsConfig } from './chatluna/tools'
 import { createScopeDirectory } from './scope-directory'
 import { resolve } from 'node:path'
 import type { SandboxAppearance, SandboxPersistenceMode } from './types'
@@ -88,6 +89,7 @@ export interface Config extends SandboxAppearance {
   modelRequestRecordLimit: number
   modelRequestRecordMaxMegabytes: number
   testEndpoint: SandboxTestEndpointConfig
+  botTools: SandboxBotToolsConfig
 }
 
 /** 字节上限以 MB 暴露给配置页；内部仍按字节比较，换算只发生在这一处。 */
@@ -107,7 +109,7 @@ const protocolSchema = (path: string, pathLabel: string, pathDescription: string
  * `description` 是面板说明（`client/settings/page.tsx`）。分区内部的 `.description()` 照常渲染成小节标题。
  *
  * 分区只是页面结构，配置键仍是平铺的顶层字段。intersect 对同名键只做浅合并，所以同一个顶层键
- * 只能放在一个分区里：测试端点整体是一个分区，内部再按端点、监听与配额分小节。
+ * 只能放在一个分区里：测试端点整体是一个分区，内部再按端点、监听、配额与工具调用分小节。
  */
 const appearanceFields = {
   sandboxAccentColor: Schema.string().default('#2563eb').role('color').extra('label', '强调色')
@@ -180,6 +182,22 @@ const endpointFields = {
   }),
 }
 
+// 工具调用是同一组工具的第三种表述，因此放进测试端点分区，排在调用配额之后；配置键仍在顶层，
+// 它不经监听器，放进 `testEndpoint` 会读成受端点开关与监听地址约束。
+const botToolFields = {
+  botTools: Schema.object({
+    enabled: Schema.boolean().default(false).extra('label', '启用')
+      .description('把测试端点的工具以`sandbox_`前缀注册到 ChatLuna'),
+    scopes: Schema.array(Schema.union([
+      Schema.const('read').description('读取'),
+      Schema.const('interact').description('交互'),
+      Schema.const('manage').description('环境管理'),
+      Schema.const('debug').description('调试'),
+    ])).default(['read', 'interact']).role('checkbox').extra('label', '权限范围')
+      .description('只注册所选范围内的工具，含义与测试凭证的权限范围相同；修改操作同样只能作用于 AI 测试空间'),
+  }).description('工具调用'),
+}
+
 /**
  * 插件设置的完整 schema，由沙盒工作台的「设置」页渲染（`src/settings.ts`）。
  *
@@ -196,8 +214,8 @@ export const Settings = Schema.intersect([
     Schema.object(modelRequestFields).extra('i18n', 'group.modelRequests').description('模型请求记录'),
   ]).extra('i18n', 'group.storage').extra('label', '数据存储')
     .description('模拟环境的保存位置，以及消息与模型请求记录的保留上限。上限按主环境与每个 AI 测试空间分别计算'),
-  Schema.object(endpointFields).extra('i18n', 'group.endpoint').extra('label', '测试端点')
-    .description('供 AI 客户端操控沙盒的 MCP 与 HTTP 接口。两个端点共用监听器、访问限制与调用配额，配额按测试凭证分别计数，超出返回 429'),
+  Schema.object({ ...endpointFields, ...botToolFields }).extra('i18n', 'group.endpoint').extra('label', '测试端点')
+    .description('供 AI 客户端操控沙盒的 MCP 与 HTTP 接口，同一组工具也可以交给 ChatLuna 机器人调用。两个端点共用监听器、访问限制与调用配额，配额按测试凭证分别计数，超出返回 429'),
 ]) as unknown as Schema<Config>
 
 /**
@@ -206,7 +224,7 @@ export const Settings = Schema.intersect([
  */
 export const Config = Schema.object(
   Object.fromEntries(
-    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...modelRequestFields, ...endpointFields })
+    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...modelRequestFields, ...endpointFields, ...botToolFields })
       .map(([key, field]) => [key, (field as Schema).hidden()]),
   ),
 ).description('设置在 OneBot 沙盒工作台的「设置」页编辑') as unknown as Schema<Config>
@@ -349,6 +367,7 @@ export function apply(ctx: Context, config: Config) {
   } catch (error) {
     ctx.logger.error('%s\n%s', 'test endpoint init failed; the workspace stays available', errorDetail(error))
   }
+  if (endpoint) registerSandboxBotTools(ctx, endpoint.mcp, config.botTools)
   const appearance: SandboxAppearance = {
     sandboxTimBubbleTail: config.sandboxTimBubbleTail,
     sandboxIncomingBubbleStyle: config.sandboxIncomingBubbleStyle,
