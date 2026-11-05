@@ -1,8 +1,8 @@
 import * as React from 'react'
-import { PauseIcon } from 'lucide-react'
+import { Button } from '@chatluna/ui-kit'
 import { useT } from '../i18n'
 import { mountAgentOverlayEffect } from '../workspace/agent-overlay-effect'
-import { AgentControlIcon, AgentCursor } from './agent-visuals'
+import { AgentCursor } from './agent-visuals'
 
 /**
  * ego lite 被控空间覆盖层的 Web 复刻：scrim + 点阵纹理 + WebGL 边缘光 + agent 光标 + 顶部任务栏。
@@ -29,17 +29,13 @@ export function AgentObserveOverlay({ spaceName, busy, style, onTakeOver, onTerm
       <div className="sandbox-agent-observe-dots" aria-hidden="true" />
       <canvas ref={canvas} className="sandbox-agent-observe-canvas" aria-hidden="true" />
       <AgentCursor />
-      <div className="sandbox-agent-taskbar">
-        <span className="sandbox-agent-taskbar-pause" aria-hidden="true">
-          <PauseIcon className="size-3.5" fill="currentColor" />
-        </span>
-        <span className="sandbox-agent-taskbar-control-icon"><AgentControlIcon running /></span>
-        <span className="sandbox-agent-taskbar-text">
-          <strong className="sandbox-agent-taskbar-title">{spaceName}</strong>
-          <span className="sandbox-agent-taskbar-subtitle">{t('sandbox.spaces.taskbar.subtitle')}</span>
-        </span>
-        <button type="button" className="sandbox-agent-taskbar-takeover" disabled={busy} onClick={onTakeOver}>{t('sandbox.spaces.taskbar.takeOver')}</button>
-        <button type="button" className="sandbox-agent-taskbar-terminate" disabled={busy} onClick={onTerminate}>{t('sandbox.spaces.taskbar.terminate')}</button>
+      {/* 空间名已显示在页头的空间标签上，任务栏只留状态与操作，名称作为工具条的无障碍名称。 */}
+      <div role="toolbar" aria-label={spaceName} className="sandbox-agent-taskbar sandbox-glass bg-popover text-popover-foreground shadow-popup ring-1 ring-border">
+        <span className="sandbox-agent-pulse-dot" aria-hidden="true" />
+        <span className="sandbox-agent-taskbar-status">{t('sandbox.spaces.taskbar.subtitle')}</span>
+        <span className="sandbox-agent-taskbar-divider" aria-hidden="true" />
+        <Button size="sm" className="rounded-full" disabled={busy} onClick={onTakeOver}>{t('sandbox.spaces.taskbar.takeOver')}</Button>
+        <Button size="sm" variant="ghost" className="rounded-full text-destructive" disabled={busy} onClick={onTerminate}>{t('sandbox.spaces.taskbar.terminate')}</Button>
       </div>
     </div>
   )

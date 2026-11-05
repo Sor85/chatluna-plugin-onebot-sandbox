@@ -140,19 +140,14 @@
 .sandbox-agent-observe-canvas { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--sandbox-agent-color); }
 .sandbox-agent-observe .sandbox-agent-cursor { z-index: 20; }
 
-/* ego 空间内任务栏（ego 在底部，本项目置顶）：#0009 深色胶囊，白字标题 + 浅蓝状态 + 白色接管 + 红字终止任务。 */
-.sandbox-agent-taskbar { position: absolute; top: calc(var(--sandbox-page-header-height, 58px) / 2); left: 50%; z-index: 25; display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: 999px; color: #fff; background: rgb(0 0 0 / 60%); box-shadow: 0 16px 48px rgb(0 0 0 / 35%); backdrop-filter: blur(10px); pointer-events: auto; transform: translate(-50%, -50%); }
-.sandbox-agent-taskbar-pause { display: inline-flex; flex: none; color: rgb(255 255 255 / 55%); }
-.sandbox-agent-taskbar-control-icon { display: inline-flex; flex: none; overflow: visible; color: #fff; }
-.sandbox-agent-taskbar-text { display: flex; min-width: 0; flex-direction: column; margin-right: 4px; text-align: left; }
-.sandbox-agent-taskbar-title { max-width: 220px; overflow: hidden; font-size: 12px; font-weight: 600; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.sandbox-agent-taskbar-subtitle { color: rgb(193 217 244); font-size: 11px; line-height: 15px; white-space: nowrap; }
-.sandbox-agent-taskbar button { flex: none; padding: 6px 14px; border: 0; border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 18px; }
-.sandbox-agent-taskbar button:disabled { opacity: 0.6; }
-.sandbox-agent-taskbar-takeover { color: #fff; background: rgb(54 50 49); }
-.sandbox-agent-taskbar-takeover:hover { background: rgb(70 65 64); }
-.sandbox-agent-taskbar-terminate { color: #ff5449; background: rgb(54 50 49); }
-.sandbox-agent-taskbar-terminate:hover { background: rgb(70 65 64); }
+/*
+ * 任务栏（ego 在底部，本项目置顶）：样式跟随 v2 与沙盒其他非模态浮层，即毛玻璃胶囊（.sandbox-glass）、主题描边与投影，
+ * 不用 ego 原版的深色胶囊。单行：运行中的脉冲点 + 状态，分隔线后是 ui-kit Button，接管为主操作（实心），
+ * 终止任务为次要的危险操作（ghost + 红字）。高度 34px，放得进页头那一条。
+ */
+.sandbox-agent-taskbar { position: absolute; top: calc(var(--sandbox-page-header-height, 58px) / 2); left: 50%; z-index: 25; display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 14px; border-radius: 999px; pointer-events: auto; transform: translate(-50%, -50%); }
+.sandbox-agent-taskbar-status { font-size: 13px; font-weight: 500; line-height: 18px; white-space: nowrap; }
+.sandbox-agent-taskbar-divider { flex: none; width: 1px; height: 16px; margin: 0 6px 0 10px; background: var(--border); }
 
 /* 任务栏控制图标：光标静止，八向射线绕 (8.7, 8.4) 旋转；运行态外套一圈双层反向光带。 */
 .sandbox-agent-control { position: relative; display: inline-flex; width: 20px; height: 20px; flex: none; align-items: center; justify-content: center; overflow: visible; }
