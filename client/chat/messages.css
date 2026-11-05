@@ -27,6 +27,11 @@
   line-height: 20px;
 }
 
+/* 合并转发详情（chat/forward.tsx）复用整套消息行样式；左右边距由弹窗正文提供，上下只留出气泡投影。 */
+.sandbox-message-list.sandbox-forward-list {
+  padding: 2px 0 8px;
+}
+
 .sandbox-message-event {
   align-self: center;
   width: fit-content;

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { PaperclipIcon, SearchIcon } from 'lucide-react'
+import { ChevronRightIcon, PaperclipIcon, SearchIcon } from 'lucide-react'
 import {
   Button,
   cn,
@@ -19,11 +19,12 @@ import { useT } from '../i18n'
 import { SandboxAvatar, type AvatarKind } from '../shared/avatar'
 import { useRetained } from '../shared/use-retained'
 import type { ForwardDialogFrame } from '../webqq/forward-dialog-stack'
-import { isMergedForwardNode } from '../webqq/forward-cluster'
+import { getForwardNodeClusterClass, isMergedForwardNode } from '../webqq/forward-cluster'
 import { buildForwardPreview } from '../webqq/forward-preview'
 import { formatMediaSize, getMediaLabel } from '../webqq/message-presentation'
 import { useWorkspace } from '../workspace/context'
 import { errorText } from '../workspace/store'
+import './messages.css'
 
 export interface ForwardTargetOption {
   conversationId: string
@@ -159,7 +160,7 @@ function ForwardFrameDialog({ stack, depth, imageOpen, onCloseFrom, onOpenForwar
   onOpenImage(url: string): void
 }) {
   const t = useT()
-  const { participants, media, mediaFailures } = useWorkspace()
+  const { participants, media, mediaFailures, workspace } = useWorkspace()
   const current = stack[depth]
   // 退场动画期间保留这一层的内容，不闪成「暂无消息」。
   const frame = useRetained(current)
@@ -169,6 +170,7 @@ function ForwardFrameDialog({ stack, depth, imageOpen, onCloseFrom, onOpenForwar
     const text = forwardNodeText(item)
     return item.media?.length === 1 && text === `[${getMediaLabel(item.media[0]!)}] ${item.media[0]!.name}` ? '' : text
   }
+  const { appearance } = workspace
   return (
     <Dialog open={!!current} onOpenChange={(open) => !open && !imageOpen && onCloseFrom(depth)}>
       <DialogContent className="flex max-h-[80vh] flex-col gap-3 overflow-hidden sm:max-w-lg">
@@ -177,54 +179,75 @@ function ForwardFrameDialog({ stack, depth, imageOpen, onCloseFrom, onOpenForwar
           <DialogTitle className="truncate leading-6">{frame.title || t('sandbox.forward.title')}</DialogTitle>
         </DialogHeader>
         <div className="-mx-5 flex min-h-0 flex-1 flex-col overflow-y-auto px-5">
-          {frame.items.map((item, index) => {
-            const merged = isMergedForwardNode(frame.items, index)
-            const nested = item.forwardId ? frame.nestedForwards[item.forwardId] : undefined
-            const preview = nested ? buildForwardPreview(nested) : undefined
-            const text = nodeText(item)
-            return (
-              <article key={index} className={cn('flex gap-2.5', merged ? 'mt-1' : 'mt-3 first:mt-0')}>
-                {merged
-                  ? <span className="w-8 shrink-0" />
-                  : <SandboxAvatar kind={participants[item.userId]?.isBot ? 'bot' : 'user'} name={item.nickname} src={participants[item.userId]?.avatar} className="size-8" />}
-                <div className="flex min-w-0 flex-col gap-1">
-                  {!merged && <span className="text-[11px] text-muted-foreground">{item.nickname}</span>}
-                  <div className="flex max-w-full flex-col gap-1.5 self-start rounded-2xl rounded-tl-md bg-muted px-3 py-2 text-[13px] leading-6 break-words whitespace-pre-wrap">
-                    {/* 自定义节点可以同时带媒体、文字与嵌套转发，按这个顺序全部画出来。 */}
-                    {item.media?.map((entry) => {
-                      const source = media[entry.id]
-                      if (!source) return <span key={entry.id} className="text-xs text-muted-foreground">{mediaFailures[entry.id] ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
-                      if (entry.type === 'image') return <button key={entry.id} type="button" aria-label={t('sandbox.media.viewImage')} onClick={() => onOpenImage(source)}><img src={source} alt={entry.name} className="max-h-56 max-w-56 rounded-lg object-cover" /></button>
-                      if (entry.type === 'audio') return <audio key={entry.id} src={source} controls preload="metadata" />
-                      if (entry.type === 'video') return <video key={entry.id} src={source} controls preload="metadata" className="max-h-56 rounded-lg" />
-                      return (
-                        <a key={entry.id} href={source} download={entry.name} className="flex items-center gap-2 rounded-lg bg-background/60 px-3 py-2">
-                          <PaperclipIcon className="size-4" />
-                          <span className="flex flex-col"><strong className="text-[13px] font-medium">{entry.name}</strong><small className="text-[11px] text-muted-foreground">{formatMediaSize(entry.size)}</small></span>
-                        </a>
-                      )
-                    })}
-                    {text && <span>{text}</span>}
-                    {item.forwardId && (
-                      <button type="button" className="flex w-56 flex-col gap-0.5 text-left" aria-label={t('sandbox.forward.open')} onClick={() => item.forwardId && onOpenForward(item.forwardId)}>
-                        <strong className="font-medium">{preview?.title ?? t('sandbox.forward.title')}</strong>
-                        {preview
-                          ? (
-                            <>
-                              {preview.lines.map((line, lineIndex) => <span key={lineIndex} className="truncate text-xs text-muted-foreground">{line}</span>)}
-                              <span className="mt-1 border-t border-border pt-1 text-[11px] text-muted-foreground">{t('sandbox.forward.total', { count: preview.total })}</span>
-                            </>
-                          )
-                          : <span className="text-xs text-muted-foreground">{t('sandbox.forward.placeholder')}</span>}
-                      </button>
-                    )}
-                    {!text && !item.media?.length && !item.forwardId && <span className="text-muted-foreground">{t('sandbox.forward.emptyNode')}</span>}
-                  </div>
-                </div>
-              </article>
-            )
-          })}
-          {!frame.items.length && <p className="py-8 text-center text-xs text-muted-foreground">{t('sandbox.forward.noItems')}</p>}
+          {frame.items.length ? (
+            // 与聊天页同一套消息行结构与类名（messages.css）：气泡底色、连续收角、尖角与描边设置都和聊天页一致。
+            // 弹窗经 Portal 挂到 body，不在 .sandbox-webqq 里，强调色在这里补上。
+            <ol
+              className={cn('sandbox-message-list sandbox-forward-list', appearance.sandboxTimBubbleTail && 'has-tail', appearance.sandboxIncomingBubbleStyle === 'outline' && 'has-outline')}
+              style={{ '--sandbox-accent': appearance.sandboxAccentColor } as React.CSSProperties}
+            >
+              {frame.items.map((item, index) => {
+                const merged = isMergedForwardNode(frame.items, index)
+                const nested = item.forwardId ? frame.nestedForwards[item.forwardId] : undefined
+                const preview = nested ? buildForwardPreview(nested) : undefined
+                const text = nodeText(item)
+                return (
+                  <li key={index} className={cn('sandbox-message-row is-incoming', getForwardNodeClusterClass(frame.items, index), merged && 'is-merged')}>
+                    {/* 合并项保留头像占位（visibility 隐藏），气泡与上一条对齐。 */}
+                    <span className="sandbox-message-avatar-wrap">
+                      <SandboxAvatar kind={participants[item.userId]?.isBot ? 'bot' : 'user'} name={item.nickname} src={participants[item.userId]?.avatar} className="size-8" />
+                    </span>
+                    <div className="sandbox-message-content">
+                      {!merged && <div className="sandbox-message-sender-line"><span>{item.nickname}</span></div>}
+                      <div className="sandbox-message-body">
+                        <div className="sandbox-message-stack">
+                          <div className="sandbox-message-bubble">
+                            {/* 自定义节点可以同时带嵌套转发、媒体与文字：转发卡片与聊天页的引用一样放在最上面。 */}
+                            {item.forwardId && (
+                              <button type="button" className="sandbox-message-quote sandbox-message-forward" aria-label={t('sandbox.forward.open')} onClick={() => item.forwardId && onOpenForward(item.forwardId)}>
+                                <strong className="sandbox-message-quote-title">{preview?.title || t('sandbox.forward.title')}</strong>
+                                {preview ? (
+                                  <>
+                                    {preview.lines.map((line, lineIndex) => <span key={lineIndex}>{line}</span>)}
+                                    <span className="sandbox-message-forward-entry">{t('sandbox.forward.total', { count: preview.total })}<ChevronRightIcon className="size-4" /></span>
+                                  </>
+                                ) : <span>{t('sandbox.forward.placeholder')}</span>}
+                              </button>
+                            )}
+                            {item.media?.map((entry) => {
+                              const source = media[entry.id]
+                              return (
+                                <div key={entry.id} className="sandbox-message-media">
+                                  {!source ? (
+                                    <span className="sandbox-message-media-loading">{mediaFailures[entry.id] ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
+                                  ) : entry.type === 'image' ? (
+                                    <button type="button" className="sandbox-message-image" aria-label={t('sandbox.media.viewImage')} onClick={() => onOpenImage(source)}>
+                                      <img src={source} alt={entry.name} />
+                                    </button>
+                                  ) : entry.type === 'audio' ? (
+                                    <audio src={source} controls preload="metadata" />
+                                  ) : entry.type === 'video' ? (
+                                    <video src={source} controls preload="metadata" />
+                                  ) : (
+                                    <a href={source} download={entry.name} className="sandbox-message-file">
+                                      <PaperclipIcon className="size-[18px]" />
+                                      <span><strong>{entry.name}</strong><small>{formatMediaSize(entry.size)}</small></span>
+                                    </a>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            {text && <span className="sandbox-message-text">{text}</span>}
+                            {!text && !item.media?.length && !item.forwardId && <span className="sandbox-message-text">{t('sandbox.forward.emptyNode')}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          ) : <p className="py-8 text-center text-xs text-muted-foreground">{t('sandbox.forward.noItems')}</p>}
         </div>
         <ForwardFrameDialog stack={stack} depth={depth + 1} imageOpen={imageOpen} onCloseFrom={onCloseFrom} onOpenForward={onOpenForward} onOpenImage={onOpenImage} />
       </DialogContent>
