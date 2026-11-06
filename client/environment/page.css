@@ -1,0 +1,14 @@
+/*
+ * 环境管理页（environment/page.tsx）。只按 sandbox-env- 类名选择；本文件不分层。
+ */
+
+/* 原生滚动条隐藏，由 .sandbox-env-scrollbar 自绘（SCROLLBAR.md）。 */
+.sandbox-env-scroller {
+  scrollbar-width: none;
+}
+
+/* 轨道上端紧贴面板标题栏下方，下端让出面板的 12px 圆角。 */
+.sandbox-env-scrollbar {
+  top: 4px;
+  bottom: 12px;
+}
