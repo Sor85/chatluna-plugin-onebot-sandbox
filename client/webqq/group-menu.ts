@@ -1,18 +1,6 @@
 import type { SandboxGroupMember } from '../../src/types'
-import { isSandboxExtensionAction, type SandboxExtensionAction } from './sandbox-extension'
 
 export type GroupMemberMenuAction = 'mention' | 'poke' | 'set-card' | 'set-title' | 'kick' | 'set-admin' | 'unset-admin' | 'transfer-owner'
-
-// 菜单 action 名保持 WebQQ 既有拼写；是否打标只问共用登记表。
-// 不要在这里再维护一份平行名单，也不要按实现配置或能力覆盖动态判断。
-const GROUP_MEMBER_SANDBOX_EXTENSIONS = {
-  'transfer-owner': 'transfer-group-owner',
-} as const satisfies Partial<Record<GroupMemberMenuAction, SandboxExtensionAction>>
-
-export function isSandboxExtensionGroupMemberAction(action: GroupMemberMenuAction): boolean {
-  if (!Object.hasOwn(GROUP_MEMBER_SANDBOX_EXTENSIONS, action)) return false
-  return isSandboxExtensionAction(GROUP_MEMBER_SANDBOX_EXTENSIONS[action as keyof typeof GROUP_MEMBER_SANDBOX_EXTENSIONS])
-}
 
 export function getGroupMemberMenuActions(
   actor: SandboxGroupMember | undefined,

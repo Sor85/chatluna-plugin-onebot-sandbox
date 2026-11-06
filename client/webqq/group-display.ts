@@ -1,13 +1,7 @@
-import type { SandboxGroupMember, SandboxGroupRole } from '../../src/types'
+import type { SandboxGroupMember } from '../../src/types'
 
 export function getGroupMemberDisplayName(member: Pick<SandboxGroupMember, 'card'> | undefined, participantName: string) {
   return member?.card?.trim() || participantName
-}
-
-export function getGroupRoleLabel(role: SandboxGroupRole) {
-  if (role === 'owner') return '群主'
-  if (role === 'admin') return '管理员'
-  return '成员'
 }
 
 // 与真实 QQ 一致：专属头衔占用群身份徽标的位置并覆盖身份文案，

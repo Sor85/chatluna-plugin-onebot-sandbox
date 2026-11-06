@@ -103,11 +103,10 @@ describe('测试调用记录 Console 协议', () => {
     expect(listeners.has('onebot-sandbox.test-call-records')).toBe(false)
     expect(listeners.has('onebot-sandbox.test-call-record')).toBe(false)
     expect(listeners.has('onebot-sandbox.clear-test-call-records')).toBe(false)
-    expect(listeners.has('onebot-sandbox.mcp-activity')).toBe(false)
     expect(listeners.has('onebot-sandbox.mcp-capabilities')).toBe(false)
   })
 
-  it('广播 MCP 活动状态并提供当前值查询', async () => {
+  it('广播 MCP 活动状态', async () => {
     const app = new App()
     runningApps.push(app)
     const directory = mkdtempSync(join(tmpdir(), 'chatluna-sandbox-console-mcp-activity-'))
@@ -117,31 +116,21 @@ describe('测试调用记录 Console 协议', () => {
     const mcp = new SandboxMcpService(app, control, { dataDirectory: directory, testSpaces })
     const credential = mcp.createCredential('控制台凭证', ['read', 'manage'])
     const broadcasts: Array<{ type: string, body: unknown }> = []
-    const listeners = new Map<string, unknown>()
     const consoleRegistrar: SandboxConsoleRegistrar = {
       addEntry() {},
-      addListener(event, callback) {
-        listeners.set(event, callback)
-      },
+      addListener() {},
       broadcast(type, body) {
         broadcasts.push({ type, body })
       },
     }
     registerConsole(consoleRegistrar, control, appearance, consoleTestEndpoint(mcp), testSpaces)
 
-    const getActivity = listeners.get('onebot-sandbox.mcp-activity')
-    expect(getActivity).toBeTypeOf('function')
-    if (typeof getActivity !== 'function') throw new Error('MCP 活动监听器未注册')
-    expect(Reflect.apply(getActivity, undefined, [])).toEqual({ running: false })
-
     const created = await mcp.callTool(credential.token, 'create_test_space', {
       idempotencyKey: 'console-activity-1',
     }) as { spaceId: string }
     expect(broadcasts).toContainEqual({ type: 'onebot-sandbox.mcp-activity', body: { running: true } })
-    expect(Reflect.apply(getActivity, undefined, [])).toEqual({ running: true })
 
     testSpaces.takeOver(created.spaceId)
     expect(broadcasts).toContainEqual({ type: 'onebot-sandbox.mcp-activity', body: { running: false } })
-    expect(Reflect.apply(getActivity, undefined, [])).toEqual({ running: false })
   })
 })

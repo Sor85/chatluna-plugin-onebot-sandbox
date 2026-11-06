@@ -7,8 +7,6 @@ import type {
   SandboxSnapshot,
 } from './types'
 
-export type SandboxAccountSexInput = SandboxAccountSex | 0 | 1 | 2 | '0' | '1' | '2'
-
 const ACCOUNT_PROFILE_KEYS = [
   'personalNote',
   'sex',
@@ -65,10 +63,6 @@ export function mergeAccountProfile(
   patch: SandboxAccountProfile,
 ): SandboxAccountProfile | undefined {
   return normalizeAccountProfile({ ...current, ...patch })
-}
-
-export function toOneBotSex(value: SandboxAccountSex | undefined): string | undefined {
-  return value
 }
 
 export function toOneBotAccountProfile(participant: Pick<SandboxParticipant, 'id' | 'name' | 'profile'>) {

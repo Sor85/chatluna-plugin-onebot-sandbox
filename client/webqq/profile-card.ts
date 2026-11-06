@@ -5,7 +5,6 @@ import type {
   SandboxGroupMember,
   SandboxParticipant,
   SandboxSnapshot,
-  SandboxUser,
 } from '../../src/types'
 import { isSandboxBot } from '../../src/types'
 import { implementationLabel } from '../shared/implementation'
@@ -186,10 +185,6 @@ export function buildGroupProfileCardModel(t: ProfileCardTranslate, group: Sandb
       { group: 'group', label: t('sandbox.profileCard.field.announcements'), value: t('sandbox.profileCard.announcementCount', { count: group.announcements.length }) },
     ],
   }
-}
-
-export function getParticipantPersonalNote(participant: SandboxUser | SandboxBotProfile | undefined): string | undefined {
-  return participant?.profile?.personalNote
 }
 
 export function groupProfileCardFields(t: ProfileCardTranslate, fields: readonly ProfileCardField[]): Array<{ group: ProfileCardFieldGroup, label: string, fields: ProfileCardField[] }> {

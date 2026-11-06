@@ -1,6 +1,5 @@
 import { errorDetail } from './error-detail'
 import type { Context } from 'cordis'
-import { Random } from './random'
 import { Bot, type Fragment, h, Universal } from '@satorijs/core'
 import type { SandboxControlService } from './control-service'
 import {
@@ -1046,14 +1045,6 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
   private getOutboundMessageSummary(message: SandboxOutboundMessage): string {
     const media = message.mediaSources.map(({ type, fileName }) => `[${type === 'image' ? '图片' : type === 'audio' ? '语音' : type === 'video' ? '视频' : '文件'}]${fileName ? ` ${fileName}` : ''}`)
     return [message.content, ...media].filter(Boolean).join(' ')
-  }
-
-  private toOneBotUser(user?: Universal.User) {
-    const participant = this.control.getSnapshot().participants.find(({ id }) => id === user?.id)
-    return toOneBotAccountProfile(participant ?? {
-      id: user?.id ?? '0',
-      name: user?.name ?? user?.id ?? '',
-    })
   }
 
   private toOneBotGuildMember(groupId: string, member: Universal.GuildMember) {

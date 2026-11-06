@@ -65,19 +65,9 @@ export function exitMessageSelection(): MessageSelectionState {
   return NO_MESSAGE_SELECTION
 }
 
-/**
- * 目标会话对话框只在有选中时才该打开：空选中打开它，确认那一步一定失败。
- *
- * 名字避开「can + 动作」的形状：那是架构守卫「客户端不自己判定消息能力」的谓词，
- * 而这里问的是本地选中集合有没有内容，不是消息能力。
- */
-export function hasSelectedMessages(state: MessageSelectionState): boolean {
-  return state.messageIds.length > 0
-}
-
 export type ForwardConfirmation =
   | { readonly kind: 'send', readonly conversationId: string, readonly messageIds: readonly string[] }
-  | { readonly kind: 'reject', readonly message: string }
+  | { readonly kind: 'reject' }
 
 /**
  * 确认转发。
@@ -91,38 +81,6 @@ export function resolveForwardConfirmation(
   context: MessageSelectionContext,
 ): ForwardConfirmation {
   const messageIds = state.messageIds.filter((messageId) => readForwardCapability(messageId, context))
-  if (!messageIds.length) return { kind: 'reject', message: '请先选择可转发的消息' }
+  if (!messageIds.length) return { kind: 'reject' }
   return { kind: 'send', conversationId, messageIds }
-}
-
-export type EscapeAction =
-  /** 目标会话对话框开着时先关它，多选态保留。 */
-  | { readonly kind: 'close-forward-target' }
-  /** 退出多选。 */
-  | { readonly kind: 'exit-selection' }
-  /** 关闭搜索并把焦点还回入口按钮。 */
-  | { readonly kind: 'close-search' }
-  | { readonly kind: 'none' }
-
-export interface EscapeContext {
-  readonly selectionActive: boolean
-  readonly forwardTargetOpen: boolean
-  readonly searchOpen: boolean
-  /** 日期弹层自己会吃掉 Escape；此时不该连搜索一起关。 */
-  readonly searchDatePopoverOpen: boolean
-}
-
-/**
- * Escape 的优先级：目标会话对话框 → 多选 → 搜索。
- *
- * 顺序是判定而不是巧合：多选态下开着目标对话框时按 Escape 应该只退回多选，而不是把多选一起
- * 退掉——那样用户选好的一批消息就白选了。
- */
-export function routeEscapeKey(context: EscapeContext): EscapeAction {
-  if (context.selectionActive) {
-    if (context.forwardTargetOpen) return { kind: 'close-forward-target' }
-    return { kind: 'exit-selection' }
-  }
-  if (context.searchOpen && !context.searchDatePopoverOpen) return { kind: 'close-search' }
-  return { kind: 'none' }
 }

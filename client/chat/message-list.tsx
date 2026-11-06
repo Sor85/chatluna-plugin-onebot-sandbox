@@ -540,7 +540,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                           onClick={() => setExpandedThinking((value) => ({ ...value, [message.id]: !value[message.id] }))}
                         >
                           {thinking.usage && <UsageMetrics input={thinking.usage.inputTokens} output={thinking.usage.outputTokens} />}
-                          <span className="sandbox-message-thinking-duration">{formatThinkingDuration(thinking.thoughtDurationMs)}</span>
+                          <span className="sandbox-message-thinking-duration">{formatThinkingDuration(t, thinking.thoughtDurationMs)}</span>
                           <ChevronRightIcon className={cn('sandbox-message-thinking-chevron', thinkingExpanded && 'is-expanded')} aria-hidden />
                         </button>
                         {thinkingExpanded && (

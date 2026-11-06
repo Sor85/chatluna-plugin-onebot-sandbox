@@ -579,4 +579,3 @@ export function createComposerDraftHost(adapter: ComposerDraftHostAdapter, notif
   }
 }
 
-export type ComposerDraftHost = ReturnType<typeof createComposerDraftHost>

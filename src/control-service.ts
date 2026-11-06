@@ -5,7 +5,7 @@ import { resolveBaseDir } from './base-dir'
 import { randomUUID } from 'node:crypto'
 import type { Context } from 'cordis'
 import { Random } from './random'
-import { h, Universal } from '@satorijs/core'
+import { h } from '@satorijs/core'
 import { resolve } from 'node:path'
 import { SandboxBot } from './bot'
 import { BUILTIN_AVATARS, findBuiltinAvatarByReference, getBuiltinAvatarReference, pickUnusedBuiltinAvatar } from './builtin-avatars'
@@ -33,11 +33,8 @@ import {
   findDirectRootConversation,
   findGroupRootConversation,
   findVisibleConversation,
-  isConversationVisible,
-  listConversations,
   listConversationIds,
   listVisibleConversationIds,
-  listVisibleRootConversations,
   projectVisibleConversations,
   pruneConversationMessageIds,
   normalizeSceneConversationInstances,
@@ -106,7 +103,6 @@ import {
   type SandboxFriendship,
   type SandboxGroup,
   type SandboxGroupAnnouncement,
-  type SandboxGroupMember,
   type SandboxGroupSystemMessage,
   type SandboxMedia,
   type SandboxMediaContent,
@@ -117,7 +113,6 @@ import {
   type SandboxOneBotDebugRecord,
   type SandboxPersistenceStatus,
   type SandboxSnapshot,
-  type SandboxParticipant,
   type SandboxUser,
   type GetForwardMessageInput,
   type SendForwardMessageInput,
@@ -2552,10 +2547,6 @@ export class SandboxControlService {
   private getVisibleConversation(operatorId: string, conversationId: string) {
     this.getParticipant(operatorId)
     return requireVisibleConversation(this.scene, operatorId, conversationId)
-  }
-
-  private isConversationVisible(operatorId: string, conversation: ResolvedConversation) {
-    return isConversationVisible(this.scene, operatorId, conversation)
   }
 
   private resolveInboundQuote(reply: SandboxMessage): InboundQuotedMessage {

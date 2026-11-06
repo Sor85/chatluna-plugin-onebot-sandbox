@@ -97,15 +97,11 @@ export interface SandboxDebugRecordConsoleEvents {
  * 只有 MCP 表述独有的东西才带 `mcp` 前缀——协议能力目录（工具、资源、`serverCapabilities`）
  * 与服务器活动。测试调用记录与测试凭证由两种表述共用同一份，用 MCP 命名会把「只有 MCP 那
  * 一种表述用得上」写进契约；`http-capabilities` 对称地只描述 HTTP 表述的协议翻译事实。
- *
- * `mcp-activity` 同时是请求端点与广播频道，这不是重复：一个回答「现在跑着吗」，
- * 一个通知「状态变了」，因此两者各自登记。
  */
 export interface SandboxTestEndpointConsoleEvents {
   'onebot-sandbox.test-call-records': (input?: ListSandboxTestCallRecordsInput) => SandboxTestCallRecordsPage
   'onebot-sandbox.test-call-record': (input: { recordId: string }) => SandboxTestCallRecord
   'onebot-sandbox.clear-test-call-records': () => { cleared: number }
-  'onebot-sandbox.mcp-activity': () => SandboxMcpActivityPayload
   'onebot-sandbox.mcp-capabilities': () => SandboxMcpCapabilityCatalog
   'onebot-sandbox.http-capabilities': () => SandboxHttpApiCapabilityCatalog
   'onebot-sandbox.test-credentials': () => SandboxTestPublicCredential[]
@@ -135,8 +131,6 @@ export interface SandboxConsoleEvents extends
   SandboxTestEndpointConsoleEvents,
   SandboxTestSpaceConsoleEvents {}
 
-export type SandboxConsoleEndpoint = keyof SandboxConsoleEvents
-
 /** 场景变更广播载荷：`spaceId` 省略时表示主模拟 QQ 环境。 */
 export interface SandboxSceneMutationPayload {
   spaceId?: string
@@ -148,10 +142,8 @@ export interface SandboxMcpActivityPayload {
   running: boolean
 }
 
-/** 广播频道名到载荷；服务端 `broadcast` 与客户端 `receive` 都从这里取类型。 */
+/** 广播频道名到载荷；服务端 `broadcast` 从这里取类型，`webui.ts` 把它们折叠进实时信号。 */
 export interface SandboxConsoleBroadcasts {
   'onebot-sandbox.scene-mutated': SandboxSceneMutationPayload
   'onebot-sandbox.mcp-activity': SandboxMcpActivityPayload
 }
-
-export type SandboxConsoleBroadcastChannel = keyof SandboxConsoleBroadcasts

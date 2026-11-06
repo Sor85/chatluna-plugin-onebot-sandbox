@@ -24,13 +24,12 @@ import {
   registerSandboxTestSpaceModel,
 } from './persistence'
 import type { SandboxOneBotDebugPersistence } from './onebot-debug'
-import { SandboxTestEndpointServer, type SandboxTestEndpointProtocolConfig, type SandboxTestEndpointServerConfig } from './mcp/server'
+import { SandboxTestEndpointServer, type SandboxTestEndpointProtocolConfig } from './mcp/server'
 import { describeHttpApiCapabilities, toHttpApiBaseUrl, type SandboxHttpApiCapabilityCatalog } from './mcp/http-api'
 import { SandboxMcpService, type SandboxMcpQuotaConfig } from './mcp/service'
 import type { SandboxMcpEndpointDescription } from './mcp/types'
 import { SandboxTestSpaceService } from './test-spaces'
 import { registerSandboxBotTools, type SandboxBotToolsConfig } from './chatluna/tools'
-import { createScopeDirectory } from './scope-directory'
 import { resolve } from 'node:path'
 import type { SandboxAppearance, SandboxPersistenceMode } from './types'
 

@@ -15,7 +15,7 @@ import type {
   SandboxSnapshot,
   SandboxWorkspaceState,
 } from '../../src/types'
-import { resolveWorkspaceSelection } from './state'
+import { resolveWorkspaceSelection, type SandboxWorkspaceSelection } from './state'
 
 type Endpoint = keyof SandboxConsoleEvents
 type InputOf<K extends Endpoint> = Parameters<SandboxConsoleEvents[K]>[0]
@@ -52,16 +52,11 @@ export function mediaIdOf(reference: string | undefined) {
   return reference?.match(MEDIA_REFERENCE)?.[1]
 }
 
-interface StoredSelection {
-  currentOperatorId?: string
-  activeConversationId?: string
-}
-
 function selectionKey(spaceId: string | undefined) {
   return `chatluna.onebot-sandbox.selection.${spaceId ?? 'main'}`
 }
 
-function readSelection(spaceId: string | undefined): StoredSelection {
+function readSelection(spaceId: string | undefined): SandboxWorkspaceSelection {
   const value = readStored(selectionKey(spaceId))
   if (!value || typeof value !== 'object') return {}
   const record = value as Record<string, unknown>
@@ -140,11 +135,10 @@ export class WorkspaceStore {
     })
   }
 
-  private replaceWorkspace(workspace: SandboxWorkspaceState, preferred: StoredSelection = {}, persist = true) {
+  private replaceWorkspace(workspace: SandboxWorkspaceState, preferred: SandboxWorkspaceSelection = {}, persist = true) {
     const selection = resolveWorkspaceSelection(workspace.snapshot, {
       currentOperatorId: preferred.currentOperatorId ?? this.view.currentOperatorId,
       activeConversationId: preferred.activeConversationId ?? this.view.activeConversationId,
-      currentView: 'messages',
     })
     this.set({
       workspace,

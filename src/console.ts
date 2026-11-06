@@ -346,7 +346,6 @@ export function registerConsole(
     mcp.onActivity((running) => {
       void console.broadcast('onebot-sandbox.mcp-activity', { running })
     })
-    registerListener('onebot-sandbox.mcp-activity', () => ({ running: mcp.isActivityRunning() }), { authority: 4 })
     registerListener('onebot-sandbox.mcp-capabilities', () => ({ ...mcp.getCapabilityCatalog(), endpoint: mcpEndpoint }), { authority: 4 })
     registerListener('onebot-sandbox.http-capabilities', () => httpApi, { authority: 4 })
     registerListener('onebot-sandbox.test-call-records', (input = {}) => mcp.listCallRecords(input), { authority: 4 })

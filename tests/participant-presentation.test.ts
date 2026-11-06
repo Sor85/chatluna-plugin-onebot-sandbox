@@ -7,10 +7,8 @@ import {
   getMessageAuthorName,
   getMessageGroupMemberActions,
   getMessageRoleBadge,
-  getParticipantAvatar,
   getParticipantName,
   hasGroupMemberManagementActions,
-  isBotParticipant,
   type ParticipantPresentationContext,
 } from '../client/webqq/participant-presentation'
 import type { SandboxGroup, SandboxGroupMember, SandboxGroupRole } from '../src/types'
@@ -37,28 +35,14 @@ function context(overrides: Partial<ParticipantPresentationContext> = {}): Parti
 }
 
 describe('参与者呈现投影', () => {
-  describe('名称与头像', () => {
-    it('按参与者目录取名称与头像', () => {
+  describe('名称', () => {
+    it('按参与者目录取名称', () => {
       expect(getParticipantName('20001', context())).toBe('成员昵称')
-      expect(getParticipantAvatar('20001', context())).toBe('a-member')
     })
 
     /** 界面上宁可显示一串 ID 也不显示空白：退群的历史发言者仍要有名字。 */
-    it('目录里没有这个人时名称退回标识本身，头像取不到', () => {
+    it('目录里没有这个人时名称退回标识本身', () => {
       expect(getParticipantName('99999', context())).toBe('99999')
-      expect(getParticipantAvatar('99999', context())).toBeUndefined()
-    })
-
-    it('没有头像的参与者取不到头像', () => {
-      expect(getParticipantAvatar('30001', context())).toBeUndefined()
-    })
-  })
-
-  describe('机器人判定', () => {
-    it('目录标记为机器人的才算机器人；缺失时按非机器人处理', () => {
-      expect(isBotParticipant('30001', context())).toBe(true)
-      expect(isBotParticipant('20001', context())).toBe(false)
-      expect(isBotParticipant('99999', context())).toBe(false)
     })
   })
 

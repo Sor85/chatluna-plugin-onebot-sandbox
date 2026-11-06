@@ -138,15 +138,6 @@ export function getForwardPreview(
   return message.forwardId ? context.forwardPreviews[message.id] : undefined
 }
 
-/** 打开合并转发的入参；缺转发标识或预览未就绪时返回 undefined，表示这一下不该有反应。 */
-export function resolveForwardOpenInput(
-  message: SandboxMessage,
-  context: Pick<MessagePresentationContext, 'forwardPreviews'>,
-): { messageId: string, forwardId: string } | undefined {
-  if (!message.forwardId || !getForwardPreview(message, context)) return
-  return { messageId: message.id, forwardId: message.forwardId }
-}
-
 /**
  * 这条消息现在能做什么。
  *

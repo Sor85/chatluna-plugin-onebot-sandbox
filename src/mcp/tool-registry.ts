@@ -28,7 +28,7 @@ import type {
   SandboxSnapshot,
 } from '../types'
 import { SandboxOneBotDebugCursorExpiredError } from '../types'
-import { argumentsFingerprint, asRecord, optionalBoolean, optionalEnum, optionalNumber, readSpaceId, requireNumber, requireString } from './arguments'
+import { argumentsFingerprint, asRecord, optionalBoolean, optionalEnum, optionalNumber, requireNumber, requireString } from './arguments'
 import {
   DEFAULT_TEST_CALL_PAGE_SIZE,
   MAX_TEST_CALL_PAGE_SIZE,

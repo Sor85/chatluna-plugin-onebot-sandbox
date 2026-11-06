@@ -6,9 +6,8 @@ import { getGroupMemberMenuActions, type GroupMemberMenuAction } from './group-m
 /**
  * 「这个参与者该怎么显示」——消息列表的参与者呈现投影。
  *
- * 名称、头像、徽标与两张菜单的取数此前散在 `webqq-message-list.vue` 里，各自都要先拿到
- * `props.model` 才能问。收成纯函数后可以不起组件逐条断言，「群名片为空白时回退到全局昵称」
- * 这类边界因此第一次有了红灯。
+ * 名称、徽标与两张菜单的取数收成纯函数，可以不起组件逐条断言「群名片为空白时回退到全局昵称」
+ * 这类边界。
  */
 
 export interface MessageParticipant {
@@ -37,21 +36,6 @@ export function getParticipantName(
   context: Pick<ParticipantPresentationContext, 'participants'>,
 ): string {
   return context.participants[participantId]?.name ?? participantId
-}
-
-export function getParticipantAvatar(
-  participantId: string,
-  context: Pick<ParticipantPresentationContext, 'participants'>,
-): string | undefined {
-  return context.participants[participantId]?.avatar
-}
-
-/** 机器人参与者才显示机器人形态的头像与「跳转到对应请求」。目录缺这个人时按非机器人处理。 */
-export function isBotParticipant(
-  participantId: string,
-  context: Pick<ParticipantPresentationContext, 'participants'>,
-): boolean {
-  return context.participants[participantId]?.isBot ?? false
 }
 
 /** 当前群里的成员记录。不在群里（私聊、或已退群的历史发言者）时取不到。 */

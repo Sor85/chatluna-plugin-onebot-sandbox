@@ -11,7 +11,6 @@ import {
   isForkBoundary,
   isInheritedMessage,
   readMessageCapabilities,
-  resolveForwardOpenInput,
   resolveReactionToggle,
   shouldRenderAsEvent,
   shouldShowThinking,
@@ -183,14 +182,6 @@ describe('消息呈现判定', () => {
      */
     it('没有转发标识的消息即使预览表里有同名条目也不算转发', () => {
       expect(getForwardPreview(message(), context({ forwardPreviews: { m1: preview } }))).toBeUndefined()
-    })
-
-    it('预览未就绪时打开转发这一下没有反应', () => {
-      const forwarded = message({ forwardId: 'f1' })
-      expect(resolveForwardOpenInput(forwarded, context())).toBeUndefined()
-      expect(resolveForwardOpenInput(message(), context({ forwardPreviews: { m1: preview } }))).toBeUndefined()
-      expect(resolveForwardOpenInput(forwarded, context({ forwardPreviews: { m1: preview } })))
-        .toEqual({ messageId: 'm1', forwardId: 'f1' })
     })
   })
 

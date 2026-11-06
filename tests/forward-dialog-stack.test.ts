@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  hasParentForwardFrame,
   closeForwardStack,
   loadForwardDialogFrame,
-  popForwardFrame,
   pushForwardFrame,
-  readForwardStackTop,
   type ForwardDialogFrame,
 } from '../client/webqq/forward-dialog-stack'
 import type { SandboxForward, SandboxForwardNode } from '../src/types'
@@ -23,20 +20,9 @@ function frame(title: string): ForwardDialogFrame {
 }
 
 describe('合并转发对话栈', () => {
-  describe('栈顶取值', () => {
-    it('弹窗显示栈顶那一帧', () => {
-      expect(readForwardStackTop([frame('一'), frame('二')])?.title).toBe('二')
-    })
-
-    /** 空栈等于弹窗关闭：视图靠这个 undefined 决定不渲染弹窗。 */
-    it('空栈取不到栈顶', () => {
-      expect(readForwardStackTop([])).toBeUndefined()
-    })
-  })
-
   describe('推入', () => {
     /**
-     * 从消息气泡打开的是一条新的转发链，把它压在旧链后面会让「返回」退到一条无关的转发里。
+     * 从消息气泡打开的是一条新的转发链，把它压在旧链后面会让关掉上层后露出一条无关的转发。
      */
     it('根消息重置整条历史', () => {
       const stack = pushForwardFrame([frame('旧一'), frame('旧二')], frame('新'), 'replace')
@@ -55,28 +41,9 @@ describe('合并转发对话栈', () => {
     })
   })
 
-  describe('弹出与关闭', () => {
-    it('逐层返回恢复上一帧', () => {
-      const stack = popForwardFrame([frame('一'), frame('二'), frame('三')])
-      expect(stack.map(({ title }) => title)).toEqual(['一', '二'])
-    })
-
-    /** 根帧的返回按钮本来就不显示；弹掉它等于用「返回」把弹窗关掉，而关闭是另一个动作。 */
-    it('只剩根帧时不弹', () => {
-      expect(popForwardFrame([frame('一')]).map(({ title }) => title)).toEqual(['一'])
-      expect(popForwardFrame([])).toEqual([])
-    })
-
+  describe('关闭', () => {
     it('关闭清空整条历史，弹窗随之关闭', () => {
-      const closed = closeForwardStack()
-      expect(closed).toEqual([])
-      expect(readForwardStackTop(closed)).toBeUndefined()
-    })
-
-    it('返回按钮只在栈里还有上一层时出现', () => {
-      expect(hasParentForwardFrame([])).toBe(false)
-      expect(hasParentForwardFrame([frame('一')])).toBe(false)
-      expect(hasParentForwardFrame([frame('一'), frame('二')])).toBe(true)
+      expect(closeForwardStack()).toEqual([])
     })
   })
 

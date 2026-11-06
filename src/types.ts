@@ -214,12 +214,6 @@ export function createGroupConversationId(groupId: string): string {
   return `group:${groupId}`
 }
 
-export function getDirectConversationPeerId(conversation: SandboxDirectConversation, participantId: string): string {
-  const peerId = conversation.participantIds.find((id) => id !== participantId)
-  if (!peerId) throw new Error(`参与者不在当前私聊中：${participantId}`)
-  return peerId
-}
-
 /**
  * 机器人回复在 ChatLuna v2 trace 里的位置：会话 ID 加回合与步序，对应 trace 页
  * `/traces/:sessionId?turn=&step=` 的深链。取自产生这条回复的那一步模型调用。
