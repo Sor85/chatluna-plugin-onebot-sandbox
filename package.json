@@ -43,6 +43,7 @@
   "scripts": {
     "sync": "node scripts/sync-to-v2.mjs --once",
     "sync:watch": "node scripts/sync-to-v2.mjs",
+    "release": "node scripts/publish.mjs",
     "build": "yakumo build",
     "clean": "yakumo clean",
     "test": "vitest run"
