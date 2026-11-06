@@ -918,12 +918,15 @@
   transform-origin: top left;
 }
 
+/* 边缘与对方气泡同一套处理：源插件的聊天区有渐变底，72% 白底自带轮廓；v2 的聊天区是白底，不加投影
+   面板就和背景融成一片。描边样式（has-outline）下同样改成白底细描边，左侧强调线保留。 */
 .sandbox-message-thinking-content {
   min-height: 0;
   padding: 8px 10px;
   border-left: 2px solid rgb(148 163 184 / 54%);
   border-radius: 6px;
-  background: rgb(255 255 255 / 72%);
+  background: rgb(255 255 255 / 90%);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 8%);
   color: var(--sandbox-muted);
   font-size: 12px;
   line-height: 18px;
@@ -931,6 +934,14 @@
   overflow-wrap: anywhere;
   text-align: left;
   white-space: pre-wrap;
+}
+
+:root:not(.dark) .sandbox-message-list.has-outline .sandbox-message-thinking-content {
+  padding: 7px 9px 7px 10px;
+  border: 1px solid #e9eaec;
+  border-left: 2px solid rgb(148 163 184 / 54%);
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
 }
 
 @keyframes sandbox-message-thinking-enter {
@@ -1003,4 +1014,5 @@
 
 .dark .sandbox-message-thinking-content {
   background: rgb(39 39 42 / 62%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 8%);
 }

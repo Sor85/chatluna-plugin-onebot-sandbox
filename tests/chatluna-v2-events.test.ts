@@ -66,6 +66,27 @@ describe('ChatLuna v2 agent 事件', () => {
     }])
   })
 
+  it('busy 先于 chat/receive 到达（v2 dispatch 的真实顺序）时，映射建立后当场开始回合', () => {
+    const { store, emit, archived } = createStore()
+    emit('chatluna/agent-status', { agent, status: 'busy' })
+    expect(store.getStates()).toEqual([])
+    emit('chat/receive', session, { sessionId: '42' })
+    expect(store.getStates()).toEqual([expect.objectContaining({ thinking: true })])
+
+    emit('chatluna/agent-step', { agent, step: step(1, 1, { usage: { inputTokens: 2, outputTokens: 1 } }) })
+    store.recordReplyMessage('bot-1', 'private:user-1', 'reply')
+    emit('chatluna/agent-status', { agent, status: 'idle' })
+    expect(archived).toEqual([{ result: expect.objectContaining({ usage: { inputTokens: 2, outputTokens: 1, totalTokens: 3 } }), ids: ['reply'] }])
+  })
+
+  it('agent 已经 idle 时晚到的 chat/receive 不开始回合', () => {
+    const { store, emit } = createStore()
+    emit('chatluna/agent-status', { agent, status: 'busy' })
+    emit('chatluna/agent-status', { agent, status: 'idle' })
+    emit('chat/receive', session, { sessionId: '42' })
+    expect(store.getStates()).toEqual([])
+  })
+
   it('回复晚于 idle 发出时由之后发出的回复接手结果，分段越多越往后移', () => {
     const { store, emit, archived } = createStore()
     emit('chat/receive', session, { sessionId: '42' })

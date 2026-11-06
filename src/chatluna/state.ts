@@ -95,6 +95,8 @@ export class SandboxChatLunaStateStore {
   private turns = new Map<string, ActiveTurn>()
   /** ChatLuna v2 会话 ID → 沙盒里的机器人与会话；由 `chat/receive` 建立。 */
   private agentTargets = new Map<string, SandboxChatLunaTarget>()
+  /** 此刻处于 busy 的 agent 会话，不论映射是否已建立。 */
+  private busySessions = new Set<string>()
   /** 每个机器人会话最近一步模型调用的 trace 位置；新回复按它标注出处。 */
   private latestTraces = new Map<string, SandboxMessageTraceReference>()
   /** 机器人会话 → 已结束回合还没落到回复上的结果。 */
@@ -108,15 +110,22 @@ export class SandboxChatLunaStateStore {
     private archiveResult: ArchiveResult = () => {},
   ) {
     const on = this.ctx.on.bind(this.ctx) as unknown as ChatLunaEventRegistrar
+    // v2 的 dispatch 先唤醒 agent（同步发出 busy）再发 `chat/receive`，会话第一次被唤醒时 busy 先到、
+    // 映射后到。busy 不论映射与否都先记下，映射晚到时若 agent 仍在 busy 就当场开始回合。
     this.disposers.push(on('chat/receive', (session, result) => {
       const target = readSessionTarget(session)
       const sessionId = readString(result?.sessionId)
-      if (target && sessionId && this.validateTarget(target.botParticipantId, target.conversationId)) this.agentTargets.set(sessionId, target)
+      if (!target || !sessionId || !this.validateTarget(target.botParticipantId, target.conversationId)) return
+      this.agentTargets.set(sessionId, target)
+      if (this.busySessions.has(sessionId) && !this.turns.has(sessionId)) this.begin(sessionId, target)
     }))
     this.disposers.push(on('chatluna/agent-status', ({ agent, status }) => {
       const sessionId = readAgentSessionId(agent)
-      const target = sessionId ? this.agentTargets.get(sessionId) : undefined
-      if (!sessionId || !target) return
+      if (!sessionId) return
+      if (status === 'busy') this.busySessions.add(sessionId)
+      else this.busySessions.delete(sessionId)
+      const target = this.agentTargets.get(sessionId)
+      if (!target) return
       if (status === 'busy') this.begin(sessionId, target)
       else this.finish(sessionId)
     }))
@@ -168,6 +177,7 @@ export class SandboxChatLunaStateStore {
     this.states.clear()
     this.turns.clear()
     this.agentTargets.clear()
+    this.busySessions.clear()
     this.latestTraces.clear()
     this.pendingResults.clear()
   }

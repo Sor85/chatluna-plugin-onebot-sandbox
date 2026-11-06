@@ -9,7 +9,8 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
  * 读一步模型调用里角色写下的内心活动（v2 character 引擎的 `<think>` 元素）。
  *
  * 文本模式下模型直接写元素，`<think>` 留在 assistant 文本块里；工具模式下同一套元素写在 `reply` 工具的
- * `content` 参数里。模型原生的 reasoning 块不算：它是推理过程，不是角色的内心活动。
+ * `content` 参数里。模型原生的 reasoning 块不算：它是模型的推理过程，不是角色的内心活动，混进来就看不出
+ * 「生成内心活动」有没有生效。
  */
 export function readStepThought(step: unknown): string {
   const record = readRecord(step)

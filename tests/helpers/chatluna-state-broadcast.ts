@@ -30,10 +30,13 @@ export function createDirectSession(control: SandboxControlService, botParticipa
   })
 }
 
-/** 以 v2 事件开始一个回合：`chat/receive` 建立会话映射，再把该 agent 会话置为 busy。 */
+/**
+ * 以 v2 事件开始一个回合，顺序与 v2 `ChatService.dispatch` 一致：先唤醒 agent（busy），再发
+ * `chat/receive` 给出会话 ID。
+ */
 export async function beginAgentTurn(app: App, session: unknown, sessionId: string): Promise<void> {
-  await emitChatLunaEvent(app, 'chat/receive', session, { sessionId })
   await emitChatLunaEvent(app, 'chatluna/agent-status', { agent: { session: { id: sessionId } }, status: 'busy' })
+  await emitChatLunaEvent(app, 'chat/receive', session, { sessionId })
 }
 
 export async function finishAgentTurn(app: App, sessionId: string): Promise<void> {

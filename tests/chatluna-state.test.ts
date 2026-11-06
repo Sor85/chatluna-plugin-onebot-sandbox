@@ -28,7 +28,7 @@ async function createControl() {
   return { app, control }
 }
 
-/** 模拟一轮 v2 agent：`chat/receive` 建立映射后，按会话 ID 发 busy、各步与 idle。 */
+/** 模拟一轮 v2 agent。v2 的 dispatch 先发 busy 再发 `chat/receive`，用例按这个顺序调用 `busy` 与 `receive`。 */
 function agentTurn(app: App, session: unknown, sessionId: string) {
   const agent = { session: { id: sessionId } }
   let stepNumber = 0
@@ -56,8 +56,8 @@ describe('ChatLuna v2 回合状态', () => {
     const { app, control } = await createControl()
     const turn = agentTurn(app, createGroupSession(control, '20001'), 'route:a')
 
-    await turn.receive()
     await turn.busy()
+    await turn.receive()
     await turn.step({ text: '<think>群里在聊游戏，接一句</think><message>我也想玩</message>', usage: { inputTokens: 12, outputTokens: 5 } })
     await control.sendMessage({ operatorId: '20001', conversationId: 'group:30001', content: '我也想玩' })
     await turn.idle()
@@ -70,12 +70,36 @@ describe('ChatLuna v2 回合状态', () => {
     })
   })
 
+  it('只取 <think>：模型只给原生推理块时思考内容为空', async () => {
+    const { app, control } = await createControl()
+    const turn = agentTurn(app, createGroupSession(control, '20001'), 'route:a')
+    const reasoningStep = (text: string) => emitChatLunaEvent(app, 'chatluna/agent-step', {
+      agent: { session: { id: 'route:a' } },
+      step: { content: [{ type: 'reasoning', text }, { type: 'text', text: '<message>好</message>' }], toolCalls: [] },
+    })
+
+    await turn.busy()
+    await turn.receive()
+    await reasoningStep('User 3 keeps sending 123.')
+    await control.sendMessage({ operatorId: '20001', conversationId: 'group:30001', content: '第一轮' })
+    await turn.idle()
+    await turn.busy()
+    await reasoningStep('ignored reasoning')
+    await turn.step({ text: '<think>他又来了</think>' })
+    await control.sendMessage({ operatorId: '20001', conversationId: 'group:30001', content: '第二轮' })
+    await turn.idle()
+
+    const messages = control.getSnapshot().messages
+    expect(messages.find(({ content }) => content === '第一轮')?.chatLuna?.thought ?? '').toBe('')
+    expect(messages.find(({ content }) => content === '第二轮')?.chatLuna?.thought).toBe('他又来了')
+  })
+
   it('分段回复晚于 idle 发出时，结果只留在最后一段，前面几段只保留出处', async () => {
     const { app, control } = await createControl()
     const turn = agentTurn(app, createDirectSession(control, '20001'), 'route:direct')
 
-    await turn.receive()
     await turn.busy()
+    await turn.receive()
     await turn.step({ text: '<think>分两句说</think>', usage: { inputTokens: 3, outputTokens: 2 } })
     await turn.idle()
     await control.sendMessage({ operatorId: '20001', conversationId: 'private:10001:20001', content: '第一句' })
@@ -94,10 +118,10 @@ describe('ChatLuna v2 回合状态', () => {
     const first = agentTurn(app, createGroupSession(control, '20001'), 'route:first')
     const second = agentTurn(app, createGroupSession(control, '20002'), 'route:second')
 
-    await first.receive()
-    await second.receive()
     await first.busy()
     await second.busy()
+    await first.receive()
+    await second.receive()
     await first.step({ usage: { inputTokens: 12, outputTokens: 5 } })
     await second.step({ usage: { inputTokens: 20, outputTokens: 8 } })
     await first.idle()
@@ -117,8 +141,8 @@ describe('ChatLuna v2 回合状态', () => {
     const { app, control } = await createControl()
     const turn = agentTurn(app, createGroupSession(control, '20001'), 'route:a')
 
-    await turn.receive()
     await turn.busy()
+    await turn.receive()
     await turn.step({ usage: { inputTokens: 8, outputTokens: 3 } })
     await control.sendMessage({ operatorId: '20001', conversationId: 'group:30001', content: '第一轮回复' })
     await turn.idle()
@@ -135,8 +159,8 @@ describe('ChatLuna v2 回合状态', () => {
     const { app, control } = await createControl()
     const turn = agentTurn(app, createGroupSession(control, '20001'), 'route:a')
 
-    await turn.receive()
     await turn.busy()
+    await turn.receive()
     await turn.step({ text: '<think>上一轮</think>', usage: { inputTokens: 1, outputTokens: 1 } })
     await turn.idle()
     await control.sendMessage({ operatorId: '10001', conversationId: 'group:30001', content: 'help' })
@@ -153,8 +177,8 @@ describe('ChatLuna v2 回合状态', () => {
       notifications.push(control.getChatLunaStates().some(({ thinking }) => thinking))
     })
 
-    await turn.receive()
     await turn.busy()
+    await turn.receive()
     await turn.idle()
 
     expect(notifications).toEqual([true, false])
@@ -168,8 +192,8 @@ describe('ChatLuna v2 回合状态', () => {
       notifications += 1
     })
 
-    await turn.receive()
     await turn.busy()
+    await turn.receive()
 
     expect(control.getChatLunaStates()).toEqual([])
     expect(notifications).toBe(0)
