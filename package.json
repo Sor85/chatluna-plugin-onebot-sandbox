@@ -1,7 +1,7 @@
 {
   "name": "chatluna-plugin-onebot-sandbox",
-  "version": "1.0.0",
-  "description": "Simulated QQ (OneBot v11) environment for verifying ChatLuna behaviour in the WebUI",
+  "version": "1.0.1",
+  "description": "在 WebUI 中模拟 QQ（OneBot v11）环境，测试 ChatLuna 及其插件在私聊、群聊中的行为",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -91,7 +91,7 @@
   "cordis": {
     "description": {
       "en": "Simulated QQ (OneBot v11) environment for verifying ChatLuna behaviour",
-      "zh": "在模拟 QQ（OneBot v11）环境中验证 ChatLuna 行为"
+      "zh": "在 WebUI 中模拟 QQ（OneBot v11）环境，测试 ChatLuna 及其插件在私聊、群聊中的行为"
     },
     "service": {
       "implements": [

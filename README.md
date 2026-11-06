@@ -1,19 +1,27 @@
 # chatluna-plugin-onebot-sandbox
 
-在 ChatLuna v2 的 WebUI 中提供模拟 QQ（OneBot v11）环境，用于验证 ChatLuna 及其插件在私聊、群聊中的真实行为。
+[![npm](https://img.shields.io/npm/v/chatluna-plugin-onebot-sandbox)](https://www.npmjs.com/package/chatluna-plugin-onebot-sandbox)
 
-## Config
+ChatLuna v2 插件：在 WebUI 中模拟 QQ（OneBot v11）环境，不接入真实 QQ 账号即可测试 ChatLuna 及其插件在私聊、群聊中的行为。
 
-| Key | Type | Default | Description |
-| --- | --- | --- | --- |
-| `persistenceMode` | `'memory' \| 'database'` | `'database'` | 模拟环境状态存储方式 |
-| `sandboxTimBubbleTail` | `boolean` | `true` | 显示气泡小尖角 |
-| `sandboxMarkRecalledMessages` | `boolean` | `true` | 保留撤回气泡并显示撤回线 |
-| `sceneMessageLimit` | `number` | `2000` | 每个空间保留的场景消息条数上限 |
-| `sceneMessageMaxBytes` | `number` | `8388608` | 每个空间场景 JSON 的字节上限 |
-| `testEndpoint.mcp` | `{ enabled, path }` | `{ false, '/mcp' }` | MCP 测试端点 |
-| `testEndpoint.http` | `{ enabled, path }` | `{ false, '/api' }` | HTTP 测试端点 |
-| `testEndpoint.shared` | object | — | 监听地址、端口、来源与 Origin 白名单、TLS 与调用配额 |
+## 功能
+
+- **WebQQ 聊天界面**：会话列表、消息气泡、发送框、合并转发、表情回应、群公告与资料卡，可切换任意测试用户的身份发言。
+- **模拟环境管理**：增删改普通用户、机器人与群组，机器人可选 NapCat、LLBot、SnowLuma 三种 OneBot 实现的能力基线。
+- **OneBot 调试**：记录机器人发出的每个 action 及其参数与返回值。
+- **AI 测试空间**：相互隔离的独立场景，可供 AI 通过 MCP 自行操作与观察。
+- **测试端点**：提供 MCP 与 HTTP 两种接口，带凭证与调用配额，供自动化脚本驱动沙盒；默认关闭。
+- **回复出处**：机器人的回复可跳转到 ChatLuna 的 trace 页，查看对应的模型请求。
+
+## 安装
+
+在 ChatLuna v2 的插件市场搜索 `onebot-sandbox` 安装，或在项目目录执行：
+
+```sh
+yarn add chatluna-plugin-onebot-sandbox
+```
+
+启用插件后，WebUI 侧边栏出现「OneBot 沙盒」页面。插件设置在沙盒的「设置」页中修改。
 
 ## License
 
