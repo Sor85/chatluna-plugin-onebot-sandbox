@@ -484,6 +484,8 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                       )}
                       onClick={(event) => {
                         if (!selectable) return
+                        // 右键菜单经 Portal 渲染，React 事件仍沿组件树冒泡到这里：点「多选」进入多选后，同一次点击会把刚选中的这条切回未选。
+                        if (!event.currentTarget.contains(event.target as Node)) return
                         if ((event.target as HTMLElement).closest('a,button,audio,video')) return
                         props.onToggleSelection(message.id)
                       }}
