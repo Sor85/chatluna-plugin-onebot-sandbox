@@ -1,11 +1,12 @@
 import * as React from 'react'
-import { DatabaseIcon, PaletteIcon, SaveIcon, ServerCogIcon, SlidersHorizontalIcon, Undo2Icon, type LucideIcon } from 'lucide-react'
+import { DatabaseIcon, InfoIcon, PaletteIcon, SaveIcon, ServerCogIcon, SlidersHorizontalIcon, Undo2Icon, type LucideIcon } from 'lucide-react'
 import { Alert, AlertDescription, Button, cn, Spinner } from '@chatluna/ui-kit'
 import { apiErrorMessage, callAction, toast, useLive } from '@chatluna/ui-client/client'
 import { SchemaForm, useFormValidation } from '@chatluna/ui-schema-form/client'
 import type { SchemaDocument, SchemaDocumentNode } from '@chatluna/schema'
 import { useT } from '../i18n'
 import { OverlayScrollbar } from '../shared/overlay-scrollbar'
+import { AboutPanel } from './about'
 import { settingsDraft, useSettingsDraft } from './draft'
 import { localizeSchema } from './localize'
 import './settings.css'
@@ -61,6 +62,7 @@ function sectionsOf(document: SchemaDocument, fallbackTitle: string): SettingsSe
 /**
  * 插件设置页。读写的是 chatluna.yml 里本插件条目的配置（`src/settings.ts`），v2 插件页不再显示这些字段。
  * 版式与环境管理页一致：左侧分区导航，右侧面板只显示当前分区；保存与撤销作用于全部分区。
+ * 导航末尾固定有「关于」（`about.tsx`），它不来自 schema，选中时面板换成插件信息。
  *
  * 各分区的表单都挂载着（未选中的隐藏），共用同一个校验，保存时不会漏掉看不见的分区。
  *
@@ -77,7 +79,7 @@ export function SettingsPage() {
   const setDraft = settingsDraft.setValue
   const [pending, setPending] = React.useState<{ revision: string, value: Values }>()
   const [saving, setSaving] = React.useState(false)
-  const [active, setActive] = React.useState(0)
+  const [active, setActive] = React.useState<number | 'about'>(0)
   const scroller = React.useRef<HTMLDivElement>(null)
   const data = live.data
   const saved = pending && pending.revision === data?.revision ? pending.value : data?.value
@@ -89,7 +91,10 @@ export function SettingsPage() {
   }, [data, dirty])
   const fallbackTitle = t('sandbox.nav.settings')
   const sections = React.useMemo(() => data ? sectionsOf(localizeSchema(data.schema, t), fallbackTitle) : [], [data, t, fallbackTitle])
-  const current = sections[Math.min(active, sections.length - 1)]
+  const about = active === 'about'
+  const current = about ? undefined : sections[Math.min(active, sections.length - 1)]
+  const panelTitle = about ? t('sandbox.settings.about.title') : current?.title
+  const panelDescription = about ? t('sandbox.settings.about.description') : current?.description
 
   const discard = () => {
     setDraft(undefined)
@@ -116,7 +121,7 @@ export function SettingsPage() {
     }
   }
 
-  const select = (index: number) => {
+  const select = (index: number | 'about') => {
     setActive(index)
     scroller.current?.scrollTo({ top: 0 })
   }
@@ -135,7 +140,7 @@ export function SettingsPage() {
           </Button>
         </div>
       </div>
-      {data && current ? (
+      {data && sections.length ? (
         <div className="grid min-h-0 w-full max-w-5xl flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 md:grid-cols-[14rem_minmax(0,1fr)] md:grid-rows-1">
           <nav aria-label={t('sandbox.settings.sections')} className="sandbox-scroll-strip flex gap-0.5 self-start overflow-x-auto rounded-xl p-1.5 ring-1 ring-border md:flex-col md:overflow-x-visible">
             {sections.map((section, index) => {
@@ -155,11 +160,21 @@ export function SettingsPage() {
                 </Button>
               )
             })}
+            <div role="separator" className="mx-1 shrink-0 bg-border max-md:w-px md:my-1 md:h-px" />
+            <Button
+              variant="ghost"
+              className={cn('shrink-0 justify-start md:w-full', about && 'bg-accent text-accent-foreground')}
+              aria-current={about ? 'page' : undefined}
+              onClick={() => select('about')}
+            >
+              <InfoIcon />
+              <span>{t('sandbox.settings.about.title')}</span>
+            </Button>
           </nav>
-          <section aria-label={current.title} className="flex min-h-0 flex-col overflow-hidden rounded-xl ring-1 ring-border">
+          <section aria-label={panelTitle} className="flex min-h-0 flex-col overflow-hidden rounded-xl ring-1 ring-border">
             <header className="flex shrink-0 flex-col gap-0.5 border-b border-border px-4 py-3">
-              <h2 className="text-[13px] font-medium">{current.title}</h2>
-              {current.description && <p className="text-[11px] text-muted-foreground">{current.description}</p>}
+              <h2 className="text-[13px] font-medium">{panelTitle}</h2>
+              {panelDescription && <p className="text-[11px] text-muted-foreground">{panelDescription}</p>}
             </header>
             <div className="relative flex min-h-0 flex-1 flex-col">
               <div ref={scroller} className="sandbox-settings-scroller min-h-0 flex-1 overflow-y-auto">
@@ -176,6 +191,7 @@ export function SettingsPage() {
                       />
                     </div>
                   ))}
+                  {about && <AboutPanel />}
                 </fieldset>
               </div>
               <OverlayScrollbar target={scroller} className="sandbox-settings-scrollbar" />
