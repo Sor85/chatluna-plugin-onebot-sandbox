@@ -66,14 +66,14 @@ describe('插件持久化配置', () => {
  * 而这些都不会让别的测试变红。
  */
 describe('测试控制端点配置', () => {
-  it('两个端点各有独立的总开关与路径，且默认都开启', () => {
+  it('两个端点各有独立的总开关与路径，且默认都关闭', () => {
     const endpoint = Config.dict?.testEndpoint.dict
     if (!endpoint) throw new Error('测试控制端点配置分组缺失')
 
     for (const [protocol, path] of [['mcp', '/mcp'], ['http', '/api']] as const) {
       const group = endpoint[protocol].dict
       if (!group) throw new Error(`${protocol} 端点配置分组缺失`)
-      expect(group.enabled.meta.default, protocol).toBe(true)
+      expect(group.enabled.meta.default, protocol).toBe(false)
       expect(labelOf(group.enabled), protocol).toBe('启用')
       expect(group.path.meta.default, protocol).toBe(path)
     }

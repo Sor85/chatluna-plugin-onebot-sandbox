@@ -84,7 +84,7 @@ export interface Config extends SandboxAppearance {
  * 两个端点的配置形状相同，只有默认路径与文案不同；分组标题由调用方补上。
  */
 const protocolSchema = (path: string, pathLabel: string, pathDescription: string): Schema<SandboxTestEndpointProtocolConfig> => Schema.object({
-  enabled: Schema.boolean().default(true).extra('label', '启用'),
+  enabled: Schema.boolean().default(false).extra('label', '启用'),
   path: Schema.string().default(path).extra('label', pathLabel).description(pathDescription),
 })
 

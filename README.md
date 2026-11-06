@@ -11,6 +11,6 @@
 | `sandboxMarkRecalledMessages` | `boolean` | `true` | 保留撤回气泡并显示撤回线 |
 | `sceneMessageLimit` | `number` | `2000` | 每个空间保留的场景消息条数上限 |
 | `sceneMessageMaxBytes` | `number` | `8388608` | 每个空间场景 JSON 的字节上限 |
-| `testEndpoint.mcp` | `{ enabled, path }` | `{ true, '/mcp' }` | MCP 测试端点 |
-| `testEndpoint.http` | `{ enabled, path }` | `{ true, '/api' }` | HTTP 测试端点 |
+| `testEndpoint.mcp` | `{ enabled, path }` | `{ false, '/mcp' }` | MCP 测试端点 |
+| `testEndpoint.http` | `{ enabled, path }` | `{ false, '/api' }` | HTTP 测试端点 |
 | `testEndpoint.shared` | object | — | 监听地址、端口、来源与 Origin 白名单、TLS 与调用配额 |
