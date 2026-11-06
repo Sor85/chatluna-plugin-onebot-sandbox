@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { XIcon } from 'lucide-react'
+import { CheckIcon, CopyIcon, XIcon } from 'lucide-react'
 import {
   Button,
   Dialog,
@@ -11,14 +11,17 @@ import {
   DialogTitle,
   Input,
 } from '@chatluna/ui-kit'
+import { toast } from '@chatluna/ui-client/client'
 import { useT } from '../i18n'
 import { EntityDialog, type EntityDialogTarget } from '../environment/entity-dialog'
 import { SandboxAvatar } from '../shared/avatar'
 import { useDiscardConfirm } from '../shared/discard-confirm'
 import { useRetained } from '../shared/use-retained'
+import { OverlayScrollbar } from '../shared/overlay-scrollbar'
 import { clampFloatingPanelPosition, getFloatingPanelPosition, isFloatingPanelInteractiveTarget } from '../shared/floating-panel'
 import { buildGroupProfileCardModel, buildProfileCardModel, groupProfileCardFields, type ProfileCardModel } from '../webqq/profile-card'
 import type { SandboxDialogs } from './context'
+import './profile-card.css'
 import { errorText, type WorkspaceStore } from './store'
 import { useSandbox, useWorkspace } from './context'
 
@@ -162,11 +165,12 @@ const PROFILE_WIDTH = 320
 /** 首帧定位用的估计高度；挂载后按实际高度重新收进视口。 */
 const PROFILE_HEIGHT = 380
 
-/** 资料卡：在点击位置附近浮出，可拖动标题栏移动，点外部或 Esc 关闭。 */
+/** 资料卡：在点击位置附近浮出，可拖动头部移动，点外部或 Esc 关闭。 */
 function ProfileCard({ card, x, y, onClose }: { card: ProfileCardModel, x: number, y: number, onClose(): void }) {
   const t = useT()
   const { resolveAvatar } = useWorkspace()
   const panel = React.useRef<HTMLElement>(null)
+  const scroller = React.useRef<HTMLDivElement>(null)
   const [position, setPosition] = React.useState(() => getFloatingPanelPosition({ x, y }, { width: window.innerWidth, height: window.innerHeight }, { width: PROFILE_WIDTH, height: PROFILE_HEIGHT }))
   const drag = React.useRef<{ id: number, x: number, y: number, left: number, top: number } | undefined>(undefined)
 
@@ -204,54 +208,92 @@ function ProfileCard({ card, x, y, onClose }: { card: ProfileCardModel, x: numbe
       className="sandbox-glass fixed z-50 flex max-h-[min(32rem,calc(100vh-24px))] w-80 flex-col overflow-hidden rounded-xl bg-popover text-sm leading-6 text-popover-foreground shadow-popup ring-1 ring-border animate-in fade-in-0 zoom-in-95"
       style={{ left: position.x, top: position.y }}
     >
-      <header
-        className="flex h-10 shrink-0 touch-none items-center justify-between border-b border-border pr-1.5 pl-4 select-none"
-        onPointerDown={(event) => {
-          if (event.button !== 0 || isFloatingPanelInteractiveTarget(event.target) || !panel.current) return
-          const rect = panel.current.getBoundingClientRect()
-          drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top }
-          event.currentTarget.setPointerCapture(event.pointerId)
-        }}
-        onPointerMove={(event) => {
-          const state = drag.current
-          if (!state || state.id !== event.pointerId || !panel.current) return
-          setPosition(clampFloatingPanelPosition(
-            { x: state.left + event.clientX - state.x, y: state.top + event.clientY - state.y },
-            { width: window.innerWidth, height: window.innerHeight },
-            { width: panel.current.offsetWidth, height: panel.current.offsetHeight },
-          ))
-        }}
-        onPointerUp={() => {
-          drag.current = undefined
-        }}
-      >
-        <strong className="text-[13px] font-medium">{t('sandbox.profile.title')}</strong>
-        <Button variant="ghost" size="icon-xs" aria-label={t('sandbox.common.close')} onClick={onClose}><XIcon /></Button>
-      </header>
-      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-4">
-        <div className="flex items-center gap-3">
-          <SandboxAvatar kind={card.avatarKind} name={card.name} src={resolveAvatar(card.avatar)} className="size-14" />
-          <div className="flex min-w-0 flex-col">
-            <h2 className="truncate text-base font-medium">{card.name}</h2>
-            <p className="text-xs text-muted-foreground">{card.identityLabel} {card.participantId}</p>
-            {card.personalNote && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{card.personalNote}</p>}
+      <Button variant="ghost" size="icon-xs" className="sandbox-profile-close" aria-label={t('sandbox.common.close')} onClick={onClose}><XIcon /></Button>
+      <div ref={scroller} className="sandbox-profile-scroller">
+        <header
+          className="sandbox-profile-hero"
+          onPointerDown={(event) => {
+            if (event.button !== 0 || isFloatingPanelInteractiveTarget(event.target) || !panel.current) return
+            const rect = panel.current.getBoundingClientRect()
+            drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top }
+            event.currentTarget.setPointerCapture(event.pointerId)
+          }}
+          onPointerMove={(event) => {
+            const state = drag.current
+            if (!state || state.id !== event.pointerId || !panel.current) return
+            setPosition(clampFloatingPanelPosition(
+              { x: state.left + event.clientX - state.x, y: state.top + event.clientY - state.y },
+              { width: window.innerWidth, height: window.innerHeight },
+              { width: panel.current.offsetWidth, height: panel.current.offsetHeight },
+            ))
+          }}
+          onPointerUp={() => {
+            drag.current = undefined
+          }}
+        >
+          <SandboxAvatar kind={card.avatarKind} name={card.name} src={resolveAvatar(card.avatar)} className="sandbox-profile-avatar" />
+          <div className="sandbox-profile-identity">
+            <h2 className="sandbox-profile-name">{card.name}</h2>
+            <div className="sandbox-profile-id">
+              <span>{card.identityLabel} {card.participantId}</span>
+              <CopyIdButton value={card.participantId} />
+            </div>
+            {card.personalNote && <p className="sandbox-profile-note">{card.personalNote}</p>}
           </div>
+        </header>
+        <div className="sandbox-profile-body">
+          {sections.map((section) => (
+            <section key={section.group}>
+              <h3 className="sandbox-profile-section-title">{section.label}</h3>
+              {section.group === 'group' ? (
+                <dl className="sandbox-profile-stats">
+                  {section.fields.map((field) => (
+                    <div key={field.label} className="sandbox-profile-stat">
+                      <dt>{field.label}</dt>
+                      <dd>{field.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <dl className="sandbox-profile-fields">
+                  {section.fields.map((field) => (
+                    <div key={`${field.label}:${field.value}`} className="sandbox-profile-field">
+                      <dt>{field.label}</dt>
+                      <dd>{field.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </section>
+          ))}
         </div>
-        {sections.map((section) => (
-          <section key={section.group} className="flex flex-col gap-1.5">
-            <h3 className="text-[11px] font-medium text-muted-foreground">{section.label}</h3>
-            <dl className="flex flex-col gap-1 rounded-lg bg-muted/50 p-2.5 text-xs">
-              {section.fields.map((field) => (
-                <div key={`${field.label}:${field.value}`} className="flex justify-between gap-3">
-                  <dt className="shrink-0 text-muted-foreground">{field.label}</dt>
-                  <dd className="min-w-0 text-right break-words">{field.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        ))}
       </div>
+      <OverlayScrollbar target={scroller} className="sandbox-profile-scrollbar" />
     </section>,
     document.body,
+  )
+}
+
+/** 号码旁的复制按钮：复制成功后短暂换成对勾。 */
+function CopyIdButton({ value }: { value: string }) {
+  const t = useT()
+  const [copied, setCopied] = React.useState(false)
+  React.useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 1500)
+    return () => clearTimeout(timer)
+  }, [copied])
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+    } catch {
+      toast.error(t('sandbox.records.copyFailed'))
+    }
+  }
+  return (
+    <Button variant="ghost" size="icon-xs" aria-label={t(copied ? 'sandbox.profile.copied' : 'sandbox.profile.copyId')} onClick={() => void copy()}>
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </Button>
   )
 }

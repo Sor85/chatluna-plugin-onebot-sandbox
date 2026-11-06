@@ -1,0 +1,164 @@
+/*
+ * 资料卡（overlay-host.tsx 的 ProfileCard）。只按 sandbox-profile- 类名选择；
+ * 本文件不分层，压过 ui-kit 在宿主 utilities 层里的工具类。卡片本身的玻璃底来自 glass.css。
+ */
+
+/* 正文视口隐藏原生滚动条，由 .sandbox-profile-scrollbar 自绘（SCROLLBAR.md）。 */
+.sandbox-profile-scroller {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sandbox-profile-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* 轨道上下让出卡片的 12px 圆角。 */
+.sandbox-profile-scrollbar {
+  top: 12px;
+  bottom: 12px;
+}
+
+.sandbox-profile-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+}
+
+/* 头部兼作拖动把手：浅色渐变底与正文区分，不再单设标题栏。 */
+.sandbox-profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 44px 18px 18px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--muted) 90%, transparent), transparent);
+  touch-action: none;
+  user-select: none;
+}
+
+.sandbox-profile-avatar {
+  width: 64px;
+  height: 64px;
+}
+
+.sandbox-profile-avatar > span:first-child {
+  font-size: 20px;
+  box-shadow: 0 0 0 3px var(--popover);
+}
+
+.sandbox-profile-identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sandbox-profile-name {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-profile-id {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sandbox-profile-note {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.sandbox-profile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 16px 16px;
+}
+
+.sandbox-profile-section-title {
+  margin: 0 4px 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+/* 字段行：圆角分组，行间细分隔线。 */
+.sandbox-profile-fields {
+  overflow: hidden;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+}
+
+.sandbox-profile-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.sandbox-profile-field + .sandbox-profile-field {
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.sandbox-profile-field dt {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.sandbox-profile-field dd {
+  min-width: 0;
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* 群资料的计数改成并排的数字块。 */
+.sandbox-profile-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sandbox-profile-stat {
+  display: flex;
+  /* dl 里 dt 在前，数字显示在上。 */
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+}
+
+.sandbox-profile-stat dd {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sandbox-profile-stat dt {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 16px;
+}
