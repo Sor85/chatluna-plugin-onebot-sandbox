@@ -102,7 +102,7 @@ describe('MCP 读取类工具', () => {
   })
 
   it('测试控制端点不提供创建或分叉会话实例的写工具', async () => {
-    // 会话实例目前是人工复盘手段：按 ADR-0017 只暴露稳定的领域测试能力，本轮不给外部
+    // 会话实例目前是人工复盘手段：测试端点只暴露稳定的领域测试能力，本轮不给外部
     // 测试控制器开写入口。工具清单本身由 tests/helpers/mcp-tool-catalogue.ts 逐条守卫，
     // 这里断言的是「尝试写入会被明确拒绝」，而不是静默成功或落到别的工具上。
     const { service, credential } = createMcpTestService(['read', 'interact', 'manage', 'debug'])

@@ -137,7 +137,7 @@ const endpointListenFields = {
   tlsKeyPath: Schema.string().extra('label', 'TLS 私钥路径'),
 }
 
-// 依 ADR-0025，配额只能由插件全局配置调整；两个端点共用一份额度，换个端点绕不开限流。
+// 配额只能由插件全局配置调整；两个端点共用一份额度，换个端点绕不开限流。
 const endpointQuotaFields = {
   readPerMinute: Schema.number().min(1).default(120).extra('label', '每分钟读取调用'),
   mutationPerMinute: Schema.number().min(1).default(60).extra('label', '每分钟变更调用'),

@@ -13,9 +13,7 @@ import { formatMentionContent } from './mention'
 /**
  * 「这条消息该怎么显示」——消息列表的呈现判定。
  *
- * 全部是纯函数：不起组件就能逐条问，也因此每一条都能被断言。此前它们住在
- * `webqq-message-list.vue` 的 `script` 里，唯一的验证手段是把组件源码读进来断言某一行文本
- * 出现过，那证明的是「有人写过这行」，不是「撤回的消息真的不能被引用」。
+ * 全部是纯函数：不起组件就能逐条问，也因此每一条都能被断言，例如「撤回的消息不能被引用」。
  */
 
 /** 呈现判定要读的那部分列表模型。收窄到这几项，测试不必造一整个列表模型。 */
@@ -30,7 +28,10 @@ export interface MessagePresentationContext {
   readonly currentOperatorId?: string
 }
 
-/** 媒体类型在界面上的中文标签。合并转发预览与消息气泡共用这一份。 */
+/**
+ * 媒体消息正文里的模拟文本标签（`[图片] 名称`）。它与服务端生成的消息内容逐字比较，属于消息内容，
+ * 不翻译；合并转发预览与消息气泡共用这一份。
+ */
 export function getMediaLabel(media: Pick<SandboxMedia, 'type'>): string {
   return media.type === 'image' ? '图片'
     : media.type === 'audio' ? '语音'

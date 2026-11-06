@@ -41,7 +41,7 @@ const TOOL_OUTPUTS: Record<string, OutputContract> = {
     required: ['name', 'testApiVersion', 'transport', 'stateless', 'cursor'],
   },
   send_message: {
-    // cursorBefore 与 cursor 是两个最容易被搞混的游标（ADR-0102），因此两个都在声明里。
+    // cursorBefore 与 cursor 是两个最容易被搞混的游标，因此两个都在声明里。
     fields: ['messageId', 'revision', 'cursorBefore', 'cursor'],
     required: ['messageId', 'revision', 'cursorBefore', 'cursor'],
   },

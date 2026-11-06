@@ -250,7 +250,7 @@ export class SandboxMcpService {
   private uploadedMedia = new Map<string, SandboxMedia>()
   // 幂等缓存同样按插入顺序限量并附带有效期。每条都持有结果的 structuredClone，而
   // apply_environment_changes 的结果里带完整场景快照；只在 invalidateScope 时清空意味着
-  // 不做破坏性操作的长跑会话会让它无界增长。上限与有效期见 ADR-0021。
+  // 不做破坏性操作的长跑会话会让它无界增长。
   private idempotency = new Map<string, IdempotencyEntry>()
   private confirmations = new Map<string, SandboxMcpConfirmation & { scope: string }>()
   private credentialFile: string
@@ -440,7 +440,7 @@ export class SandboxMcpService {
       const schema = clone.inputSchema as { description?: string; properties?: Record<string, { description?: string }> }
       if (schema.properties?.idempotencyKey) schema.properties.idempotencyKey.description = window
       // 按 schema 形状选注入点而不是按工具名：带消息正文参数的工具就是「正文要写成什么才能唤醒被测
-      // 机器人」的那一个，而工具名不参与任何判定（ADR-0086 的守卫规则）。今后新增带正文的工具会自动
+      // 机器人」的那一个，而工具名不参与任何判定。今后新增带正文的工具会自动
       // 带上指引，这正是期望行为。
       if (schema.properties?.content) schema.description = [schema.description, wakeup].filter(Boolean).join(' ')
       return clone
@@ -621,7 +621,7 @@ export class SandboxMcpService {
    * 因此想给某个工具开特例的人没有地方可写。
    *
    * 两种协议表述（MCP Streamable HTTP 与 HTTP 测试接口）都只经这里，因此权限、配额、并发、幂等
-   * 与测试调用记录不存在第二份实现（ADR-0081）。`context.transport` 只用于标注记录与
+   * 与测试调用记录不存在第二份实现。`context.transport` 只用于标注记录与
    * `get_server_info` 的自述，不参与任何权限或配额判定：同一个凭证在两种表述下拥有完全相同的
    * 能力与额度。
    */
@@ -737,7 +737,7 @@ export class SandboxMcpService {
       throw new SandboxMcpError('confirmation_required', '签发确认令牌后场景版本已变化，令牌已作废', false, reissue)
     }
     // 参数绑定取业务参数指纹：令牌自身与调用标注参数都不参与，因此签发时的 `arguments` 只需逐字段
-    // 写出这次操作要做什么，不必连带复述编排标注（ADR-0097）。
+    // 写出这次操作要做什么，不必连带复述编排标注。
     if (confirmation.argumentsHash !== argumentsFingerprint(args)) {
       throw new SandboxMcpError('confirmation_required', '调用参数与签发确认令牌时的 arguments 不一致', false, '令牌仍然有效，请按签发时的 arguments 逐字段调用。')
     }
@@ -764,7 +764,7 @@ export class SandboxMcpService {
   }
 
   /**
-   * 按 ADR-0027 把抛出的异常分成三类。
+   * 把抛出的异常分成三类。
    *
    * 结构化的 `SandboxMcpError` 原样透出；领域主动作出的业务拒绝（`SandboxDomainError`）保留
    * `domain_error` 与原始消息，因为「只有群主可以踢人」这类判定对外部测试控制器有用；其余一切
@@ -855,7 +855,7 @@ export class SandboxMcpService {
       if (cached.argumentsHash !== argumentsHash) throw new SandboxMcpError('idempotency_conflict', '幂等 Key 已被不同参数使用')
       return structuredClone(cached.result)
     }
-    // 过期的条目按 ADR-0021 视为不存在：重放会重新执行操作，因此这里先丢弃再往下走。
+    // 过期的条目视为不存在：重放会重新执行操作，因此这里先丢弃再往下走。
     if (cached) this.idempotency.delete(cacheKey)
     const result = await action()
     this.rememberIdempotentResult(cacheKey, { argumentsHash, result: structuredClone(result), expiresAt: Date.now() + this.idempotencyTtlMs, scope: scopeKey(spaceId) })
@@ -1047,7 +1047,7 @@ export class SandboxMcpService {
     } catch (error) {
       // 凭证存储损坏时必须安全地回到“无有效凭证”，不能让可选 MCP 能力阻断 WebQQ。
       // 但这条路径必须留下线索：否则管理员只看到 WebQQ 里凭证列表凭空空了。
-      // 只记文件路径与失败原因，不记文件内容——内容里带明文 Token（ADR-0058）。
+      // 只记文件路径与失败原因，不记文件内容——内容里带明文 Token。
       this.credentials = []
       if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         this.ctx.logger('onebot-sandbox').warn('%s\n%s', `测试凭证文件读取失败，已回到无有效凭证：${this.credentialFile}`, errorDetail(error))

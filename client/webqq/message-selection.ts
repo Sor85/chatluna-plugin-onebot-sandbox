@@ -1,11 +1,10 @@
 import type { MessageCapabilities } from '../../src/message-capabilities'
 
 /**
- * 多选转发的整个流程：进入、切换、退出、可选性、键盘、以及确认转发到目标会话。
+ * 多选转发的整个流程：进入、切换、退出、可选性，以及确认转发到目标会话。
  *
- * 这些判定此前散在聊天区域的 `script` 里，唯一的验证手段是点界面。其中「哪些消息可选」原先
- * 由组件自己按 `!message.event && !isRecalledMessage(message)` 推导——那是消息能力里
- * `forward` 那一位的第二份口径（ADR 0078 明确只许有一份），现在改成读投影给出的能力位。
+ * 「哪些消息可选」只读投影给出的 `forward` 能力位，不在客户端按事件、撤回状态另行推导：
+ * 消息能力只许有一份口径（`src/message-capabilities`），服务端写入时问的是同一份判据。
  */
 
 export interface MessageSelectionState {

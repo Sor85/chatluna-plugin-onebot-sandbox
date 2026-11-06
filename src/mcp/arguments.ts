@@ -121,7 +121,7 @@ const CALL_ANNOTATION_KEYS: readonly string[] = ['testRunId', 'confirmationToken
  * 调用标注参数在求摘要前被剥掉：它们对全部工具生效且鼓励每次调用都带（`testRunId` 是
  * `list_test_call_records` 回溯同一轮编排的唯一维度），一个鼓励普遍携带的标注键不该改变业务判定。
  * 带上它们的后果是两条本该成功的路径静默失败——签发令牌时没写 `testRunId`、实际调用带了它，
- * 确认会被判成失败；同一幂等键换一个 `testRunId` 重放，会被判成幂等冲突。见 ADR-0097。
+ * 确认会被判成失败；同一幂等键换一个 `testRunId` 重放，会被判成幂等冲突。
  */
 export function argumentsFingerprint(args: Record<string, unknown>): string {
   const business = Object.fromEntries(Object.entries(args).filter(([key]) => !CALL_ANNOTATION_KEYS.includes(key)))

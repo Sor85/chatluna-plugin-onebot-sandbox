@@ -74,8 +74,8 @@ describe('参与者呈现投影', () => {
       const members = group([member('10001', 'owner'), member('20001', 'admin'), member('30001', 'member')])
       const withGroup = context({ currentGroup: members })
 
-      expect(getMessageRoleBadge('10001', withGroup)).toEqual({ text: '群主', kind: 'owner' })
-      expect(getMessageRoleBadge('20001', withGroup)).toEqual({ text: '管理员', kind: 'admin' })
+      expect(getMessageRoleBadge('10001', withGroup)).toEqual({ kind: 'owner' })
+      expect(getMessageRoleBadge('20001', withGroup)).toEqual({ kind: 'admin' })
       expect(getMessageRoleBadge('30001', withGroup)).toBeUndefined()
     })
 
@@ -84,8 +84,8 @@ describe('参与者呈现投影', () => {
       const members = group([member('10001', 'owner', { title: '大家长' }), member('30001', 'member', { title: '活跃王' })])
       const withGroup = context({ currentGroup: members })
 
-      expect(getMessageRoleBadge('10001', withGroup)).toEqual({ text: '大家长', kind: 'owner' })
-      expect(getMessageRoleBadge('30001', withGroup)).toEqual({ text: '活跃王', kind: 'title' })
+      expect(getMessageRoleBadge('10001', withGroup)).toEqual({ kind: 'owner', title: '大家长' })
+      expect(getMessageRoleBadge('30001', withGroup)).toEqual({ kind: 'title', title: '活跃王' })
     })
 
     it('不在群里时没有徽标', () => {

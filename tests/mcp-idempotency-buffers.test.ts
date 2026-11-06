@@ -9,7 +9,7 @@ import { createMcpTestService, stopMcpTestApps } from './helpers/mcp-service-har
  * 缓冲区都有。幂等缓存每条都持有结果的 `structuredClone`，`apply_environment_changes` 的结果里带
  * 完整场景快照，因此不做破坏性操作的长跑会话会让它无界增长。
  *
- * 时间用测试运行器的假时钟推进，按 ADR-0066 不注入时钟。
+ * 时间用测试运行器的假时钟推进，不注入时钟。
  */
 
 beforeEach(() => {
@@ -55,7 +55,7 @@ describe('MCP 幂等缓存的上限与有效期', () => {
     vi.advanceTimersByTime(30 * 60_000 + 1)
     const replayed = await createSpace(service, credential.token, 'expiring-key')
 
-    // 这是 ADR-0021 的行为变更：超出窗口的重放不再返回首次结果，而是真的再执行一次。
+    // 超出窗口的重放不返回首次结果，而是真的再执行一次。
     expect(replayed.spaceId).not.toBe(first.spaceId)
     expect((await service.callTool(credential.token, 'list_test_spaces', {}) as { items: unknown[] }).items).toHaveLength(2)
   })
@@ -81,7 +81,7 @@ describe('MCP 幂等缓存的上限与有效期', () => {
     const defaults = readWindows(createMcpTestService(['read']))
     expect(defaults.map(({ name }) => name)).toContain('send_message')
     for (const { name, description } of defaults) {
-      // 有效期是 ADR-0021 修订后的对外承诺，消费者只能从 inputSchema 学到它。
+      // 有效期是对外承诺，消费者只能从 inputSchema 学到它。
       expect({ name, statesWindow: description.includes('30 分钟') && description.includes('500 条') }).toEqual({ name, statesWindow: true })
     }
 

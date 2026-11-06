@@ -4,10 +4,11 @@ import en from './locales/en.yml'
 
 export default function apply(ctx: Context) {
   ctx.locale.register('onebot-sandbox', { zh, en })
+  const t = ctx.locale.bind('onebot-sandbox')
   ctx.slots.route({
     path: '/onebot-sandbox/:view?',
     page: async () => (await import('./app')).SandboxApp,
-    title: 'OneBot 沙盒',
+    title: () => t('onebot-sandbox.title'),
     icon: 'flask-conical',
     order: 60,
     group: 'chat',

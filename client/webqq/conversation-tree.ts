@@ -34,7 +34,6 @@ export interface ConversationTreeRow {
   time: string
   actorRole?: SandboxGroupMember['role']
   entityTarget: { type: 'user' | 'bot' | 'group', id: string }
-  entityLabel: '用户' | '机器人' | '群组'
 }
 
 /** 会话实例子项。它自己不带子项列表：层级严格两层，实例下不再有实例。 */
@@ -46,7 +45,7 @@ export interface ConversationTreeInstanceRow extends ConversationTreeRow {
  * 会话树的顶层：根会话行，子项列表一定存在，没有会话实例时为空数组。
  *
  * 子项类型钉成会话实例行而不是任意一行，因此「层级严格两层，实例下不再有实例」
- * （CONTEXT.md「会话实例」、ADR-0076）写在类型上，而不是只写在注释里。
+ * 写在类型上，而不是只写在注释里。
  */
 export interface ConversationTreeNode extends ConversationTreeRow {
   kind: 'root'
@@ -136,7 +135,6 @@ function toRow(input: ConversationTreeInput, conversation: ResolvedConversation)
     entityTarget: group
       ? { type: 'group', id: group.id }
       : { type: bot ? 'bot' : 'user', id: peerId ?? '' },
-    entityLabel: group ? '群组' : bot ? '机器人' : '用户',
   }
 }
 

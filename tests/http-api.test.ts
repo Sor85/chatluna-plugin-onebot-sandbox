@@ -83,7 +83,7 @@ describe('HTTP 测试接口路由', () => {
 
     expect(() => route('POST', '/api/v1/tools')).toThrow('只接受 GET')
     expect(() => route('GET', '/api/v1/tools/send_message')).toThrow('只接受 POST')
-    // 版本段缺失或写错都是路径不存在，而不是「工具不存在」：破坏性变更走新版本段（ADR-0028）。
+    // 版本段缺失或写错都是路径不存在，而不是「工具不存在」：破坏性变更走新版本段。
     expect(() => route('GET', '/api/tools')).toThrow('路径不存在')
     expect(() => route('GET', '/api/v2/tools')).toThrow('路径不存在')
     expect(() => route('GET', '/api/v1/unknown')).toThrow('路径不存在')

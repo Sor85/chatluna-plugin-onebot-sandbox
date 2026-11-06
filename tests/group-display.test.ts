@@ -9,16 +9,16 @@ describe('WebQQ 群身份显示', () => {
   })
 
   it('消息徽标只显示群主和管理员', () => {
-    expect(getGroupAuthorityBadge({ role: 'owner' })).toEqual({ text: '群主', kind: 'owner' })
-    expect(getGroupAuthorityBadge({ role: 'admin' })).toEqual({ text: '管理员', kind: 'admin' })
+    expect(getGroupAuthorityBadge({ role: 'owner' })).toEqual({ kind: 'owner' })
+    expect(getGroupAuthorityBadge({ role: 'admin' })).toEqual({ kind: 'admin' })
     expect(getGroupAuthorityBadge({ role: 'member' })).toBeUndefined()
     expect(getGroupAuthorityBadge(undefined)).toBeUndefined()
   })
 
   it('专属头衔覆盖徽标文案但保留群身份配色', () => {
-    expect(getGroupAuthorityBadge({ role: 'owner', title: ' 创始人 ' })).toEqual({ text: '创始人', kind: 'owner' })
-    expect(getGroupAuthorityBadge({ role: 'admin', title: '副群主' })).toEqual({ text: '副群主', kind: 'admin' })
-    expect(getGroupAuthorityBadge({ role: 'member', title: '荣誉成员' })).toEqual({ text: '荣誉成员', kind: 'title' })
+    expect(getGroupAuthorityBadge({ role: 'owner', title: ' 创始人 ' })).toEqual({ kind: 'owner', title: '创始人' })
+    expect(getGroupAuthorityBadge({ role: 'admin', title: '副群主' })).toEqual({ kind: 'admin', title: '副群主' })
+    expect(getGroupAuthorityBadge({ role: 'member', title: '荣誉成员' })).toEqual({ kind: 'title', title: '荣誉成员' })
     expect(getGroupAuthorityBadge({ role: 'member', title: '   ' })).toBeUndefined()
   })
 })

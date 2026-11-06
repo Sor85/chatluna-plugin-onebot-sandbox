@@ -157,7 +157,7 @@ const TEST_CALL_TRANSPORTS: readonly SandboxTestCallTransport[] = ['mcp', 'http'
 const SPACE_REQUIRED = { type: 'string', description: 'AI 测试空间 ID，由 create_test_space 返回；修改与等待类操作必填' }
 const SPACE_OPTIONAL = { type: 'string', description: 'AI 测试空间 ID；省略时读取主场景' }
 // 幂等窗口的具体数值由服务实例的配置决定，不能写死在这里：读取工具声明的那一处会按实际配置改写
-// 这条描述，否则非默认部署会向 AI 消费者发布一份错误的契约。见 ADR-0021。
+// 这条描述，否则非默认部署会向 AI 消费者发布一份错误的契约。
 const IDEMPOTENCY_KEY = { type: 'string', description: '幂等键；使用相同键重放时参数必须逐字段一致' }
 const CURSOR = {
   type: 'object',
@@ -175,7 +175,7 @@ const TIMEOUT_SECONDS = { type: 'number', minimum: 1, maximum: 120, description:
  *
  * 游标是服务端编码的不透明字符串，因此「哪个游标在哪种取值下有效」不再是消费者要判断的事——
  * 序号、时间戳与破平键怎么编码归服务端。`limit` 沿用既有口径：类型不对显式失败、越界按声明的
- * 上下限收敛（ADR-0098）。
+ * 上下限收敛。
  */
 const PAGE_CURSOR = {
   type: 'string',
@@ -514,7 +514,7 @@ const WAIT_CHATLUNA_STATE_OUTPUT = waitOutputSchema(
 /**
  * 发送类结果的两个游标。
  *
- * `cursorBefore` 是发送前的位置、`cursor` 是发送后的位置，两者最容易被搞混（ADR-0102）：等待机器人
+ * `cursorBefore` 是发送前的位置、`cursor` 是发送后的位置，两者最容易被搞混：等待机器人
  * 对本次发送的反应必须用 `cursorBefore`，同步回复在调用返回之前就已经进入事件流。
  */
 const SEND_CURSORS = {
@@ -1247,7 +1247,7 @@ function importScene(runtime: SandboxMcpToolRuntime, args: Record<string, unknow
  * 调试记录页在测试控制端点这一侧的形状。
  *
  * 翻译写在这里而不是改记录页类型：`SandboxOneBotDebugRecordsPage` 同时被 Console 契约与 WebQQ 的
- * 记录页读取，那两处直接读 `records`／`nextCursor`（ADR-0095 的口径是由翻译它的模块自述）。
+ * 记录页读取，那两处直接读 `records`／`nextCursor`，翻译由翻译它的模块自述。
  * `capacity` 与 `earliestCursor` 原样带出：前者是容量摘要，后者是游标过期恢复用的最早位置，
  * 不透明游标只替换「消费者自己拼参数」这一段，不减少信息量。
  */
@@ -1305,7 +1305,7 @@ async function clearOneBotDebugRecords(runtime: SandboxMcpToolRuntime) {
 /**
  * 测试调用记录的分页在这里切，而不是下推到记录库。
  *
- * 记录页类型由 Console 契约与 WebQQ 的测试调用记录页共用，按 ADR-0095 翻译归翻译它的模块；记录
+ * 记录页类型由 Console 契约与 WebQQ 的测试调用记录页共用，翻译归翻译它的模块；记录
  * 本身整份在内存里，因此按偏移切页不多读一次。补上 `limit` 之前它是唯一没有上限的 list：保留
  * 500 条时一次全返回。
  */

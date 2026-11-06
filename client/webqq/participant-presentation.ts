@@ -92,8 +92,7 @@ export function getMessageGroupMemberActions(
  * 哪些动作算「群管理操作」。
  *
  * 这张表决定头像右键里那个「群成员操作」子菜单出不出现：`mention` 与 `poke` 是互动而不是
- * 管理，它们留在一级菜单里，因此只有这六项进表。表此前内联在视图模板旁边，改它不会报错，
- * 只会让子菜单在该出现时不出现。
+ * 管理，它们留在一级菜单里，因此只有这六项进表。表写错不会报错，只会让子菜单在该出现时不出现。
  */
 export const GROUP_MANAGEMENT_ACTIONS: readonly GroupMemberMenuAction[] = [
   'set-card',

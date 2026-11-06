@@ -499,7 +499,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                           {!merged && (
                             <div className="sandbox-message-sender-line">
                               <span>{authorName(message.authorId)}</span>
-                              {badge && <span className={cn('sandbox-message-role-badge', `is-${badge.kind}`)}>{badge.text}</span>}
+                              {badge && <span className={cn('sandbox-message-role-badge', `is-${badge.kind}`)}>{badge.title ?? t(`sandbox.role.${badge.kind}`)}</span>}
                             </div>
                           )}
                           <div className="sandbox-message-body">

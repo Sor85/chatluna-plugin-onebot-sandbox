@@ -129,7 +129,7 @@ describe('测试凭证存储的健壮性', () => {
     const { service } = createService(directory)
     const created = service.createCredential('日志凭证', ['read'])
 
-    // 让文件不可读，逼出加载失败路径，再确认告警里没有明文 Token（ADR-0058）。
+    // 让文件不可读，逼出加载失败路径，再确认告警里没有明文 Token。
     const file = join(directory, CREDENTIAL_FILE)
     chmodSync(file, 0o000)
     const { printed } = captureLogger((app) => createService(directory, app))

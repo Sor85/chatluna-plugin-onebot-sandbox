@@ -61,9 +61,9 @@ body:has(.sandbox-settings-form) [data-slot='popover-content']:has(> [role='slid
 }
 
 /*
- * 消息页的页头与聊天标题栏两层毛玻璃，对应源插件的全局顶栏（rail）与聊天表头（sidebar.css、chat.css）。
+ * 消息页的页头与聊天标题栏两层毛玻璃。
  * 模糊放在无后代的伪元素上，表头本体不成为 Backdrop Root，里面的搜索结果浮层仍能采样消息区。
- * 背后必须真有内容（源插件 ADR 0071）：聊天列（.sandbox-chat-pane）上移页头高度，消息区（.sandbox-chat-stage）
+ * 毛玻璃背后必须真有内容：聊天列（.sandbox-chat-pane）上移页头高度，消息区（.sandbox-chat-stage）
  * 再上移标题栏高度（h-14），滚动视口（.sandbox-message-scroller）补回两者之和的顶部内边距，首条消息位置不变，
  * 消息依次从标题栏和页头后面滚过。页头高度由 app.tsx 测量，写在 .sandbox-stage 上的
  * --sandbox-page-header-height；总览里的预览缩略图不在 .sandbox-stage 内，取默认 0。

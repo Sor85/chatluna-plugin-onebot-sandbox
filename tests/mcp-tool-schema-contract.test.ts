@@ -292,7 +292,7 @@ describe('MCP 工具参数契约', () => {
         .toEqual({ tool, pagination: [...PAGINATION_PARAMETERS].sort() })
       expect({ tool, retired: parameters.filter((name) => RETIRED_PAGINATION_PARAMETERS.includes(name)) })
         .toEqual({ tool, retired: [] })
-      // 上下限写在声明里，越界才谈得上「按声明收敛」（ADR-0098）。
+      // 上下限写在声明里，越界才谈得上「按声明收敛」。
       expect({ tool, limit: schemas[tool]?.properties?.limit })
         .toEqual({ tool, limit: expect.objectContaining({ minimum: 1, maximum: 200 }) })
     }

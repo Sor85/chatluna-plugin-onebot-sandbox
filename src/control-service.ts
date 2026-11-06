@@ -378,7 +378,7 @@ export class SandboxControlService {
    * 入站事件会话窗口，由投递模块进出栈，由虚拟 OneBot 机器人读取。
    *
    * 控制服务只负责把同一个实例交给两边，自己不读也不写：读取跟随与会话观察都发生在机器人适配器
-   * 那一侧，写入落点不看它（ADR-0076 的写入偏离照旧）。
+   * 那一侧，写入落点不看它，回复照旧落到根会话。
    */
   private inboundEventConversations: InboundEventConversations = createInboundEventConversations()
   /** 投递规则的唯一持有者；三条发送路径与六种事件都经它。 */

@@ -1,4 +1,3 @@
-// 移植自源插件：草稿模型与宿主读写协议保持不变，只把 Vue 响应式换成通知回调。
 import {
   createEmptyComposerDraft,
   deleteComposerBackward,
@@ -17,17 +16,16 @@ import {
 /**
  * 草稿与 contenteditable 之间的双向转换、光标读写、输入法状态与提及候选菜单。
  *
- * 纯 token 计算早就下沉了（`composer-draft.ts`）；真正会出问题的是「怎么把它和 contenteditable
- * 对上」：从子节点遍历回读出草稿、把草稿渲染成节点、把光标放到第几个 token 的第几个偏移、
- * 输入法未上屏时不许读回、input 事件早于 Selection 更新时要等一拍。这几块此前全留在发送控件里，
- * 一条行为断言都没有，而它们的失效形态都是静默的——光标跳到开头、中文输入法上屏后前一个字符
- * 消失、退格删掉半个提及——不报错，只能靠人在界面上敲出来。
+ * 纯 token 计算在 `composer-draft.ts`；这里处理「怎么把它和 contenteditable 对上」：从子节点
+ * 遍历回读出草稿、把草稿渲染成节点、把光标放到第几个 token 的第几个偏移、输入法未上屏时不许
+ * 读回、input 事件早于 Selection 更新时要等一拍。它们的失效形态都是静默的——光标跳到开头、
+ * 中文输入法上屏后前一个字符消失、退格删掉半个提及——不报错，所以收在纯模块里逐条断言。
  *
  * 候选菜单与草稿同处一个模块：每次输入都要重算菜单、方向键要被路由给菜单、选中候选项又要写回
  * 草稿并移动光标，拆开会让两者之间的 interface 宽到没有意义。
  *
- * 判定进这个模块，带副作用与有时序的宿主操作按最小结构接口注入（ADR 0075）：不注入 DOM 类型，
- * 视图负责把 Text 节点、提及芯片与 Selection 映射成下面这几个朴素结构。
+ * 状态变化经 `notify` 回调通知视图。判定进这个模块，带副作用与有时序的宿主操作按最小结构接口
+ * 注入：不注入 DOM 类型，视图负责把 Text 节点、提及芯片与 Selection 映射成下面这几个朴素结构。
  */
 
 /** 编辑器一个子节点的结构读数。视图从 DOM 映射出来，映射本身是机械动作。 */
@@ -278,8 +276,7 @@ export function deleteComposerMentionAtBoundary(
 /**
  * 这一次按键是什么意思。
  *
- * 「Enter 到底是发送还是选中候选」此前是组件里的一个内联条件，散在模板事件绑定与两个处理函数
- * 之间；现在由这一个函数回答，调用方只按返回值决定要不要 `preventDefault`。
+ * 「Enter 到底是发送还是选中候选」由这一个函数回答，调用方只按返回值决定要不要 `preventDefault`。
  *
  * 退格只在提及边界上被消费，让「整块删掉提及」这条规则由本模块说了算，两个引擎口径一致；
  * 其余位置的退格照旧交给宿主，删一个字符就是删一个字符。菜单开着时不可能同时落在提及边界上
@@ -353,7 +350,7 @@ export interface ComposerDraftHostAdapter {
 export function createComposerDraftHost(adapter: ComposerDraftHostAdapter, notify: () => void = () => {}) {
   const { ref, computed } = createCells(notify)
   const draft = ref<ComposerDraft>(createEmptyComposerDraft())
-  /** 输入法组字中。此前是模板上两个内联赋值，四处判定各读一次。 */
+  /** 输入法组字中。 */
   const composing = ref(false)
   /**
    * 占位文案与发送按钮的可用性都看这一项。

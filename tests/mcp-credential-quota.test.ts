@@ -70,7 +70,7 @@ async function rejection(promise: Promise<unknown>): Promise<SandboxMcpError> {
 }
 
 beforeEach(() => {
-  // 频率窗口读系统时钟；按 ADR-0066 用测试运行器的假时钟固定基准时刻并推进时间，
+  // 频率窗口读系统时钟；用测试运行器的假时钟固定基准时刻并推进时间，
   // 不真的等待一分钟，也不注入时钟。shouldAdvanceTime 是必需的：等待类工具与
   // 场景提交都依赖真实排队的定时器。
   vi.useFakeTimers({ shouldAdvanceTime: true })

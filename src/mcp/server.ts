@@ -21,7 +21,7 @@ export interface SandboxTestEndpointProtocolConfig {
 // 只描述传输：监听地址、端口、TLS、来源与 Origin 白名单，以及两种协议表述各自的开关与路径。
 // 测试凭证的频率与并发配额由测试控制服务（SandboxMcpQuotaConfig）执行，不在此声明。
 //
-// 传输字段是共享的而不是每种表述各来一份：非回环缺 TLS 时的明文告警（ADR-0082）一旦分成两份
+// 传输字段是共享的而不是每种表述各来一份：非回环缺 TLS 时的明文告警一旦分成两份
 // 配置，就有了两次配错的机会，而两种表述面对的风险完全相同。
 export interface SandboxTestEndpointServerConfig {
   host: string
@@ -124,7 +124,7 @@ export class SandboxTestEndpointServer {
 
   async start(): Promise<void> {
     if ((!this.config.mcp.enabled && !this.config.http.enabled) || this.server) return
-    // 非回环缺 TLS 时照常启动，只持续告警（ADR-0082）：这里没有可用的替代传输，拒绝启动只会让
+    // 非回环缺 TLS 时照常启动，只持续告警：这里没有可用的替代传输，拒绝启动只会让
     // 局域网调试无路可走，而是否接受明文只有部署者知道。
     if (!isLoopback(this.config.host) && (!this.config.tlsCertPath || !this.config.tlsKeyPath)) {
       this.ctx.logger('onebot-sandbox').warn('测试控制端点正在非回环地址上使用明文 HTTP；Bearer Token 可能被窃取。')

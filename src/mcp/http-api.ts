@@ -16,7 +16,7 @@ import { SandboxMcpError } from './types'
  * 都拿得到 `structuredContent`，不存在「某几个工具要改走解析文本」这条例外路径。
  */
 
-/** 路径版本段。与 ADR-0028 的 `testApiVersion` 同步推进：破坏性变更走新的版本段而不是原地改。 */
+/** 路径版本段。与 `testApiVersion` 同步推进：破坏性变更走新的版本段而不是原地改。 */
 export const HTTP_API_VERSION = 'v1'
 
 /** 请求体上限。`upload_media` 走 base64，正常上传远小于此；超出即拒，避免单个请求吃满内存。 */

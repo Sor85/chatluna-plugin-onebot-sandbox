@@ -211,7 +211,7 @@ describe('MCP Streamable HTTP', () => {
     })
     cleanups.push(async () => { await server.stop(); await app.stop() })
 
-    // 告警必须真的打出来：这是明文传输唯一的可见提示（ADR-0082），端点本身不再拦。
+    // 告警必须真的打出来：这是明文传输唯一的可见提示，端点本身不再拦。
     const { printed, restore } = captureLogs(app)
     try {
       await server.start()
