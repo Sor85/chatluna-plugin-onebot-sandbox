@@ -50,7 +50,7 @@ describe('ChatLuna v2 agent 事件', () => {
     expect(store.getStates()).toEqual([expect.objectContaining({ botParticipantId: 'bot-1', conversationId: 'private:user-1', thinking: true })])
 
     emit('chatluna/agent-step', { agent, step: step(3, 1, { usage: { inputTokens: 10, outputTokens: 2 }, text: '<think>先查一下</think>' }) })
-    emit('chatluna/agent-step', { agent, step: step(3, 2, { usage: { inputTokens: 5, outputTokens: 4 }, text: '<think>可以回了</think>好的' }) })
+    emit('chatluna/agent-step', { agent, step: step(3, 2, { usage: { inputTokens: 12, outputTokens: 4 }, text: '<think>可以回了</think>好的' }) })
     expect(store.traceFor('bot-1', 'private:user-1')).toEqual({ sessionId: '42', turn: 3, step: 2 })
 
     store.recordReplyMessage('bot-1', 'private:user-1', 'message-1')
@@ -60,7 +60,7 @@ describe('ChatLuna v2 agent 事件', () => {
       result: {
         thought: '先查一下\n\n可以回了',
         thoughtDurationMs: expect.any(Number),
-        usage: { inputTokens: 15, outputTokens: 6, totalTokens: 21 },
+        usage: { inputTokens: 12, outputTokens: 6, totalTokens: 18 },
       },
       ids: ['message-1'],
     }])

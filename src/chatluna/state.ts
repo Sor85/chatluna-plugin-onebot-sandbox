@@ -18,6 +18,7 @@ interface ChatLunaEventRegistrar {
   (event: 'chat/receive', listener: (session: unknown, result: { sessionId: string }) => void): () => void
   (event: 'chatluna/agent-status', listener: (payload: { agent: ChatLunaAgentPayload, status: string }) => void): () => void
   (event: 'chatluna/agent-step', listener: (payload: { agent: ChatLunaAgentPayload, step: ChatLunaStepPayload }) => void): () => void
+  (event: 'chatluna/span-start' | 'chatluna/span-end', listener: (payload: { span?: ChatLunaSpanPayload }) => void): () => void
 }
 
 /** ChatLuna v2 agent 事件里本模块读取的字段；事件类型来自宿主，这里只做结构化读取。 */
@@ -30,6 +31,13 @@ interface ChatLunaStepPayload {
   toolCalls?: unknown
   usage?: { inputTokens?: unknown, cacheReadTokens?: unknown, cacheWriteTokens?: unknown, outputTokens?: unknown, totalTokens?: unknown }
   trace?: { attributes?: Record<string, unknown> }
+}
+
+/** `@chatluna/trace` 的 span 快照里本模块读取的字段；step span 带 turn、step 属性与 agent 会话 ID。 */
+interface ChatLunaSpanPayload {
+  spanKind?: unknown
+  session?: unknown
+  attributes?: Record<string, unknown>
 }
 
 interface SandboxChatLunaTarget {
@@ -99,6 +107,8 @@ export class SandboxChatLunaStateStore {
   private busySessions = new Set<string>()
   /** 每个机器人会话最近一步模型调用的 trace 位置；新回复按它标注出处。 */
   private latestTraces = new Map<string, SandboxMessageTraceReference>()
+  /** 每个机器人会话正在进行的那一步；`reply` 等工具在这一步当中发出回复，此时 agent-step 还没到。 */
+  private runningTraces = new Map<string, SandboxMessageTraceReference>()
   /** 机器人会话 → 已结束回合还没落到回复上的结果。 */
   private pendingResults = new Map<string, PendingResult>()
   private disposers: Array<() => void> = []
@@ -135,11 +145,38 @@ export class SandboxChatLunaStateStore {
       if (!sessionId || !target) return
       this.recordStep(sessionId, target, step)
     }))
+    // 工具模式下回复由 `reply` 工具在这一步当中发出，早于 agent-step；step span 的起止让发消息时能拿到这一步。
+    // 文本模式的回复在这一步结束后经渲染队列发出，落回 latestTraces。trace 插件未加载时两个事件都不会来。
+    this.disposers.push(on('chatluna/span-start', ({ span }) => {
+      const located = this.locateStepSpan(span)
+      if (located) this.runningTraces.set(located.key, located.trace)
+    }))
+    this.disposers.push(on('chatluna/span-end', ({ span }) => {
+      const located = this.locateStepSpan(span)
+      if (!located) return
+      const running = this.runningTraces.get(located.key)
+      if (running?.turn === located.trace.turn && running.step === located.trace.step) this.runningTraces.delete(located.key)
+      this.latestTraces.set(located.key, located.trace)
+    }))
   }
 
-  /** 机器人此刻发出的回复出自哪一步模型调用；会话里出现新的用户消息后清空，命令回复不会沿用上一轮。 */
+  private locateStepSpan(span: ChatLunaSpanPayload | undefined): { key: string, trace: SandboxMessageTraceReference } | undefined {
+    if (span?.spanKind !== 'step') return
+    const sessionId = readString(span.session)
+    const target = sessionId ? this.agentTargets.get(sessionId) : undefined
+    const turn = readNumber(span.attributes?.turn)
+    const step = readNumber(span.attributes?.step)
+    if (!sessionId || !target || !turn || !step) return
+    return { key: createStateKey(target.botParticipantId, target.conversationId), trace: { sessionId, turn, step } }
+  }
+
+  /**
+   * 机器人此刻发出的回复出自哪一步模型调用：有正在进行的一步就是它，否则是最近完成的一步。
+   * 会话里出现新的用户消息后清空最近完成的一步，命令回复不会沿用上一轮。
+   */
   traceFor(botParticipantId: string, conversationId: string): SandboxMessageTraceReference | undefined {
-    const trace = this.latestTraces.get(createStateKey(botParticipantId, conversationId))
+    const key = createStateKey(botParticipantId, conversationId)
+    const trace = this.runningTraces.get(key) ?? this.latestTraces.get(key)
     return trace && { ...trace }
   }
 
@@ -179,6 +216,7 @@ export class SandboxChatLunaStateStore {
     this.agentTargets.clear()
     this.busySessions.clear()
     this.latestTraces.clear()
+    this.runningTraces.clear()
     this.pendingResults.clear()
   }
 
@@ -205,6 +243,7 @@ export class SandboxChatLunaStateStore {
       if (turn.key === key) this.turns.delete(id)
     }
     this.pendingResults.delete(key)
+    this.runningTraces.delete(key)
     this.turns.set(sessionId, { key, startedAt: Date.now(), thoughts: [], replyMessageIds: [] })
     this.states.set(key, { ...target, thinking: true, updatedAt: new Date().toISOString() })
     // 等待态是不落场景快照的瞬时状态，必须单独广播，否则聊天页面要等下一条消息才刷新，届时思考早已结束。
@@ -224,14 +263,10 @@ export class SandboxChatLunaStateStore {
     if (thought) turn.thoughts.push(thought)
     if (!step?.usage) return
     // v2 的 inputTokens 只是未命中缓存的部分，缓存读写另记；按 v2 计费的 billedInputTokens 口径三项相加。
+    // 每一步都把整段上下文重发一遍，输入取最后一步（与 trace 页的「已用上下文」一致），输出是各步新生成的，累加。
     const inputTokens = readNumber(step.usage.inputTokens) + readNumber(step.usage.cacheReadTokens) + readNumber(step.usage.cacheWriteTokens)
-    const outputTokens = readNumber(step.usage.outputTokens)
-    const totalTokens = readNumber(step.usage.totalTokens) || inputTokens + outputTokens
-    state.usage = {
-      inputTokens: (state.usage?.inputTokens ?? 0) + inputTokens,
-      outputTokens: (state.usage?.outputTokens ?? 0) + outputTokens,
-      totalTokens: (state.usage?.totalTokens ?? 0) + totalTokens,
-    }
+    const outputTokens = (state.usage?.outputTokens ?? 0) + readNumber(step.usage.outputTokens)
+    state.usage = { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens }
     state.updatedAt = new Date().toISOString()
   }
 
@@ -244,6 +279,7 @@ export class SandboxChatLunaStateStore {
     const turn = this.turns.get(sessionId)
     if (!turn) return
     this.turns.delete(sessionId)
+    this.runningTraces.delete(turn.key)
     const state = this.states.get(turn.key)
     if (!state) return
     state.thinking = false
@@ -271,7 +307,7 @@ export class SandboxChatLunaStateStore {
     for (const [sessionId, target] of this.agentTargets) {
       if (predicate(target)) this.agentTargets.delete(sessionId)
     }
-    for (const map of [this.latestTraces, this.pendingResults]) {
+    for (const map of [this.latestTraces, this.runningTraces, this.pendingResults]) {
       for (const key of [...map.keys()]) {
         const [botParticipantId = '', conversationId = ''] = key.split('\u0000')
         if (predicate({ botParticipantId, conversationId })) map.delete(key)

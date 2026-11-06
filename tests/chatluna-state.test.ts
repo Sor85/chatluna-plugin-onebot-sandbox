@@ -155,6 +155,43 @@ describe('ChatLuna v2 回合状态', () => {
     expect(messages.find(({ content }) => content === '第二轮回复')?.chatLuna?.usage).toBeUndefined()
   })
 
+  it('一轮多步时输入取最后一步的上下文，输出累加', async () => {
+    const { app, control } = await createControl()
+    const turn = agentTurn(app, createGroupSession(control, '20001'), 'route:a')
+
+    await turn.busy()
+    await turn.receive()
+    await turn.step({ usage: { inputTokens: 1000, cacheReadTokens: 30000, outputTokens: 600 } })
+    await control.sendMessage({ operatorId: '20001', conversationId: 'group:30001', content: '两步的回复' })
+    await turn.step({ usage: { inputTokens: 1200, cacheReadTokens: 30400, outputTokens: 200 } })
+    await turn.idle()
+
+    expect(control.getSnapshot().messages.at(-1)?.chatLuna?.usage).toEqual({ inputTokens: 31600, outputTokens: 800, totalTokens: 32400 })
+  })
+
+  it('工具在这一步当中发出的回复，出处标到正在进行的这一步', async () => {
+    const { app, control } = await createControl()
+    const turn = agentTurn(app, createGroupSession(control, '20001'), 'route:a')
+    const span = (name: 'chatluna/span-start' | 'chatluna/span-end', step: number) =>
+      emitChatLunaEvent(app, name, { span: { spanKind: 'step', session: 'route:a', attributes: { turn: 2, step } } })
+
+    await turn.busy()
+    await turn.receive()
+    await span('chatluna/span-start', 1)
+    await control.sendMessage({ operatorId: '20001', conversationId: 'group:30001', content: '第一步里 reply 工具发的' })
+    await span('chatluna/span-end', 1)
+    await span('chatluna/span-start', 2)
+    await control.sendMessage({ operatorId: '20001', conversationId: 'group:30001', content: '第二步里 reply 工具发的' })
+    await span('chatluna/span-end', 2)
+    await turn.idle()
+    await control.sendMessage({ operatorId: '20001', conversationId: 'group:30001', content: '回合结束后渲染队列发的' })
+
+    const traceOf = (content: string) => control.getSnapshot().messages.find((message) => message.content === content)?.chatLuna?.trace
+    expect(traceOf('第一步里 reply 工具发的')).toEqual({ sessionId: 'route:a', turn: 2, step: 1 })
+    expect(traceOf('第二步里 reply 工具发的')).toEqual({ sessionId: 'route:a', turn: 2, step: 2 })
+    expect(traceOf('回合结束后渲染队列发的')).toEqual({ sessionId: 'route:a', turn: 2, step: 2 })
+  })
+
   it('输入用量含缓存读写：v2 的 inputTokens 只是未命中缓存的部分', async () => {
     const { app, control } = await createControl()
     const turn = agentTurn(app, createGroupSession(control, '20001'), 'route:a')
