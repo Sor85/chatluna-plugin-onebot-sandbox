@@ -101,8 +101,9 @@ export function ForwardTargetDialog({ open, targets, onOpenChange, onConfirm }: 
             ))}
           </TabsList>
         </Tabs>
-        {/* 视口很矮时列表先收缩，页头、搜索与页脚保持可见，不从透明的毛玻璃页头下面滚过。 */}
-        <div className="-mx-5 flex max-h-72 min-h-0 flex-col gap-0.5 overflow-y-auto px-5" role="listbox" aria-label={t('sandbox.forward.targets')}>
+        {/* 视口很矮时列表先收缩，页头、搜索与页脚保持可见，不从透明的毛玻璃页头下面滚过。
+            上下留 4px 内边距：滚动容器会裁掉首末项选中时的 ring。 */}
+        <div className="-mx-5 flex max-h-72 min-h-0 flex-col gap-0.5 overflow-y-auto px-5 py-1" role="listbox" aria-label={t('sandbox.forward.targets')}>
           {visible.map((target) => (
             <button
               key={target.conversationId}
