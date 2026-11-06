@@ -59,10 +59,15 @@ run('yarn', ['yakumo', 'build', 'onebot-sandbox'], v2Root)
 run(path.join(v2Root, 'node_modules', '.bin', 'vitest'), ['run'], target)
 
 // yarn pack 把 workspace:* 改写成具体版本，npm pack 不会。
-const tarball = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'onebot-sandbox-')), 'package.tgz')
+const workdir = fs.mkdtempSync(path.join(os.tmpdir(), 'onebot-sandbox-'))
+const tarball = path.join(workdir, 'package.tgz')
 run('yarn', ['pack', '--out', tarball], target)
+// 解压后从目录发布：npm 只在发布目录时把 README 写进版本元数据的 readme 字段，直接发布 tgz 时该字段为空，
+// 插件市场与 npm 详情页读的正是这个字段，会显示成没有说明。
+run('tar', ['-xzf', tarball, '-C', workdir])
+const packageDir = path.join(workdir, 'package')
 
-const args = ['publish', tarball, '--access', 'public']
+const args = ['publish', packageDir, '--access', 'public']
 const prerelease = version.match(/-(alpha|beta|rc|next)/)?.[1]
 if (prerelease) args.push('--tag', prerelease)
 if (dryRun) args.push('--dry-run')
@@ -70,7 +75,7 @@ if (otp) args.push(otp)
 run('npm', args)
 
 if (dryRun) {
-  console.log(`[publish] 演练完成，包文件：${tarball}`)
+  console.log(`[publish] 演练完成，包文件：${tarball}，解压目录：${packageDir}`)
   process.exit(0)
 }
 
