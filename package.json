@@ -4,6 +4,14 @@
   "description": "Simulated QQ (OneBot v11) environment for verifying ChatLuna behaviour in the WebUI",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sor85/chatluna-plugin-onebot-sandbox.git"
+  },
+  "homepage": "https://github.com/Sor85/chatluna-plugin-onebot-sandbox#readme",
+  "bugs": {
+    "url": "https://github.com/Sor85/chatluna-plugin-onebot-sandbox/issues"
+  },
   "keywords": [
     "chatluna-plugin",
     "onebot",

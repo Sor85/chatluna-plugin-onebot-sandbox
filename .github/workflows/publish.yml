@@ -1,0 +1,99 @@
+# 推送 v* tag 时经 npm Trusted Publishing（OIDC）发布到 npm，不使用 NPM_TOKEN。
+#
+# 插件依赖的 @chatluna/* 只存在于 ChatLuna v2 仓库（私有，未发布到 npm），所以构建在 v2 工作区里进行：
+# 检出 v2、把插件放进 external/onebot-sandbox、全量构建，再用 yarn pack 打包（workspace:* 改写成具体版本），
+# 最后用 npm publish 发布这个包。v2 仓库凭 CHATLUNA_V2_TOKEN（只读 Contents 的 PAT）检出。
+#
+# 手动触发（workflow_dispatch）时只构建、测试、打包并执行 npm publish --dry-run，用来在发版前验证流程。
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout plugin
+        uses: actions/checkout@v6
+        with:
+          path: plugin
+
+      - name: Check version
+        if: github.ref_type == 'tag'
+        run: |
+          VERSION=$(jq -r ".version" plugin/package.json)
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME 与 package.json 的版本 $VERSION 不一致"
+            exit 1
+          fi
+
+      - name: Checkout ChatLuna v2
+        uses: actions/checkout@v6
+        with:
+          repository: ChatLunaLab/v2-mirror
+          ref: ${{ vars.CHATLUNA_V2_REF || 'cordis4' }}
+          token: ${{ secrets.CHATLUNA_V2_TOKEN }}
+          path: v2
+          persist-credentials: false
+
+      - name: Place plugin into v2 workspace
+        run: |
+          mkdir -p v2/external/onebot-sandbox
+          git -C plugin archive HEAD | tar -x -C v2/external/onebot-sandbox
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      # Trusted Publishing 需要 npm CLI >= 11.5.1。
+      - name: Update npm
+        run: npm install -g npm@^11.5.1
+
+      - name: Enable corepack
+        run: corepack enable
+
+      # external/ 在 v2 里被 gitignore，锁文件不含插件，安装时允许更新锁文件。
+      - name: Install dependencies
+        working-directory: v2
+        env:
+          YARN_ENABLE_IMMUTABLE_INSTALLS: "false"
+        run: yarn install
+
+      - name: Build
+        working-directory: v2
+        run: yarn build
+
+      - name: Test
+        working-directory: v2/external/onebot-sandbox
+        run: ../../node_modules/.bin/vitest run
+
+      - name: Pack
+        working-directory: v2/external/onebot-sandbox
+        run: |
+          yarn pack --out "$RUNNER_TEMP/package.tgz"
+          tar -tzf "$RUNNER_TEMP/package.tgz"
+
+      - name: Publish to npm
+        run: |
+          VERSION=$(jq -r ".version" plugin/package.json)
+          ARGS="--access public"
+          if echo "$VERSION" | grep -qE "(alpha|beta|rc|next)"; then
+            ARGS="$ARGS --tag $(echo "$VERSION" | sed -E "s/.*-(alpha|beta|rc|next).*/\1/")"
+          fi
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          npm publish "$RUNNER_TEMP/package.tgz" $ARGS

@@ -17,6 +17,7 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 - `src/lifecycle.ts`：Cordis 4 没有 `ready`/`dispose` 事件，启动任务推迟到下一轮宏任务，收尾挂在 Fiber effect 上。
 - `client/`：React 前端。`workspace/` 是状态（`store.ts`）与上下文，`chat/` 是 WebQQ 三栏，`environment/` 是实体编辑与环境管理页，`onebot-debug/`、`test-call/` 是两个记录工作台（共用 `records/record-layout.tsx`），`mcp/` 是测试凭证与能力目录，`settings/` 是插件设置页，`test-space/` 是 AI 测试空间（总览、缩略图、被控覆盖层）；`webqq/` 等目录是从源插件原样移植的纯逻辑模块。
 - `scripts/sync-to-v2.mjs`：把源码同步到 v2 开发仓库的副本。
+- `.github/workflows/publish.yml`：推送 `v*` tag 时经 npm Trusted Publishing 发布，见「发布」。
 - `tests/`：vitest。`helpers/app.ts` 是 Cordis 4 + Koishi 兼容层的测试宿主；ChatLuna 的回合事件经 `helpers/chatluna-state-broadcast.ts` 按 v2 的 `chat/receive` 与 `chatluna/agent-status` 形状广播。
 
 ## 约定
@@ -58,6 +59,13 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 - 测试（`external/onebot-sandbox` 目录）：`../../node_modules/.bin/vitest run`
 - 类型检查（`external/onebot-sandbox` 目录）：`../../node_modules/.bin/tsc -p tsconfig.json --noEmit` 与 `-p tsconfig.client.json`
 - 本仓库没有 `node_modules`，测试、类型检查与构建都不能直接在这里跑：tsc 和 vitest 按文件真实路径向上找依赖，只有放在 v2 仓库里才能找到。
+
+## 发布
+
+- 推送与 `package.json` 版本同名的 `v<版本>` tag，由 `publish.yml` 经 npm Trusted Publishing（OIDC）发布，不使用 `NPM_TOKEN`；npm 上登记的 workflow 文件名是 `publish.yml`，改名要同步 npm 包的 Trusted Publisher 设置。
+- CI 不能在本仓库里直接构建，理由同「位置与依赖」：工作流用 Secret `CHATLUNA_V2_TOKEN` 检出私有的 `ChatLunaLab/v2-mirror`（分支取 Variable `CHATLUNA_V2_REF`，默认 `cordis4`），把 `git archive HEAD` 解到 `external/onebot-sandbox`。`external/` 在 v2 被 gitignore，锁文件里没有插件，安装关闭 immutable；之后与 v2 自身 CI 一样全量 `yarn build`，不单独构建插件，免得依赖包还没产出类型。
+- 发布的包由 `yarn pack` 产出再交给 `npm publish <tgz>`：yarn 把 `workspace:*` 改写成具体版本，npm 不会。不要在本地 v2 副本里直接 pack：同步脚本不清理 `lib`/`dist`，副本里残留着已删除模块的声明文件。
+- `package.json` 的 `repository` 必须指向 `Sor85/chatluna-plugin-onebot-sandbox`，provenance 校验要求它与发布所在的仓库一致。
 
 ## 迁移进度
 
