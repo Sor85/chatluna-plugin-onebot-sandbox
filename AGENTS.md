@@ -4,7 +4,7 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 
 ## 位置与依赖
 
-- 本仓库（`chatluna/chatluna-v2-onebot-sandbox`）是插件的唯一源码，独立管理 git。`@chatluna/*` 目前未发布到 npm，只能在 ChatLuna v2 仓库（`chatluna-v2-mirror`）里以 workspace 成员 `external/onebot-sandbox` 的身份解析、构建和运行。
+- 本仓库（`chatluna/chatluna-plugin-onebot-sandbox`）是插件的唯一源码，独立管理 git。`@chatluna/*` 目前未发布到 npm，只能在 ChatLuna v2 仓库（`chatluna-v2-mirror`）里以 workspace 成员 `external/onebot-sandbox` 的身份解析、构建和运行。
 - 源码经 `scripts/sync-to-v2.mjs` 单向同步到 `external/onebot-sandbox`（`node scripts/sync-to-v2.mjs --once` 同步一次，`node scripts/sync-to-v2.mjs` 持续监听；本仓库没有安装依赖，用 node 直接运行，不经 yarn）。副本根目录下的 `node_modules`、`lib`、`dist`、`data` 只属于副本，同步既不覆盖也不删除；其余文件以本仓库为准，在副本里直接改会被下一次同步覆盖，所以只在本仓库里改。v2 仓库位置默认 `../../chatluna-v2-mirror`，可用 `CHATLUNA_V2_ROOT` 覆盖。
 - 依赖范围：`@chatluna/*` 在 devDependencies 用 `workspace:*`，peerDependencies 用 `>=2.0.0-alpha.0`。
 - 遵循 v2 外部插件规范，但不受 v2 仓库 lint（`verify-layout`/`verify-refs`/`verify-gates` 跳过 `external/`）约束；协议为 MIT。
