@@ -36,7 +36,7 @@ function agentTurn(app: App, session: unknown, sessionId: string) {
     receive: () => emitChatLunaEvent(app, 'chat/receive', session, { sessionId }),
     busy: () => emitChatLunaEvent(app, 'chatluna/agent-status', { agent, status: 'busy' }),
     idle: () => emitChatLunaEvent(app, 'chatluna/agent-status', { agent, status: 'idle' }),
-    step: (options: { text?: string, usage?: { inputTokens: number, outputTokens: number } } = {}) => {
+    step: (options: { text?: string, usage?: { inputTokens: number, cacheReadTokens?: number, cacheWriteTokens?: number, outputTokens: number, totalTokens?: number } } = {}) => {
       stepNumber += 1
       return emitChatLunaEvent(app, 'chatluna/agent-step', {
         agent,
@@ -153,6 +153,19 @@ describe('ChatLuna v2 回合状态', () => {
     const messages = control.getSnapshot().messages
     expect(messages.find(({ content }) => content === '第一轮回复')?.chatLuna?.usage).toEqual({ inputTokens: 8, outputTokens: 3, totalTokens: 11 })
     expect(messages.find(({ content }) => content === '第二轮回复')?.chatLuna?.usage).toBeUndefined()
+  })
+
+  it('输入用量含缓存读写：v2 的 inputTokens 只是未命中缓存的部分', async () => {
+    const { app, control } = await createControl()
+    const turn = agentTurn(app, createGroupSession(control, '20001'), 'route:a')
+
+    await turn.busy()
+    await turn.receive()
+    await turn.step({ usage: { inputTokens: 100, cacheReadTokens: 900, cacheWriteTokens: 50, outputTokens: 20, totalTokens: 1070 } })
+    await control.sendMessage({ operatorId: '20001', conversationId: 'group:30001', content: '命中缓存的回复' })
+    await turn.idle()
+
+    expect(control.getSnapshot().messages.at(-1)?.chatLuna?.usage).toEqual({ inputTokens: 1050, outputTokens: 20, totalTokens: 1070 })
   })
 
   it('回合结束后用户先发了消息，之后的机器人消息不接手上一轮的结果', async () => {

@@ -28,7 +28,7 @@ interface ChatLunaAgentPayload {
 interface ChatLunaStepPayload {
   content?: unknown
   toolCalls?: unknown
-  usage?: { inputTokens?: unknown, outputTokens?: unknown, totalTokens?: unknown }
+  usage?: { inputTokens?: unknown, cacheReadTokens?: unknown, cacheWriteTokens?: unknown, outputTokens?: unknown, totalTokens?: unknown }
   trace?: { attributes?: Record<string, unknown> }
 }
 
@@ -223,7 +223,8 @@ export class SandboxChatLunaStateStore {
     const thought = readStepThought(step)
     if (thought) turn.thoughts.push(thought)
     if (!step?.usage) return
-    const inputTokens = readNumber(step.usage.inputTokens)
+    // v2 的 inputTokens 只是未命中缓存的部分，缓存读写另记；按 v2 计费的 billedInputTokens 口径三项相加。
+    const inputTokens = readNumber(step.usage.inputTokens) + readNumber(step.usage.cacheReadTokens) + readNumber(step.usage.cacheWriteTokens)
     const outputTokens = readNumber(step.usage.outputTokens)
     const totalTokens = readNumber(step.usage.totalTokens) || inputTokens + outputTokens
     state.usage = {
