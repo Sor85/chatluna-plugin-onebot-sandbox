@@ -1,0 +1,383 @@
+/*
+ * 实体编辑弹窗（environment/entity-dialog.tsx 的编辑态）。只按 sandbox-entity- 类名选择；
+ * 本文件不分层，压过 ui-kit 在宿主 utilities 层里的工具类。
+ */
+
+/* 正文：外层负边距贴到弹窗两侧，自绘滚动条画在弹窗内缘；上下留 2px，输入框的焦点环不被裁掉。 */
+.sandbox-entity-body {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  margin: 0 -20px;
+}
+
+.sandbox-entity-scroller {
+  display: flex;
+  max-height: 62vh;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  padding: 2px 20px;
+  scrollbar-width: none;
+}
+
+.sandbox-entity-scroller::-webkit-scrollbar,
+.sandbox-entity-capability-list::-webkit-scrollbar {
+  display: none;
+}
+
+.sandbox-entity-scrollbar {
+  top: 2px;
+  bottom: 2px;
+}
+
+/* 头部资料卡：头像兼作更换入口，昵称随输入实时预览。 */
+.sandbox-entity-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--muted) 95%, transparent), color-mix(in oklab, var(--muted) 35%, transparent));
+}
+
+.sandbox-entity-avatar {
+  position: relative;
+  flex: none;
+  border-radius: 999px;
+}
+
+.sandbox-entity-avatar:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.sandbox-entity-avatar-image {
+  width: 56px;
+  height: 56px;
+  transition: opacity 0.15s ease;
+}
+
+.sandbox-entity-avatar:hover .sandbox-entity-avatar-image {
+  opacity: 0.85;
+}
+
+.sandbox-entity-avatar-edit {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  background: var(--background);
+  box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.08);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.sandbox-entity-avatar:hover .sandbox-entity-avatar-edit {
+  color: var(--background);
+  background: var(--foreground);
+}
+
+.sandbox-entity-avatar-edit svg {
+  width: 12px;
+  height: 12px;
+}
+
+.sandbox-entity-identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sandbox-entity-name {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-entity-name.is-empty {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.sandbox-entity-id {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 分区：小标题在上，右侧可放计数。 */
+.sandbox-entity-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sandbox-entity-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.sandbox-entity-section-meta {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.sandbox-entity-hint {
+  margin-top: -6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.sandbox-entity-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 12px;
+}
+
+.sandbox-entity-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sandbox-entity-field.is-wide {
+  grid-column: 1 / -1;
+}
+
+/* 启用开关：整行可点。 */
+.sandbox-entity-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* 能力覆盖列表：固定高度单独滚动，行间细分隔线。 */
+.sandbox-entity-capabilities {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sandbox-entity-capability-list {
+  height: 224px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sandbox-entity-capability-scrollbar {
+  top: 10px;
+  bottom: 10px;
+}
+
+.sandbox-entity-capability {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  transition: background-color 0.15s ease;
+}
+
+.sandbox-entity-capability + .sandbox-entity-capability {
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.sandbox-entity-capability:hover {
+  background: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+
+.sandbox-entity-capability.is-unsupported {
+  opacity: 0.6;
+}
+
+.sandbox-entity-capability-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.sandbox-entity-capability-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.sandbox-entity-capability-description {
+  color: var(--muted-foreground);
+}
+
+.sandbox-entity-capability-note {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.sandbox-entity-empty {
+  padding: 24px 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 群成员卡片：成员实心、非成员虚线并淡化，正在编辑的那张描边。 */
+.sandbox-entity-members {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sandbox-entity-member {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border: 1px dashed color-mix(in oklab, var(--border) 100%, var(--muted-foreground) 25%);
+  border-radius: 10px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sandbox-entity-member:hover {
+  background: color-mix(in oklab, var(--muted) 45%, transparent);
+}
+
+.sandbox-entity-member.is-member {
+  border-style: solid;
+  border-color: transparent;
+  background: color-mix(in oklab, var(--muted) 75%, transparent);
+}
+
+.sandbox-entity-member.is-editing {
+  box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--foreground) 45%, transparent);
+}
+
+.sandbox-entity-member-toggle {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.sandbox-entity-member-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.sandbox-entity-member-avatar {
+  position: relative;
+  flex: none;
+}
+
+.sandbox-entity-member:not(.is-member) .sandbox-entity-member-avatar > :first-child {
+  opacity: 0.55;
+}
+
+.sandbox-entity-member-marker {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  display: flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  background: var(--background);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.sandbox-entity-member.is-member .sandbox-entity-member-marker {
+  color: var(--primary-foreground);
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--background);
+}
+
+.sandbox-entity-member-marker svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 3;
+}
+
+.sandbox-entity-member-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.sandbox-entity-member-text strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-entity-member-text small {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-entity-member:not(.is-member) .sandbox-entity-member-text {
+  color: var(--muted-foreground);
+}
+
+/* 成员群资料编辑：卡片下方展开。 */
+.sandbox-entity-member-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
+}
+
+.sandbox-entity-member-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sandbox-entity-member-editor .sandbox-entity-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}

@@ -18,6 +18,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Switch,
 } from '@chatluna/ui-kit'
 import { getOneBotProfileBaseline } from '../../src/onebot-profiles'
 import {
@@ -31,10 +32,12 @@ import {
 import { useT } from '../i18n'
 import { SandboxAvatar } from '../shared/avatar'
 import { useDiscardConfirm } from '../shared/discard-confirm'
+import { OverlayScrollbar } from '../shared/overlay-scrollbar'
 import { useSandbox, useWorkspace } from '../workspace/context'
 import { errorText } from '../workspace/store'
 import { AvatarChoices } from './avatar-picker'
 import { ImplementationSelect } from './create-popover'
+import './entity-dialog.css'
 
 export interface EntityDialogTarget {
   type: 'user' | 'bot' | 'group'
@@ -75,6 +78,8 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
   const [picking, setPicking] = React.useState(false)
   const [capabilitySearch, setCapabilitySearch] = React.useState('')
   const [editingMemberId, setEditingMemberId] = React.useState('')
+  const scroller = React.useRef<HTMLDivElement>(null)
+  const capabilityScroller = React.useRef<HTMLDivElement>(null)
   const users = getSandboxUsers(snapshot)
   const bots = getSandboxBots(snapshot)
   const participants = [
@@ -196,7 +201,10 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
     ? baseline.capabilities.filter((capability) => [capability.id, capability.action, capability.description, capability.reason, ...(capability.aliases ?? [])]
       .some((value) => value?.toLowerCase().includes(query)))
     : baseline.capabilities
-  const entityLabel = t(`sandbox.kind.${target?.type ?? 'user'}`)
+  const supportedCapabilityCount = baseline.capabilities.filter(({ supported }) => supported).length
+  const enabledCapabilityCount = baseline.capabilities.filter(({ id, supported }) => supported && !draft.disabledCapabilities.includes(id)).length
+  const type = target?.type ?? 'user'
+  const entityLabel = t(`sandbox.kind.${type}`)
   const editingParticipant = participants.find(({ id }) => id === editingMemberId)
   const editingMember = memberOf(editingMemberId)
   const roleItems = [
@@ -228,173 +236,182 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
         ) : (
           // 三段式：页头与页脚固定，只有正文滚动；视口很矮时正文先收缩，不会滚到透明的毛玻璃页头下面。
           <form className="flex min-h-0 flex-col gap-4" onSubmit={submitEdit}>
-            <div className="-mx-5 flex max-h-[62vh] min-h-0 flex-col gap-4 overflow-y-auto px-5">
-              <button type="button" className="group flex items-center gap-3 self-start rounded-lg" aria-label={t('sandbox.avatar.title')} onClick={() => setPicking(true)}>
-                <SandboxAvatar kind={target?.type ?? 'user'} name={draft.name} src={resolveAvatar(draft.avatar)} className="size-12" badge={false} />
-                <span className="text-xs text-muted-foreground group-hover:text-foreground">{t('sandbox.avatar.change')}</span>
-              </button>
-              <div className="flex flex-col gap-2">
-                <Label>{target?.type === 'group' ? t('sandbox.field.groupId') : t('sandbox.field.qqId')}</Label>
-                <Input value={draft.id} disabled />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="sandbox-entity-name">{t(`sandbox.field.name.${target?.type ?? 'user'}`)}</Label>
-                <Input id="sandbox-entity-name" required value={draft.name} onChange={(event) => setDraft((value) => ({ ...value, name: event.target.value }))} />
-              </div>
-              {target?.type !== 'group' && (
-                <>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="sandbox-entity-note">{t('sandbox.field.personalNote')}</Label>
-                    <Input
-                      id="sandbox-entity-note"
-                      placeholder={t('sandbox.field.personalNotePlaceholder')}
-                      value={draft.personalNote}
-                      onChange={(event) => setDraft((value) => ({ ...value, personalNote: event.target.value }))}
-                    />
+            <div className="sandbox-entity-body">
+              <div ref={scroller} className="sandbox-entity-scroller">
+                <div className="sandbox-entity-hero">
+                  <button type="button" className="sandbox-entity-avatar" aria-label={t('sandbox.avatar.change')} onClick={() => setPicking(true)}>
+                    <SandboxAvatar kind={type} name={draft.name} src={resolveAvatar(draft.avatar)} className="sandbox-entity-avatar-image" badge={false} />
+                    <span className="sandbox-entity-avatar-edit" aria-hidden><PencilIcon /></span>
+                  </button>
+                  <div className="sandbox-entity-identity">
+                    <strong className={cn('sandbox-entity-name', !draft.name.trim() && 'is-empty')}>{draft.name.trim() || t(`sandbox.field.name.${type}`)}</strong>
+                    <span className="sandbox-entity-id">{type === 'group' ? t('sandbox.field.groupId') : t('sandbox.field.qqId')} {draft.id}</span>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <Label>{t('sandbox.field.sex')}</Label>
-                    <Select
-                      value={draft.sex}
-                      onValueChange={(value) => value && setDraft((current) => ({ ...current, sex: value === 'unset' ? 'unset' : value === 'male' ? 'male' : value === 'female' ? 'female' : 'unknown' }))}
-                      items={['unset', 'unknown', 'male', 'female'].map((value) => ({ value, label: t(`sandbox.sex.${value}`) }))}
-                    >
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent className="sandbox-glass">
-                        {['unset', 'unknown', 'male', 'female'].map((value) => <SelectItem key={value} value={value}>{t(`sandbox.sex.${value}`)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              )}
-              {target?.type === 'bot' && (
-                <>
-                  <ImplementationSelect value={draft.implementation} onChange={(implementation) => setDraft((value) => ({ ...value, implementation }))} />
-                  <div className="flex flex-col gap-2">
-                    <Label>{t('sandbox.entity.capabilities')}</Label>
-                    <div className="relative">
-                      <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input className="pl-8!" value={capabilitySearch} placeholder={t('sandbox.entity.capabilitySearch')} aria-label={t('sandbox.entity.capabilitySearch')} onChange={(event) => setCapabilitySearch(event.target.value)} />
+                </div>
+                <section className="sandbox-entity-section">
+                  <h3 className="sandbox-entity-section-title">{t('sandbox.entity.section.basic')}</h3>
+                  <div className="sandbox-entity-grid">
+                    <div className={cn('sandbox-entity-field', type === 'group' && 'is-wide')}>
+                      <Label htmlFor="sandbox-entity-name">{t(`sandbox.field.name.${type}`)}</Label>
+                      <Input id="sandbox-entity-name" required value={draft.name} onChange={(event) => setDraft((value) => ({ ...value, name: event.target.value }))} />
                     </div>
-                    <div className="h-56 overflow-y-auto rounded-lg border border-border">
-                      <div className="flex flex-col p-1">
-                        {capabilities.map((capability) => (
-                          <label key={capability.id} className="flex items-start gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent/60">
-                            <Checkbox
-                              className="mt-0.5"
-                              checked={capability.supported && !draft.disabledCapabilities.includes(capability.id)}
-                              disabled={!capability.supported}
-                              onCheckedChange={(checked) => setDraft((value) => ({
-                                ...value,
-                                disabledCapabilities: checked === true
-                                  ? value.disabledCapabilities.filter((id) => id !== capability.id)
-                                  : [...new Set([...value.disabledCapabilities, capability.id])],
-                              }))}
-                            />
-                            <span className="flex min-w-0 flex-col gap-0.5">
-                              <span className="flex items-center gap-1.5">
-                                <span className="font-mono text-xs">{capability.action}</span>
-                                <Badge variant="secondary" className="text-[10px]">{t(capability.surface === 'standard' ? 'sandbox.entity.standard' : 'sandbox.entity.native')}</Badge>
-                              </span>
-                              <span className="text-xs text-muted-foreground">{capability.description}</span>
-                              {(capability.aliases?.length || !capability.supported) && (
-                                <small className="text-[11px] text-muted-foreground">
-                                  {capability.aliases?.length ? t('sandbox.entity.aliases', { aliases: capability.aliases.join('、') }) : ''}
-                                  {capability.aliases?.length && !capability.supported ? ' · ' : ''}
-                                  {!capability.supported ? capability.reason : ''}
-                                </small>
-                              )}
-                            </span>
-                          </label>
-                        ))}
-                        {!capabilities.length && <p className="p-3 text-center text-xs text-muted-foreground">{t('sandbox.entity.noCapability')}</p>}
-                      </div>
-                    </div>
-                  </div>
-                  <label className="flex items-center gap-2 text-[13px]">
-                    <Checkbox checked={draft.enabled} onCheckedChange={(value) => setDraft((current) => ({ ...current, enabled: value === true }))} />
-                    {t('sandbox.field.botEnabled')}
-                  </label>
-                </>
-              )}
-              {target?.type === 'group' && (
-                <section className="flex flex-col gap-3">
-                  <div className="flex items-end justify-between">
-                    <div className="flex flex-col gap-1">
-                      <strong className="text-[13px] font-medium">{t('sandbox.entity.members')}</strong>
-                      <p className="text-xs text-muted-foreground">{t('sandbox.entity.membersHint')}</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{draft.members.length} / {participants.length}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {participants.map((participant) => {
-                      const member = memberOf(participant.id)
-                      return (
-                        <article key={participant.id} className="relative flex items-center gap-2 rounded-lg border border-border p-2 data-[member=true]:border-primary/50 data-[member=true]:bg-primary/5" data-member={!!member}>
-                          <button
-                            type="button"
-                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                            aria-pressed={!!member}
-                            aria-label={t(member ? 'sandbox.entity.removeMember' : 'sandbox.entity.addMember', { name: participant.name, id: participant.id })}
-                            onClick={() => toggleMember(participant.id)}
-                          >
-                            <span className="relative">
-                              <SandboxAvatar kind={participant.type} name={participant.name} src={resolveAvatar(participant.avatar)} className="size-8" />
-                              <span className="absolute -top-1 -left-1 flex size-4 items-center justify-center rounded-full bg-background ring-1 ring-border">
-                                {member ? <CheckIcon className="size-3 text-primary" /> : <PlusIcon className="size-3 text-muted-foreground" />}
-                              </span>
-                            </span>
-                            <span className="flex min-w-0 flex-col">
-                              <strong className="truncate text-xs font-medium">{participant.name}</strong>
-                              <small className="truncate text-[11px] text-muted-foreground">
-                                {member ? `${member.card || t('sandbox.entity.noCard')} · ${t(`sandbox.role.${member.role}`)}` : participant.id}
-                              </small>
-                            </span>
-                          </button>
-                          {member && (
-                            <Button type="button" variant="ghost" size="icon-xs" aria-label={t('sandbox.entity.editMember', { name: participant.name })} onClick={() => setEditingMemberId(participant.id)}>
-                              <PencilIcon />
-                            </Button>
-                          )}
-                        </article>
-                      )
-                    })}
-                  </div>
-                  {editingParticipant && editingMember && (
-                    <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-                      <div className="flex items-center gap-2">
-                        <SandboxAvatar kind={editingParticipant.type} name={editingParticipant.name} src={resolveAvatar(editingParticipant.avatar)} className="size-7" />
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <strong className="truncate text-xs font-medium">{editingParticipant.name}</strong>
-                          <small className="text-[11px] text-muted-foreground">{editingParticipant.id}</small>
-                        </span>
-                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t('sandbox.common.close')} onClick={() => setEditingMemberId('')}><XIcon /></Button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="flex flex-col gap-2">
-                          <Label>{t('sandbox.entity.card')}</Label>
-                          <Input value={editingMember.card ?? ''} onChange={(event) => patchMember(editingParticipant.id, { card: event.target.value })} />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label>{t('sandbox.entity.role')}</Label>
+                    {type !== 'group' && (
+                      <>
+                        <div className="sandbox-entity-field">
+                          <Label>{t('sandbox.field.sex')}</Label>
                           <Select
-                            value={editingMember.role}
-                            onValueChange={(value) => value && patchMember(editingParticipant.id, { role: value === 'owner' ? 'owner' : value === 'admin' ? 'admin' : 'member' })}
-                            items={roleItems}
+                            value={draft.sex}
+                            onValueChange={(value) => value && setDraft((current) => ({ ...current, sex: value === 'unset' ? 'unset' : value === 'male' ? 'male' : value === 'female' ? 'female' : 'unknown' }))}
+                            items={['unset', 'unknown', 'male', 'female'].map((value) => ({ value, label: t(`sandbox.sex.${value}`) }))}
                           >
                             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                             <SelectContent className="sandbox-glass">
-                              {roleItems.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                              {['unset', 'unknown', 'male', 'female'].map((value) => <SelectItem key={value} value={value}>{t(`sandbox.sex.${value}`)}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="sandbox-entity-field is-wide">
+                          <Label htmlFor="sandbox-entity-note">{t('sandbox.field.personalNote')}</Label>
+                          <Input
+                            id="sandbox-entity-note"
+                            placeholder={t('sandbox.field.personalNotePlaceholder')}
+                            value={draft.personalNote}
+                            onChange={(event) => setDraft((value) => ({ ...value, personalNote: event.target.value }))}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </section>
+                {type === 'bot' && (
+                  <section className="sandbox-entity-section">
+                    <h3 className="sandbox-entity-section-title">{t('sandbox.entity.section.runtime')}</h3>
+                    <label className="sandbox-entity-toggle">
+                      <span>{t('sandbox.field.botEnabled')}</span>
+                      <Switch checked={draft.enabled} onCheckedChange={(value) => setDraft((current) => ({ ...current, enabled: value === true }))} />
+                    </label>
+                    <ImplementationSelect value={draft.implementation} onChange={(implementation) => setDraft((value) => ({ ...value, implementation }))} />
+                    <div className="sandbox-entity-field">
+                      <div className="sandbox-entity-section-title">
+                        <Label>{t('sandbox.entity.capabilities')}</Label>
+                        <span className="sandbox-entity-section-meta">{t('sandbox.entity.capabilityCount', { enabled: enabledCapabilityCount, total: supportedCapabilityCount })}</span>
+                      </div>
+                      <div className="relative">
+                        <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input type="search" className="sandbox-search-input pl-8!" value={capabilitySearch} placeholder={t('sandbox.entity.capabilitySearch')} aria-label={t('sandbox.entity.capabilitySearch')} onChange={(event) => setCapabilitySearch(event.target.value)} />
+                      </div>
+                      <div className="sandbox-entity-capabilities">
+                        <div ref={capabilityScroller} className="sandbox-entity-capability-list">
+                          {capabilities.map((capability) => (
+                            <label key={capability.id} className={cn('sandbox-entity-capability', !capability.supported && 'is-unsupported')}>
+                              <Checkbox
+                                className="mt-0.5"
+                                checked={capability.supported && !draft.disabledCapabilities.includes(capability.id)}
+                                disabled={!capability.supported}
+                                onCheckedChange={(checked) => setDraft((value) => ({
+                                  ...value,
+                                  disabledCapabilities: checked === true
+                                    ? value.disabledCapabilities.filter((id) => id !== capability.id)
+                                    : [...new Set([...value.disabledCapabilities, capability.id])],
+                                }))}
+                              />
+                              <span className="sandbox-entity-capability-text">
+                                <span className="sandbox-entity-capability-action">
+                                  {capability.action}
+                                  <Badge variant="secondary" className="text-[10px]">{t(capability.surface === 'standard' ? 'sandbox.entity.standard' : 'sandbox.entity.native')}</Badge>
+                                </span>
+                                <span className="sandbox-entity-capability-description">{capability.description}</span>
+                                {(capability.aliases?.length || !capability.supported) && (
+                                  <small className="sandbox-entity-capability-note">
+                                    {capability.aliases?.length ? t('sandbox.entity.aliases', { aliases: capability.aliases.join('、') }) : ''}
+                                    {capability.aliases?.length && !capability.supported ? ' · ' : ''}
+                                    {!capability.supported ? capability.reason : ''}
+                                  </small>
+                                )}
+                              </span>
+                            </label>
+                          ))}
+                          {!capabilities.length && <p className="sandbox-entity-empty">{t('sandbox.entity.noCapability')}</p>}
+                        </div>
+                        <OverlayScrollbar target={capabilityScroller} className="sandbox-entity-capability-scrollbar" />
                       </div>
                     </div>
-                  )}
-                  {!draft.members.length && <p className="text-xs text-destructive">{t('sandbox.entity.needOwner')}</p>}
-                </section>
-              )}
-              {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+                  </section>
+                )}
+                {type === 'group' && (
+                  <section className="sandbox-entity-section">
+                    <h3 className="sandbox-entity-section-title">
+                      <span>{t('sandbox.entity.members')}</span>
+                      <span className="sandbox-entity-section-meta">{draft.members.length} / {participants.length}</span>
+                    </h3>
+                    <p className="sandbox-entity-hint">{t('sandbox.entity.membersHint')}</p>
+                    <div className="sandbox-entity-members">
+                      {participants.map((participant) => {
+                        const member = memberOf(participant.id)
+                        return (
+                          <article key={participant.id} className={cn('sandbox-entity-member', member && 'is-member', editingMemberId === participant.id && 'is-editing')}>
+                            <button
+                              type="button"
+                              className="sandbox-entity-member-toggle"
+                              aria-pressed={!!member}
+                              aria-label={t(member ? 'sandbox.entity.removeMember' : 'sandbox.entity.addMember', { name: participant.name, id: participant.id })}
+                              onClick={() => toggleMember(participant.id)}
+                            >
+                              <span className="sandbox-entity-member-avatar">
+                                <SandboxAvatar kind={participant.type} name={participant.name} src={resolveAvatar(participant.avatar)} className="size-8" />
+                                <span className="sandbox-entity-member-marker" aria-hidden>{member ? <CheckIcon /> : <PlusIcon />}</span>
+                              </span>
+                              <span className="sandbox-entity-member-text">
+                                <strong>{participant.name}</strong>
+                                <small>{member ? `${member.card || t('sandbox.entity.noCard')} · ${t(`sandbox.role.${member.role}`)}` : participant.id}</small>
+                              </span>
+                            </button>
+                            {member && (
+                              <Button type="button" variant="ghost" size="icon-xs" aria-label={t('sandbox.entity.editMember', { name: participant.name })} onClick={() => setEditingMemberId(participant.id)}>
+                                <PencilIcon />
+                              </Button>
+                            )}
+                          </article>
+                        )
+                      })}
+                    </div>
+                    {editingParticipant && editingMember && (
+                      <div className="sandbox-entity-member-editor">
+                        <div className="sandbox-entity-member-editor-head">
+                          <SandboxAvatar kind={editingParticipant.type} name={editingParticipant.name} src={resolveAvatar(editingParticipant.avatar)} className="size-7" />
+                          <span className="sandbox-entity-member-text flex-1">
+                            <strong>{editingParticipant.name}</strong>
+                            <small>{editingParticipant.id}</small>
+                          </span>
+                          <Button type="button" variant="ghost" size="icon-xs" aria-label={t('sandbox.common.close')} onClick={() => setEditingMemberId('')}><XIcon /></Button>
+                        </div>
+                        <div className="sandbox-entity-grid">
+                          <div className="sandbox-entity-field">
+                            <Label>{t('sandbox.entity.card')}</Label>
+                            <Input value={editingMember.card ?? ''} onChange={(event) => patchMember(editingParticipant.id, { card: event.target.value })} />
+                          </div>
+                          <div className="sandbox-entity-field">
+                            <Label>{t('sandbox.entity.role')}</Label>
+                            <Select
+                              value={editingMember.role}
+                              onValueChange={(value) => value && patchMember(editingParticipant.id, { role: value === 'owner' ? 'owner' : value === 'admin' ? 'admin' : 'member' })}
+                              items={roleItems}
+                            >
+                              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                              <SelectContent className="sandbox-glass">
+                                {roleItems.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {!draft.members.length && <p className="text-xs text-destructive">{t('sandbox.entity.needOwner')}</p>}
+                  </section>
+                )}
+                {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+              </div>
+              <OverlayScrollbar target={scroller} className="sandbox-entity-scrollbar" />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={requestClose}>{t('sandbox.common.cancel')}</Button>
