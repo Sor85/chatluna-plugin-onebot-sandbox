@@ -8,6 +8,9 @@
 // 用法：
 //   node scripts/publish.mjs            发布 package.json 里的版本
 //   node scripts/publish.mjs --dry-run  走完构建、测试与打包，只执行 npm publish --dry-run，不打 tag
+//   node scripts/publish.mjs --otp=123456  账号开了两步验证时带上验证器 App 的一次性验证码
+// 不经 yarn 运行：本仓库没有 yarn.lock，Yarn 4 会把它当成未安装的项目，在启动脚本前就报错。
+// 没有交互式终端时，npm 不会等待浏览器授权，直接以 EOTP 退出，所以两步验证的验证码用 --otp 传入。
 // v2 仓库位置与 sync-to-v2.mjs 相同：默认 ../../chatluna-v2-mirror，可用 CHATLUNA_V2_ROOT 覆盖。
 
 import { execFileSync } from 'node:child_process'
@@ -20,6 +23,7 @@ const source = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const v2Root = path.resolve(process.env.CHATLUNA_V2_ROOT ?? path.join(source, '..', '..', 'chatluna-v2-mirror'))
 const target = path.join(v2Root, 'external', 'onebot-sandbox')
 const dryRun = process.argv.includes('--dry-run')
+const otp = process.argv.find((arg) => arg.startsWith('--otp='))
 
 const run = (command, args, cwd = source) => execFileSync(command, args, { cwd, stdio: 'inherit' })
 const read = (command, args, cwd = source) => execFileSync(command, args, { cwd, encoding: 'utf8' }).trim()
@@ -62,6 +66,7 @@ const args = ['publish', tarball, '--access', 'public']
 const prerelease = version.match(/-(alpha|beta|rc|next)/)?.[1]
 if (prerelease) args.push('--tag', prerelease)
 if (dryRun) args.push('--dry-run')
+if (otp) args.push(otp)
 run('npm', args)
 
 if (dryRun) {

@@ -62,7 +62,7 @@ ChatLuna v2 外部插件：在 WebUI 中提供模拟 QQ（OneBot v11）环境，
 
 ## 发布
 
-- 发布在本机执行 `node scripts/publish.mjs`（`yarn release`），`--dry-run` 只演练不发布。脚本要求工作区干净、提交已推送、npm 已登录、`v<版本>` tag 不存在；它会同步到 v2 副本，清空 `lib`、`dist` 与 `tsconfig.tsbuildinfo` 后执行 `yarn yakumo build onebot-sandbox`，再跑 vitest、用 `yarn pack` 打包、`npm publish` 这个包，最后给当前提交打 `v<版本>` tag 并推送。发版前只需修改 `package.json` 的 `version` 并提交推送。
+- 发布在本机执行 `node scripts/publish.mjs`，`--dry-run` 只演练不发布，账号开了两步验证时加 `--otp=<验证码>`。不经 yarn：本仓库没有 `yarn.lock`，Yarn 4 会把它当成未安装的项目，在启动脚本前就报错。没有交互式终端时，npm 不会等待浏览器授权，直接以 `EOTP` 退出，所以验证码要用 `--otp` 传入。npm 收到发布后可能先建一个 `0.0.0-stage` 占位版本，经分段发布处理完才出现正式版本；确认 `latest` 指向新版本之前，不要判定为发布失败。脚本要求工作区干净、提交已推送、npm 已登录、`v<版本>` tag 不存在；它会同步到 v2 副本，清空 `lib`、`dist` 与 `tsconfig.tsbuildinfo` 后执行 `yarn yakumo build onebot-sandbox`，再跑 vitest、用 `yarn pack` 打包、`npm publish` 这个包，最后给当前提交打 `v<版本>` tag 并推送。发版前只需修改 `package.json` 的 `version` 并提交推送。
 - 不在 CI 里发布：v2-mirror 是私有仓库，公开仓库的 Actions 要检出它，就得在 Secret 里放一个能读私有仓库的 PAT。等 v2 公开、`@chatluna/*` 发布到 npm 后，再改用 GitHub Actions 经 npm Trusted Publishing（OIDC）发布。
 - 必须先清空 `lib`/`dist`：同步脚本从不清理产物，副本里残留着已删除模块的声明文件，直接打包会把它们一起发出去；`tsconfig.tsbuildinfo` 要一起删，否则 tsc 按增量信息认为产物已是最新，`lib` 里只剩 rolldown 产出的 `index.js`，没有类型声明。必须用 `yarn pack` 打包：它会把 `workspace:*` 改写成具体版本，npm 不会。
 - `package.json` 的 `repository` 指向 `Sor85/chatluna-plugin-onebot-sandbox`；以后改用 Trusted Publishing 时，provenance 校验要求它与发布所在的仓库一致。
