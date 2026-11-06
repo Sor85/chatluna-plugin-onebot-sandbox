@@ -1,44 +1,38 @@
 import { describe, expect, it } from 'vitest'
-import { parseThinkContent, readChatLunaResponseText } from '../src/chatluna/thinking'
+import { parseThinkContent, readStepThought } from '../src/chatluna/thinking'
 
-describe('ChatLuna 思考内容解析', () => {
+describe('角色内心活动', () => {
   it('从多个 think 标签中按顺序取出思考内容', () => {
-    expect(parseThinkContent('前<think>第一段</think>中<think>第二段</think>后')).toBe('第一段\n\n第二段')
+    expect(parseThinkContent('<think> 第一段 </think>回复<think>第二段</think>')).toBe('第一段\n\n第二段')
   })
 
   it('没有 think 标签时返回空字符串', () => {
-    expect(parseThinkContent('只是普通回复')).toBe('')
+    expect(parseThinkContent('普通回复')).toBe('')
   })
 
-  it('回复已被清理时继续从完整快照中读取思考内容', () => {
-    const text = readChatLunaResponseText({
-      lastResponseMessage: { content: '这是已经清理后的回复' },
-      completionMessages: [{
-        lc: 1,
-        type: 'constructor',
-        id: ['langchain_core', 'messages', 'AIMessage'],
-        kwargs: { content: '前文<think>\n从完整快照读取\n</think>后文' },
-      }],
-    })
-
-    expect(parseThinkContent(text)).toBe('从完整快照读取')
+  it('文本模式：从 step 的文本块里取 character 引擎写下的 <think>', () => {
+    expect(readStepThought({
+      content: [
+        { type: 'reasoning', text: '模型原生推理不算内心活动' },
+        { type: 'text', text: '<think>他今天好像很累</think><message>早点休息</message>' },
+      ],
+      toolCalls: [],
+    })).toBe('他今天好像很累')
   })
 
-  it('所有候选都没有思考内容时回退到第一个非空文本', () => {
-    expect(readChatLunaResponseText({
-      lastResponseMessage: { content: '普通回复' },
-      completionMessages: [],
-    })).toBe('普通回复')
+  it('工具模式：从 reply 工具的 content 参数里取，其他工具的参数不算', () => {
+    expect(readStepThought({
+      content: [],
+      toolCalls: [
+        { type: 'tool-call', toolName: 'memory_write', input: { content: '<think>不该读到</think>' } },
+        { type: 'tool-call', toolName: 'reply', input: { content: '<think>先安慰一下</think>没事的' } },
+      ],
+    })).toBe('先安慰一下')
   })
 
-  it('展开 Koishi 元素树形状的回复', () => {
-    expect(parseThinkContent(readChatLunaResponseText({
-      lastResponseMessage: {
-        children: [
-          { type: 'text', attrs: { content: '<think>元素树思考</think>' } },
-          { type: 'text', attrs: { content: '正文' } },
-        ],
-      },
-    }))).toBe('元素树思考')
+  it('形状不对时返回空字符串，而不是抛错', () => {
+    expect(readStepThought(undefined)).toBe('')
+    expect(readStepThought({ content: 'text', toolCalls: {} })).toBe('')
+    expect(readStepThought({ content: [null, { type: 'text' }], toolCalls: [{ type: 'tool-call', toolName: 'reply' }] })).toBe('')
   })
 })

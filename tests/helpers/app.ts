@@ -63,6 +63,9 @@ export class App extends Context {
 
   async stop() {
     await Promise.allSettled(this.pending)
+    // Koishi 与 Satori 兼容层把 `ready` 回调挂在 setTimeout(0) 上且不随 fiber 取消，先让它们在
+    // 宿主还活着时跑完，否则回调在销毁后读 `ctx.bots` / `ctx.satori` 报未处理错误。
+    await new Promise((resolve) => setTimeout(resolve, 0))
     await this.fiber.dispose()
   }
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SandboxMcpService } from '../src/mcp/service'
-import { createDirectSession, emitChatLunaEvent } from './helpers/chatluna-state-broadcast'
+import { beginAgentTurn, createDirectSession, finishAgentTurn } from './helpers/chatluna-state-broadcast'
 import { createMcpTestService, createStartedMcpTestService, stopMcpTestApps } from './helpers/mcp-service-harness'
 
 /**
@@ -374,13 +374,13 @@ describe('MCP 交互类工具', () => {
     const pending = service.callTool(credential.token, 'wait_for_chatluna_state', {
       cursor, botParticipantId: '20001', thinking: true, timeoutSeconds: 5,
     }) as Promise<WaitResult>
-    await emitChatLunaEvent(app, 'chatluna/before-chat', 'chatluna:direct', {}, {}, {}, session)
+    await beginAgentTurn(app, session, 'route:direct')
     expect(await pending).toMatchObject({
       outcome: 'matched',
       state: { botParticipantId: '20001', conversationId: 'private:10001:20001', thinking: true },
     })
 
-    await emitChatLunaEvent(app, 'chatluna/after-chat', 'chatluna:direct', {}, {}, {}, {}, session)
+    await finishAgentTurn(app, 'route:direct')
     await expect(service.callTool(credential.token, 'wait_for_chatluna_state', {
       cursor, botParticipantId: '20001', thinking: false, timeoutSeconds: 5,
     })).resolves.toMatchObject({ outcome: 'matched', state: { thinking: false } })

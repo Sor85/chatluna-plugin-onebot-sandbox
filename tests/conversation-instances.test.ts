@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { SandboxControlService, createDefaultScene } from '../src/control-service'
 import { listRootConversationInstances, readConversationMessageIds, resolveConversation } from '../src/conversation-resolution'
 import type { SandboxSnapshot } from '../src/types'
-import { createDirectSession, emitChatLunaEvent } from './helpers/chatluna-state-broadcast'
+import { beginAgentTurn, createDirectSession } from './helpers/chatluna-state-broadcast'
 
 const runningApps: App[] = []
 const temporaryDirectories: string[] = []
@@ -84,8 +84,8 @@ describe('会话实例端到端', () => {
       channel: { id: conversationId, type: Universal.Channel.Type.DIRECT },
     })
     const rootSession = createDirectSession(control, '20001')
-    await emitChatLunaEvent(app, 'chatluna/before-chat', 'chatluna:instance', {}, {}, {}, instanceSession)
-    await emitChatLunaEvent(app, 'chatluna/before-chat', 'chatluna:root', {}, {}, {}, rootSession)
+    await beginAgentTurn(app, instanceSession, 'route:instance')
+    await beginAgentTurn(app, rootSession, 'route:root')
 
     expect(control.getChatLunaStates().map((state) => ({
       botParticipantId: state.botParticipantId,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SandboxMcpService } from '../src/mcp/service'
-import { createDirectSession, emitChatLunaEvent } from './helpers/chatluna-state-broadcast'
+import { beginAgentTurn, createDirectSession } from './helpers/chatluna-state-broadcast'
 import { createMcpTestService, createStartedMcpTestService, stopMcpTestApps } from './helpers/mcp-service-harness'
 
 /**
@@ -235,7 +235,7 @@ describe('工具返回值与声明一致', () => {
 
     const cursor = service.currentCursor()
     const pending = call('wait_for_chatluna_state', { cursor, botParticipantId: '20001', thinking: true, timeoutSeconds: 5 })
-    await emitChatLunaEvent(app, 'chatluna/before-chat', 'chatluna:direct', {}, {}, {}, createDirectSession(control, '20001'))
+    await beginAgentTurn(app, createDirectSession(control, '20001'), 'route:direct')
     assertResultMatchesDeclaration('wait_for_chatluna_state', 'matched', await pending, schemas.wait_for_chatluna_state!)
 
     const actionCursor = service.currentCursor()

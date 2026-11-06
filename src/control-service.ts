@@ -11,10 +11,7 @@ import { SandboxBot } from './bot'
 import { BUILTIN_AVATARS, findBuiltinAvatarByReference, getBuiltinAvatarReference, pickUnusedBuiltinAvatar } from './builtin-avatars'
 import { SandboxChannelAssignee } from './channel-assignee'
 import { SandboxChatLunaStateStore } from './chatluna/state'
-import {
-  SandboxChatLunaCharacterContext,
-  findChatLunaCharacterChatContext,
-} from './chatluna/character-context'
+import { SandboxChatConversationLines, findChatConversationReset } from './chatluna/conversation-lines'
 import {
   createInboundDelivery,
   createInboundEventConversations,
@@ -394,10 +391,10 @@ export class SandboxControlService {
   private relationshipActions: RelationshipActions
   private chatLunaState: SandboxChatLunaStateStore
   /**
-   * 被测 chatluna-character 的对话上下文只按账号或群号归档，看不见会话实例这一级；
-   * 由它负责在对话线切换时重置那份上下文。
+   * v2 私聊的会话键不看 channelId，根会话与它的实例在 ChatLuna 那里是同一份会话；
+   * 由它负责在对话线切换时重置那份会话。
    */
-  private chatLunaCharacterContext: SandboxChatLunaCharacterContext
+  private chatConversationLines: SandboxChatConversationLines
   /**
    * Koishi 的 channel 受理人与虚拟机器人对不上时，非 @ 的群消息会在中间件之前被静默丢弃；
    * 由它在投递前把受理人对齐，见 {@link SandboxChannelAssignee}。
@@ -466,7 +463,7 @@ export class SandboxControlService {
     }, () => this.notifySceneMutation(), (botParticipantId, conversationId, result, messageIds) => {
       this.archiveChatLunaResult(botParticipantId, conversationId, result, messageIds)
     })
-    this.chatLunaCharacterContext = new SandboxChatLunaCharacterContext(() => findChatLunaCharacterChatContext(ctx))
+    this.chatConversationLines = new SandboxChatConversationLines(() => findChatConversationReset(ctx))
     // database 服务可以晚于本插件加载，因此每次现取；取不到时 Koishi 的受理人判定本身也不生效。
     this.channelAssignee = new SandboxChannelAssignee(async (rows) => {
       // channel 表由 Koishi 兼容层注册，不在本插件的表类型里；只借用 upsert 这一项能力。
@@ -481,7 +478,7 @@ export class SandboxControlService {
       onMiddlewareFinished: (listener) => ctx.on('middleware', listener),
       recordDebug: (input) => this.recordOneBotDebug(input),
       recordDelivery: (delivery) => this.botDeliveries.push(delivery),
-      followInboundConversation: (input) => this.chatLunaCharacterContext.followInboundConversation(input),
+      followInboundConversation: (input) => this.chatConversationLines.followInboundConversation(input),
       alignChannelAssignee: (input) => this.channelAssignee.align(input),
       // 投递模块只认 (消息, 异常) 两参；Cordis 4 的 Logger 会把 Error 格式化成 {}，这里显式带上堆栈。
       logger: {
@@ -766,11 +763,6 @@ export class SandboxControlService {
    */
   getOneBotDebugStore(): SandboxOneBotDebugStore {
     return this.oneBotDebug
-  }
-
-  finishChatLunaCharacterTurn(session: unknown): void {
-    if (!this.chatLunaState.finishCharacterTurn(session)) return
-    this.notifySceneMutation()
   }
 
   recordOneBotDebug(input: AppendOneBotDebugRecordInput): SandboxOneBotDebugRecord {
@@ -2318,7 +2310,7 @@ export class SandboxControlService {
       const trace = this.chatLunaState.traceFor(authorId, conversationId)
       if (trace) message.chatLuna = { thought: '', trace }
     } else if (!event) {
-      this.chatLunaState.clearTraces(conversationId)
+      this.chatLunaState.clearReplyContext(conversationId)
     }
     this.scene.messages.push(message)
     appendConversationMessageId(this.scene, conversationId, message.id)
@@ -2330,26 +2322,27 @@ export class SandboxControlService {
   }
 
   // 本轮结果只归档到最后一条机器人回复：分段发送时思考与用量属于整轮，挂在收尾的气泡上。
-  // 没有捕获到消息 ID 的兼容路径取会话里最近一条，供不经过标准发送入口的上游实现使用。
+  // 回复晚于回合结束陆续发出时会再次归档，列表里前面几段上的结果随之移除，只保留各自的出处。
   private archiveChatLunaResult(
-    botParticipantId: string,
-    conversationId: string,
+    _botParticipantId: string,
+    _conversationId: string,
     result: SandboxMessageChatLuna,
     replyMessageIds: readonly string[],
   ): void {
     const targetIds = new Set(replyMessageIds)
-    const message = targetIds.size
-      ? this.scene.messages.findLast((message) => targetIds.has(message.id))
-      : this.scene.messages.findLast((message) => (
-          !message.event
-          && message.authorId === botParticipantId
-          && message.conversationId === conversationId
-        ))
+    const replies = this.scene.messages.filter((message) => targetIds.has(message.id))
+    const message = replies.at(-1)
     if (!message) return
 
+    for (const previous of replies.slice(0, -1)) {
+      if (!previous.chatLuna) continue
+      const trace = previous.chatLuna.trace
+      if (trace) previous.chatLuna = { thought: '', trace }
+      else delete previous.chatLuna
+    }
     const trace = message.chatLuna?.trace
     message.chatLuna = {
-      ...(result.thought ? { thought: result.thought } : { thought: message.chatLuna?.thought ?? '' }),
+      thought: result.thought,
       ...(result.thoughtDurationMs === undefined ? {} : { thoughtDurationMs: result.thoughtDurationMs }),
       ...(result.usage ? { usage: result.usage } : {}),
       ...(trace ? { trace } : {}),

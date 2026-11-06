@@ -1,62 +1,32 @@
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
+/** `reply` 工具（`render.reply = tool`）的名字，与 v2 `packages/chat/core/src/render/reply-tool.ts` 同步。 */
+const REPLY_TOOL = 'reply'
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
-function readAttrsText(attrs: Record<string, unknown>) {
-  for (const key of ['content', 'text']) {
-    const value = attrs[key]
-    if (value != null && String(value).trim()) return String(value)
-  }
-  return ''
-}
-
-// ChatLuna 的回复快照在不同链路上分别是字符串、Koishi 元素树或 LangChain 序列化消息，
-// 逐层展开这些形状才能拿到仍然带 <think> 的原始文本。
-export function readStructuredText(value: unknown): string {
-  if (typeof value === 'string' || typeof value === 'number') return String(value)
-  if (value == null) return ''
-  if (Array.isArray(value)) return value.map(readStructuredText).join('')
-  if (!isRecord(value)) return ''
-  if (value.content !== undefined && value.content !== value) return readStructuredText(value.content)
-  if (value.text !== undefined) return readStructuredText(value.text)
-  if (Array.isArray(value.children)) return readStructuredText(value.children)
-  if (isRecord(value.attrs)) return readAttrsText(value.attrs)
-  if (isRecord(value.kwargs)) return readStructuredText(value.kwargs)
-  if (isRecord(value.lc_kwargs)) return readStructuredText(value.lc_kwargs)
-  return ''
-}
-
-function isAssistantMessageSnapshot(value: unknown) {
-  if (!isRecord(value)) return false
-  const role = String(value.role ?? value.type ?? '').trim().toLowerCase()
-  if (role === 'assistant' || role === 'ai') return true
-  const id = Array.isArray(value.id) ? value.id.map(String).join(':').toLowerCase() : ''
-  return id.includes('aimessage') || id.includes('assistantmessage')
-}
-
-function readCompletionMessagesText(value: unknown) {
-  if (!Array.isArray(value)) return ''
-  for (let index = value.length - 1; index >= 0; index--) {
-    if (!isAssistantMessageSnapshot(value[index])) continue
-    const text = readStructuredText(value[index])
-    if (text) return text
-  }
-  return ''
-}
-
-export function readChatLunaResponseText(payload: {
-  lastResponseMessage?: unknown
-  completionMessages?: unknown
-  text?: unknown
-}): string {
-  const candidates = [
-    readStructuredText(payload.lastResponseMessage),
-    readStructuredText(payload.text),
-    readCompletionMessagesText(payload.completionMessages),
-  ].filter(Boolean)
-  // lastResponseMessage 有时已是发送出去的清理后文本，<think> 只留在 completionMessages 快照里；
-  // 不能被第一个非空候选提前截断。
-  return candidates.find((text) => parseThinkContent(text)) || candidates[0] || ''
+/**
+ * 读一步模型调用里角色写下的内心活动（v2 character 引擎的 `<think>` 元素）。
+ *
+ * 文本模式下模型直接写元素，`<think>` 留在 assistant 文本块里；工具模式下同一套元素写在 `reply` 工具的
+ * `content` 参数里。模型原生的 reasoning 块不算：它是推理过程，不是角色的内心活动。
+ */
+export function readStepThought(step: unknown): string {
+  const record = readRecord(step)
+  const blocks = [
+    ...Array.isArray(record?.content) ? record.content : [],
+    ...Array.isArray(record?.toolCalls) ? record.toolCalls : [],
+  ]
+  return blocks
+    .map((value) => {
+      const block = readRecord(value)
+      if (block?.type === 'text' && typeof block.text === 'string') return parseThinkContent(block.text)
+      const content = readRecord(block?.input)?.content
+      if (block?.type === 'tool-call' && block.toolName === REPLY_TOOL && typeof content === 'string') return parseThinkContent(content)
+      return ''
+    })
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 export function parseThinkContent(text: string): string {

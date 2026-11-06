@@ -1,10 +1,7 @@
 import { Random } from './random'
 import { Universal, h } from '@satorijs/core'
 import type { SandboxChannelAssigneeTarget } from './channel-assignee'
-import {
-  resolveChatLunaCharacterSessionKey,
-  type ChatLunaCharacterInboundConversation,
-} from './chatluna/character-context'
+import type { ChatInboundConversation } from './chatluna/conversation-lines'
 import type { ResolvedConversation } from './conversation-resolution'
 import { createOneBotDebugError, type AppendOneBotDebugRecordInput } from './onebot-debug'
 import { toOneBotRawMessage, type SandboxOneBotMessageSegment } from './onebot-message'
@@ -155,8 +152,8 @@ export interface InboundDeliveryInput {
   recordDebug(input: AppendOneBotDebugRecordInput): void
   /** 追加一条机器人事件投递记录。 */
   recordDelivery(delivery: SandboxBotDelivery): void
-  /** 让被测 chatluna-character 的对话上下文跟上这次入站事件的对话线；抛错由本模块吸收。 */
-  followInboundConversation(input: ChatLunaCharacterInboundConversation): Promise<unknown>
+  /** 让 ChatLuna v2 的会话跟上这次入站事件的对话线；抛错由本模块吸收。 */
+  followInboundConversation(input: ChatInboundConversation): Promise<unknown>
   /**
    * 把这条群聊会话的 Koishi channel 受理人对齐到收件机器人；抛错由本模块吸收。
    *
@@ -184,7 +181,7 @@ export interface InboundDelivery {
   /**
    * 把一条已落库的消息投递给所有该收到它的机器人。
    *
-   * 包含接收机器人推导、会话与 OneBot 事件字段构造、ChatLuna 角色上下文跟随、中间件等待与超时、
+   * 包含接收机器人推导、会话与 OneBot 事件字段构造、ChatLuna 会话跟随对话线、中间件等待与超时、
    * 入站事件会话的进出栈、投递记录。任何一步失败都会留下一条 `status: 'error'` 的调试记录与一行
    * 日志再抛出，因此调用方可以放心不等待这个 Promise。
    */
@@ -257,20 +254,16 @@ export function createInboundDelivery({
   }
 
   /**
-   * 让被测 chatluna-character 的对话上下文跟上这次入站事件所属的对话线。
+   * 让 ChatLuna v2 的会话跟上这次入站事件所属的对话线。
    *
    * 失败只写日志：重置不成功最坏是这一轮带上另一条对话线的历史，而中断投递会让被测插件
    * 根本收不到消息，那比上下文不干净严重得多。
    */
-  const followCharacterConversation = async (botId: string, context: InboundMessageContext): Promise<void> => {
+  const followChatConversation = async (botId: string, context: InboundMessageContext, session: unknown): Promise<void> => {
     try {
-      await followInboundConversation({
-        botId,
-        conversationId: context.conversation.id,
-        sessionKey: resolveChatLunaCharacterSessionKey(context.conversation, context.operator.id),
-      })
+      await followInboundConversation({ botId, conversationId: context.conversation.id, session })
     } catch (error) {
-      logger.warn('重置 chatluna-character 对话上下文失败；这一轮可能带上另一条对话线的历史。', error)
+      logger.warn('重置 ChatLuna 会话失败；这一轮可能带上另一条对话线的历史。', error)
     }
   }
 
@@ -353,10 +346,9 @@ export function createInboundDelivery({
     try {
       const runtimeBot = getRuntimeBot(recipientBot.id)
       if (!runtimeBot) throw new SandboxDomainError(`机器人运行时不存在：${recipientBot.id}`)
-      // 两件事都必须在派发之前：受理人对不上时 Koishi 连中间件都不会跑，上下文不跟随时插件会带上
-      // 另一条对话线的历史。两者都不阻断投递，失败各自只留一行日志。
+      // 受理人与会话跟随都必须在派发之前：受理人对不上时 Koishi 连中间件都不会跑，会话不跟随时
+      // ChatLuna 会带上另一条对话线的历史。两者都不阻断投递，失败各自只留一行日志。
       await alignInboundChannel(recipientBot.id, context)
-      await followCharacterConversation(recipientBot.id, context)
       // ChatLuna allowQuoteReply / character 只认 session.quote.user.id === bot.userId|selfId，
       // 不依赖 @。quote 必须带齐 user 与 timestamp，character 才能拼出和真 QQ 一样的引用 XML。
       const session = runtimeBot.session({
@@ -377,6 +369,8 @@ export function createInboundDelivery({
         },
       })
       Object.assign(session, { onebot: payload })
+      // v2 按 Session 算会话键，所以跟随放在 Session 构造之后、中间件计时开始之前。
+      await followChatConversation(recipientBot.id, context, session)
 
       const middlewareFinished = new Promise<void>((resolve) => {
         const timer = setTimeout(() => {

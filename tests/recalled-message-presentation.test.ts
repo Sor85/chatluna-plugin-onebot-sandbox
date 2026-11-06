@@ -223,7 +223,13 @@ describe('撤回消息生命周期与呈现', () => {
       conversationId: 'private:10001:20001',
       content: '更早的机器人消息',
     })
-    await emit(app, 'chatluna_character/message_collect', session, [])
+    const agent = { session: { id: 'route:direct' } }
+    await emit(app, 'chat/receive', session, { sessionId: 'route:direct' })
+    await emit(app, 'chatluna/agent-status', { agent, status: 'busy' })
+    await emit(app, 'chatluna/agent-step', {
+      agent,
+      step: { content: [{ type: 'text', text: '<think>本轮思考</think>本轮回复' }], toolCalls: [] },
+    })
     const latest = await control.sendMessage({
       operatorId: '20001',
       conversationId: 'private:10001:20001',
@@ -234,14 +240,7 @@ describe('撤回消息生命周期与呈现', () => {
       messageId: latest.messageId,
       conversationId: 'private:10001:20001',
     })
-    await emit(app, 'chatluna_character/after-chat', {
-      session,
-      lastResponseMessage: { content: '本轮回复' },
-      completionMessages: [{
-        id: ['langchain_core', 'messages', 'AIMessage'],
-        kwargs: { content: '<think>本轮思考</think>本轮回复' },
-      }],
-    })
+    await emit(app, 'chatluna/agent-status', { agent, status: 'idle' })
 
     const messages = control.getSnapshot().messages
     expect(messages.find(({ content }) => content === '更早的机器人消息')?.chatLuna).toBeUndefined()

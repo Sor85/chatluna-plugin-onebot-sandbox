@@ -5,8 +5,8 @@ import type { SandboxControlService } from '../../src/control-service'
 /**
  * 驱动 ChatLuna 状态广播的共享辅助函数。
  *
- * ChatLuna 的思考状态由宿主事件推动，测试必须在真实的 Koishi 事件总线上广播
- * `chatluna/before-chat` 与 `chatluna/after-chat` 才能观察到 thinking 的建立与结束。
+ * ChatLuna 的等待态由宿主事件推动，测试必须在真实的事件总线上广播 v2 的 `chat/receive` 与
+ * `chatluna/agent-status` / `chatluna/agent-step` 才能观察到 thinking 的建立与结束。
  * 状态归属靠 Session 的 selfId 与 channelId 判定，因此 Session 必须来自被测机器人的运行时。
  */
 export async function emitChatLunaEvent(app: App, event: string, ...args: unknown[]): Promise<void> {
@@ -28,4 +28,14 @@ export function createDirectSession(control: SandboxControlService, botParticipa
     user: { id: userId, name: '测试用户1' },
     channel: { id: `private:${userId}:${botParticipantId}`, type: Universal.Channel.Type.DIRECT },
   })
+}
+
+/** 以 v2 事件开始一个回合：`chat/receive` 建立会话映射，再把该 agent 会话置为 busy。 */
+export async function beginAgentTurn(app: App, session: unknown, sessionId: string): Promise<void> {
+  await emitChatLunaEvent(app, 'chat/receive', session, { sessionId })
+  await emitChatLunaEvent(app, 'chatluna/agent-status', { agent: { session: { id: sessionId } }, status: 'busy' })
+}
+
+export async function finishAgentTurn(app: App, sessionId: string): Promise<void> {
+  await emitChatLunaEvent(app, 'chatluna/agent-status', { agent: { session: { id: sessionId } }, status: 'idle' })
 }

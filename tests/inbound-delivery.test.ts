@@ -364,8 +364,9 @@ describe('入站投递：Koishi channel 受理人对齐', () => {
   })
 })
 
-describe('入站投递：ChatLuna 角色上下文跟随', () => {  it('跟随抛错时投递仍然完成、插件仍然收到事件，只多一条日志', async () => {
-    const harness = createHarness({ followFails: new Error('chatluna-character 不可用') })
+describe('入站投递：ChatLuna 会话跟随对话线', () => {
+  it('跟随抛错时投递仍然完成、插件仍然收到事件，只多一条日志', async () => {
+    const harness = createHarness({ followFails: new Error('chat 服务不可用') })
     const runtime = harness.addBot(bot('20001'))
 
     await deliverAndFinish(harness, messageInput({ operator: USER, peer: bot('20001'), conversation: DIRECT }))
@@ -373,7 +374,7 @@ describe('入站投递：ChatLuna 角色上下文跟随', () => {  it('跟随抛
     expect(runtime.dispatched).toHaveLength(1)
     expect(harness.deliveries).toHaveLength(1)
     expect(harness.warnings).toEqual([[
-      '重置 chatluna-character 对话上下文失败；这一轮可能带上另一条对话线的历史。',
+      '重置 ChatLuna 会话失败；这一轮可能带上另一条对话线的历史。',
       expect.any(Error),
     ]])
   })
