@@ -15,6 +15,7 @@ import type {
   SandboxSnapshot,
   SandboxWorkspaceState,
 } from '../../src/types'
+import { readCachedMedia, rememberMedia } from './media-cache'
 import { resolveWorkspaceSelection, type SandboxWorkspaceSelection } from './state'
 
 type Endpoint = keyof SandboxConsoleEvents
@@ -140,11 +141,18 @@ export class WorkspaceStore {
       currentOperatorId: preferred.currentOperatorId ?? this.view.currentOperatorId,
       activeConversationId: preferred.activeConversationId ?? this.view.activeConversationId,
     })
+    // 页面级缓存里已有的媒体随快照同一次提交，首帧就画出头像，不先闪名字首字。
+    const { avatarIds, messageMediaIds } = visibleMediaIdsOf(workspace.snapshot)
+    const cached = [...avatarIds, ...messageMediaIds].flatMap((id) => {
+      const url = this.view.media[id] ? undefined : readCachedMedia(id)
+      return url ? [[id, url] as const] : []
+    })
     this.set({
       workspace,
       currentOperatorId: selection.currentOperatorId,
       activeConversationId: selection.activeConversationId,
       loadError: undefined,
+      ...(cached.length ? { media: { ...this.view.media, ...Object.fromEntries(cached) } } : {}),
     })
     if (persist) this.saveSelection()
     void this.loadVisibleMedia()
@@ -347,24 +355,24 @@ export class WorkspaceStore {
     return id ? this.view.media[id] ?? '' : reference ?? ''
   }
 
-  /** 头像与消息媒体都是受控引用；按需拉取 Base64 并缓存为 Data URL，失败只标记不重试风暴。 */
+  /**
+   * 头像与消息媒体都是受控引用；按需拉取 Base64 并缓存为 Data URL，失败只标记不重试风暴。
+   * 拉到的内容同时写进页面级缓存（`media-cache.ts`），离开沙盒页面再回来不必重新请求。
+   */
   async loadVisibleMedia() {
     const snapshot = this.snapshot
     const operatorId = this.view.currentOperatorId
     if (!snapshot || !operatorId) return
-    const ids = [
-      ...snapshot.messages.flatMap(({ media }) => media?.map(({ id }) => id) ?? []),
-      ...(snapshot.forwards ?? []).flatMap(({ nodes }) => nodes.flatMap(({ media }) => media?.map(({ id }) => id) ?? [])),
-      ...[...snapshot.participants.map(({ avatar }) => avatar), ...snapshot.groups.map(({ avatar }) => avatar)]
-        .flatMap((reference) => mediaIdOf(reference) ?? []),
-    ]
-    const missing = [...new Set(ids)].filter((id) => !this.view.media[id] && !this.mediaLoading.has(id))
+    const { avatarIds, messageMediaIds } = visibleMediaIdsOf(snapshot)
+    const missing = [...new Set([...avatarIds, ...messageMediaIds])].filter((id) => !this.view.media[id] && !this.mediaLoading.has(id))
     await Promise.all(missing.map(async (mediaId) => {
       this.mediaLoading.add(mediaId)
       try {
         const content = await invoke('onebot-sandbox.media-content', this.scoped({ operatorId, mediaId }))
+        const url = `data:${content.mimeType};base64,${content.dataBase64}`
+        rememberMedia(mediaId, url, avatarIds.has(mediaId))
         const { [mediaId]: _, ...failures } = this.view.mediaFailures
-        this.set({ media: { ...this.view.media, [mediaId]: `data:${content.mimeType};base64,${content.dataBase64}` }, mediaFailures: failures })
+        this.set({ media: { ...this.view.media, [mediaId]: url }, mediaFailures: failures })
       } catch {
         this.set({ mediaFailures: { ...this.view.mediaFailures, [mediaId]: true } })
       } finally {
@@ -372,6 +380,17 @@ export class WorkspaceStore {
       }
     }))
   }
+}
+
+/** 快照里引用到的媒体，分成头像（参与者与群）和消息媒体（含合并转发节点），两类的缓存策略不同。 */
+function visibleMediaIdsOf(snapshot: SandboxSnapshot) {
+  const avatarIds = new Set([...snapshot.participants.map(({ avatar }) => avatar), ...snapshot.groups.map(({ avatar }) => avatar)]
+    .flatMap((reference) => mediaIdOf(reference) ?? []))
+  const messageMediaIds = new Set([
+    ...snapshot.messages.flatMap(({ media }) => media?.map(({ id }) => id) ?? []),
+    ...(snapshot.forwards ?? []).flatMap(({ nodes }) => nodes.flatMap(({ media }) => media?.map(({ id }) => id) ?? [])),
+  ])
+  return { avatarIds, messageMediaIds }
 }
 
 /** 当前操作者可见的全部会话（根会话与实例），与侧栏、选择恢复同一口径。 */
