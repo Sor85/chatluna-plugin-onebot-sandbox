@@ -11,7 +11,7 @@ import { SandboxBot } from './bot'
 import { BUILTIN_AVATARS, findBuiltinAvatarByReference, getBuiltinAvatarReference, pickUnusedBuiltinAvatar } from './builtin-avatars'
 import { SandboxChannelAssignee } from './channel-assignee'
 import { SandboxChatLunaStateStore } from './chatluna/state'
-import { SandboxChatConversationLines, findChatConversationReset } from './chatluna/conversation-lines'
+import { SandboxChatConversationLines, findChatConversationHeads, type ChatConversationHeads } from './chatluna/conversation-lines'
 import {
   createInboundDelivery,
   createInboundEventConversations,
@@ -143,11 +143,22 @@ export interface SandboxControlServiceOptions {
   initialScene?: SandboxSnapshot
   runtimeBots?: SandboxRuntimeBotRegistry
   runtimeActive?: boolean
+  /** 所在测试空间的 ID；主场景不传。ChatLuna 会话按它区分同号的群与私聊（见 `chatluna/conversation-lines.ts`）。 */
+  scopeId?: string
   databaseReadyTimeoutMs?: number
 }
 
 export class SandboxRuntimeBotRegistry {
   private owners = new Map<string, object>()
+  private conversationLines?: SandboxChatConversationLines
+
+  /**
+   * ChatLuna 的会话键由机器人号与群号、账号组成，和机器人 ID 一样是各场景共用的资源，对话线归属因此
+   * 挂在这个共享对象上：主场景与各测试空间必须看到同一份「这个键此刻属于谁」。
+   */
+  chatConversationLines(resolveChat: () => ChatConversationHeads | undefined): SandboxChatConversationLines {
+    return this.conversationLines ??= new SandboxChatConversationLines(resolveChat)
+  }
 
   assertAvailable(botId: string, owner: object): void {
     const currentOwner = this.owners.get(botId)
@@ -391,6 +402,7 @@ export class SandboxControlService {
    * 由它负责在对话线切换时重置那份会话。
    */
   private chatConversationLines: SandboxChatConversationLines
+  private scopeId?: string
   /**
    * Koishi 的 channel 受理人与虚拟机器人对不上时，非 @ 的群消息会在中间件之前被静默丢弃；
    * 由它在投递前把受理人对齐，见 {@link SandboxChannelAssignee}。
@@ -454,13 +466,15 @@ export class SandboxControlService {
     // 初始场景在默认头像落盘后再冻结，reset 才能恢复到可显示的实体头像集合。
     this.initialScene = structuredClone(this.scene)
     this.chatLunaState = new SandboxChatLunaStateStore(ctx, (botParticipantId, channelId) => {
-      const participant = this.scene.participants.find(({ id }) => id === botParticipantId)
-      if (participant?.kind !== 'bot') return undefined
+      // 各场景的状态表都收到同一批 ChatLuna 事件，测试空间与主场景常有同号的机器人；只有此刻运行着
+      // 这个机器人的场景认领，注册表保证同一时刻只有一个。
+      if (!this.runtimeBots.has(botParticipantId)) return undefined
       return findVisibleConversation(this.scene, botParticipantId, resolveOneBotChannelId(this.scene, channelId, botParticipantId))?.id
     }, () => this.notifySceneMutation(), (botParticipantId, conversationId, result, messageIds) => {
       this.archiveChatLunaResult(botParticipantId, conversationId, result, messageIds)
     })
-    this.chatConversationLines = new SandboxChatConversationLines(() => findChatConversationReset(ctx))
+    this.chatConversationLines = this.runtimeBotRegistry.chatConversationLines(() => findChatConversationHeads(ctx))
+    this.scopeId = options.scopeId
     // database 服务可以晚于本插件加载，因此每次现取；取不到时 Koishi 的受理人判定本身也不生效。
     this.channelAssignee = new SandboxChannelAssignee(async (rows) => {
       // channel 表由 Koishi 兼容层注册，不在本插件的表类型里；只借用 upsert 这一项能力。
@@ -475,7 +489,12 @@ export class SandboxControlService {
       onMiddlewareFinished: (listener) => ctx.on('middleware', listener),
       recordDebug: (input) => this.recordOneBotDebug(input),
       recordDelivery: (delivery) => this.botDeliveries.push(delivery),
-      followInboundConversation: (input) => this.chatConversationLines.followInboundConversation(input),
+      followInboundConversation: ({ conversationId, channelId, botId, session }) => {
+        const conversation = resolveConversation(this.scene, conversationId ?? resolveOneBotChannelId(this.scene, channelId ?? '', botId))
+        // 群实例的 channelId 本来就是实例 ID，在 ChatLuna 里各成一键；只有私聊实例与根会话同键，要另分对话线。
+        const instanceId = conversation?.kind === 'instance' && conversation.type === 'direct' ? conversation.id : undefined
+        return this.chatConversationLines.followInboundConversation({ scopeId: this.scopeId, instanceId, session })
+      },
       alignChannelAssignee: (input) => this.channelAssignee.align(input),
       // 投递模块只认 (消息, 异常) 两参；Cordis 4 的 Logger 会把 Error 格式化成 {}，这里显式带上堆栈。
       logger: {

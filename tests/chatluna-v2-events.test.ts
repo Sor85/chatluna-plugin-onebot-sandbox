@@ -79,6 +79,26 @@ describe('ChatLuna v2 agent 事件', () => {
     expect(archived).toEqual([{ result: expect.objectContaining({ usage: { inputTokens: 2, outputTokens: 1, totalTokens: 3 } }), ids: ['reply'] }])
   })
 
+  it('chat.wake 唤醒的回合没有 chat/receive，按 agent 打开时记下的路由位置补上映射，回复照样有出处', () => {
+    const { store, emit, archived } = createStore()
+    const woken = { session: { id: 'route:k' }, options: { location: { platform: 'onebot', selfId: 'bot-1', isDirect: true, channel: 'private:user-1', session: 'k' } } }
+    emit('chatluna/agent-status', { agent: woken, status: 'busy' })
+    expect(store.getStates()).toEqual([expect.objectContaining({ botParticipantId: 'bot-1', conversationId: 'private:user-1', thinking: true })])
+
+    emit('chatluna/span-start', { span: { spanKind: 'step', session: 'route:k', attributes: { turn: 1, step: 1 } } })
+    expect(store.traceFor('bot-1', 'private:user-1')).toEqual({ sessionId: 'route:k', turn: 1, step: 1 })
+    emit('chatluna/agent-step', { agent: woken, step: step(1, 1, { usage: { inputTokens: 3, outputTokens: 1 } }) })
+    store.recordReplyMessage('bot-1', 'private:user-1', 'reply')
+    emit('chatluna/agent-status', { agent: woken, status: 'idle' })
+    expect(archived).toEqual([{ result: expect.objectContaining({ usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4 } }), ids: ['reply'] }])
+  })
+
+  it('路由位置解析不到沙盒会话时同样不建立映射', () => {
+    const { store, emit } = createStore(() => undefined)
+    emit('chatluna/agent-status', { agent: { session: { id: 'x' }, options: { location: { selfId: 'bot-1', channel: 'private:user-1' } } }, status: 'busy' })
+    expect(store.getStates()).toEqual([])
+  })
+
   it('agent 已经 idle 时晚到的 chat/receive 不开始回合', () => {
     const { store, emit } = createStore()
     emit('chatluna/agent-status', { agent, status: 'busy' })

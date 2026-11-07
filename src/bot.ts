@@ -38,6 +38,7 @@ import {
   resolveGroupConversationId,
   resolveOneBotChannelId,
   toOneBotChannelId,
+  toOneBotDirectChannelId,
 } from './conversation-resolution'
 import {
   forwardNodeText,
@@ -814,10 +815,10 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
   }
 
   async createDirectChannel(userId: string): Promise<Universal.Channel> {
-    return {
-      id: this.resolveDirectConversationId(userId),
-      type: 1,
-    }
+    // 与 adapter-onebot 一样给出 `private:<账号>`、不做校验：ChatLuna 唤醒后回私聊走 sendPrivateMessage →
+    // 这里 → sendMessage，给沙盒会话 ID 会让调试记录与插件拿到的 channelId 都偏离真实格式。
+    // 不可见的私聊由 sendMessage 报错。
+    return { id: toOneBotDirectChannelId(userId), type: 1 }
   }
 
   async getUser(userId: string): Promise<Universal.User> {

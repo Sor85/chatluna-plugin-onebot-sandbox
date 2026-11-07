@@ -374,7 +374,7 @@ describe('入站投递：ChatLuna 会话跟随对话线', () => {
     expect(runtime.dispatched).toHaveLength(1)
     expect(harness.deliveries).toHaveLength(1)
     expect(harness.warnings).toEqual([[
-      '重置 ChatLuna 会话失败；这一轮可能带上另一条对话线的历史。',
+      '切换 ChatLuna 会话失败；这一轮可能带上另一条对话线或另一个测试空间的历史。',
       expect.any(Error),
     ]])
   })

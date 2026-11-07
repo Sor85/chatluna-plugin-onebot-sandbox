@@ -28,6 +28,8 @@ interface ChatLunaEventRegistrar {
 /** ChatLuna v2 agent 事件里本模块读取的字段；事件类型来自宿主，这里只做结构化读取。 */
 interface ChatLunaAgentPayload {
   session?: { id?: unknown }
+  /** ChatLuna 打开会话时写入的路由位置；channel 是打开这份会话的 Session 或唤醒目标的 channelId。 */
+  options?: { location?: { selfId?: unknown, channel?: unknown } }
 }
 
 interface ChatLunaStepPayload {
@@ -98,7 +100,7 @@ function createStateKey(botParticipantId: string, conversationId: string) {
  * 机器人的等待态、用量、思考与回复出处，全部由 ChatLuna v2 的三个事件推动。
  *
  * `chat/receive` 给出「agent 会话 ID → 机器人 + 会话」映射，之后的 `agent-status`（busy / idle）与
- * `agent-step` 只带会话 ID。v2 的会话键含机器人 selfId，因此一个 agent 会话只对应一个机器人会话，
+ * `agent-step` 只带会话 ID；唤醒的回合没有 `chat/receive`，映射改由 agent 自己的路由位置补上。v2 的会话键含机器人 selfId，因此一个 agent 会话只对应一个机器人会话，
  * 并发的机器人与会话各自按会话 ID 收尾，互不串联。
  */
 export class SandboxChatLunaStateStore {
@@ -140,14 +142,14 @@ export class SandboxChatLunaStateStore {
       if (!sessionId) return
       if (status === 'busy') this.busySessions.add(sessionId)
       else this.busySessions.delete(sessionId)
-      const target = this.agentTargets.get(sessionId)
+      const target = this.targetOf(sessionId, agent)
       if (!target) return
       if (status === 'busy') this.begin(sessionId, target)
       else this.finish(sessionId)
     }))
     this.disposers.push(on('chatluna/agent-step', ({ agent, step }) => {
       const sessionId = readAgentSessionId(agent)
-      const target = sessionId ? this.agentTargets.get(sessionId) : undefined
+      const target = sessionId ? this.targetOf(sessionId, agent) : undefined
       if (!sessionId || !target) return
       this.recordStep(sessionId, target, step)
     }))
@@ -164,6 +166,23 @@ export class SandboxChatLunaStateStore {
       if (running?.turn === located.trace.turn && running.step === located.trace.step) this.runningTraces.delete(located.key)
       this.latestTraces.set(located.key, located.trace)
     }))
+  }
+
+  /**
+   * agent 会话对应的机器人会话。`chat.wake` 唤醒的回合不经过 `chat/receive`，会话第一次被唤醒时还没有
+   * 映射，这时按 agent 打开时记下的路由位置补上，否则唤醒发出的回复没有出处。
+   */
+  private targetOf(sessionId: string, agent: ChatLunaAgentPayload | undefined): SandboxChatLunaTarget | undefined {
+    const known = this.agentTargets.get(sessionId)
+    if (known) return known
+    const location = readRecord(readRecord(agent?.options)?.location)
+    const botParticipantId = readString(location?.selfId)
+    const channelId = readString(location?.channel)
+    const conversationId = botParticipantId && channelId ? this.resolveTarget(botParticipantId, channelId) : undefined
+    if (!botParticipantId || !conversationId) return
+    const target = { botParticipantId, conversationId }
+    this.agentTargets.set(sessionId, target)
+    return target
   }
 
   private locateStepSpan(span: ChatLunaSpanPayload | undefined): { key: string, trace: SandboxMessageTraceReference } | undefined {

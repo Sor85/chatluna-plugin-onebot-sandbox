@@ -1,7 +1,6 @@
 import { Random } from './random'
 import { Universal, h } from '@satorijs/core'
 import type { SandboxChannelAssigneeTarget } from './channel-assignee'
-import type { ChatInboundConversation } from './chatluna/conversation-lines'
 import { toOneBotChannelId, type ResolvedConversation } from './conversation-resolution'
 import { createOneBotDebugError, type AppendOneBotDebugRecordInput } from './onebot-debug'
 import { toOneBotRawMessage, type SandboxOneBotMessageSegment } from './onebot-message'
@@ -50,7 +49,7 @@ export interface InboundDeliveryBot {
 }
 
 /**
- * 会话在投递里只被读一个字段：中间件完成事件按它配对，判断这次结束的是不是本次派发。
+ * 会话在投递里只被读两个字段：中间件完成事件按 id 配对，判断这次结束的是不是本次派发；事件派发前按 channelId 切换 ChatLuna 会话。
  *
  * 原始 OneBot 载荷不在这份形状里，因为它不是会话自己的字段——沙盒把它嫁接在第三方 `Session`
  * 实例上（`Object.assign(session, { onebot })`），被测插件读的也正是那个嫁接上去的属性。
@@ -59,6 +58,8 @@ export interface InboundDeliveryBot {
  */
 export interface InboundDeliverySession {
   readonly id: number
+  /** 通知与申请事件按它找所属会话，切换 ChatLuna 会话用。 */
+  readonly channelId?: string
 }
 
 export interface InboundDeliveryLogger {
@@ -152,8 +153,11 @@ export interface InboundDeliveryInput {
   recordDebug(input: AppendOneBotDebugRecordInput): void
   /** 追加一条机器人事件投递记录。 */
   recordDelivery(delivery: SandboxBotDelivery): void
-  /** 让 ChatLuna v2 的会话跟上这次入站事件的对话线；抛错由本模块吸收。 */
-  followInboundConversation(input: ChatInboundConversation): Promise<unknown>
+  /**
+   * 让 ChatLuna v2 的会话跟上这次入站事件的对话线；抛错由本模块吸收。消息给出所属会话，
+   * 通知与申请只有 Session 上的 channelId，由调用方解析。
+   */
+  followInboundConversation(input: { botId: string, conversationId?: string, channelId?: string, session: unknown }): Promise<unknown>
   /**
    * 把这条群聊会话的 Koishi channel 受理人对齐到收件机器人；抛错由本模块吸收。
    *
@@ -172,10 +176,10 @@ export interface InboundDeliveryInput {
  */
 export interface InboundDelivery {
   /**
-   * 把一个 OneBot 事件派发给一个机器人并记录它。
+   * 把一个 OneBot 事件派发给一个机器人并记录它，派发前先让 ChatLuna 会话跟上事件所在的会话。
    *
-   * 消息、好友请求、好友通知、群请求、群通知、撤回通知六种事件都经它。失败时记一条错误记录
-   * 并原样抛出——失败不被吞掉。
+   * 好友请求、好友通知、群请求、群通知、撤回通知都经它；消息由 {@link deliverMessage} 投递，
+   * 跟随与记录走同一套逻辑。失败时记一条错误记录并原样抛出——失败不被吞掉。
    */
   dispatchEvent(bot: InboundDeliveryBot, session: InboundDeliverySession): Promise<void>
   /**
@@ -216,7 +220,8 @@ export function createInboundDelivery({
         && profile.id !== context.operator.id)
   }
 
-  const dispatchEvent: InboundDelivery['dispatchEvent'] = async (bot, session) => {
+  /** 派发并记一条调试记录；ChatLuna 会话由调用方先切好。 */
+  const dispatchRecorded: InboundDelivery['dispatchEvent'] = async (bot, session) => {
     const startedAt = Date.now()
     const payload = Reflect.get(session, 'onebot')
     const profile = getBotProfile(bot.selfId)
@@ -256,15 +261,25 @@ export function createInboundDelivery({
   /**
    * 让 ChatLuna v2 的会话跟上这次入站事件所属的对话线。
    *
-   * 失败只写日志：重置不成功最坏是这一轮带上另一条对话线的历史，而中断投递会让被测插件
+   * 失败只写日志：切换不成功最坏是这一轮带上另一条对话线（或另一个测试空间）的历史，而中断投递会让被测插件
    * 根本收不到消息，那比上下文不干净严重得多。
    */
-  const followChatConversation = async (botId: string, context: InboundMessageContext, session: unknown): Promise<void> => {
+  const followChatConversation = async (
+    botId: string,
+    target: { conversationId?: string, channelId?: string },
+    session: unknown,
+  ): Promise<void> => {
     try {
-      await followInboundConversation({ botId, conversationId: context.conversation.id, session })
+      await followInboundConversation({ botId, ...target, session })
     } catch (error) {
-      logger.warn('重置 ChatLuna 会话失败；这一轮可能带上另一条对话线的历史。', error)
+      logger.warn('切换 ChatLuna 会话失败；这一轮可能带上另一条对话线或另一个测试空间的历史。', error)
     }
+  }
+
+  const dispatchEvent: InboundDelivery['dispatchEvent'] = async (bot, session) => {
+    // 插件常在通知、申请的回调里 chat.wake 这个会话；先切到本场景的会话，唤醒才不会落进别的测试空间。
+    await followChatConversation(bot.selfId, { channelId: session.channelId }, session)
+    await dispatchRecorded(bot, session)
   }
 
   /**
@@ -375,7 +390,7 @@ export function createInboundDelivery({
       })
       Object.assign(session, { onebot: payload })
       // v2 按 Session 算会话键，所以跟随放在 Session 构造之后、中间件计时开始之前。
-      await followChatConversation(recipientBot.id, context, session)
+      await followChatConversation(recipientBot.id, { conversationId: context.conversation.id }, session)
 
       const middlewareFinished = new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
@@ -394,7 +409,7 @@ export function createInboundDelivery({
 
       await eventConversations.run(recipientBot.id, context.conversation.id, async () => {
         dispatched = true
-        await dispatchEvent(runtimeBot, session)
+        await dispatchRecorded(runtimeBot, session)
         await middlewareFinished
       })
     } catch (error) {

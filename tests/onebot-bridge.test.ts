@@ -936,6 +936,19 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     })
   })
 
+  it('私聊频道与 adapter-onebot 一样是 private:<账号>，经 sendPrivateMessage 发出时调试记录同样如此', async () => {
+    const { control } = await createControl()
+
+    await expect(control.bot.createDirectChannel('10001')).resolves.toEqual({ id: 'private:10001', type: 1 })
+    await expect(control.bot.sendPrivateMessage('99999', '不可见')).rejects.toThrow()
+    await control.bot.sendPrivateMessage('10001', '唤醒后的私聊回复')
+    const { records } = await control.getOneBotDebugStore().getRecords({ direction: 'action' })
+    expect(records[0]).toMatchObject({
+      action: 'send_private_msg',
+      payload: { channel_id: 'private:10001', message: '唤醒后的私聊回复' },
+    })
+  })
+
   it('camelCase 便捷方法映射到真实 OneBot action 而不是未知 action', async () => {
     const { control } = await createControl()
 

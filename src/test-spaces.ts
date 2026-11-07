@@ -255,6 +255,7 @@ export class SandboxTestSpaceService {
     return new SandboxControlService(this.ctx, {
       initialScene: scene,
       runtimeActive,
+      scopeId: id,
       runtimeBots: this.runtimeBots,
       mediaDirectory: resolve(this.spaceDirectory(id), 'media'),
       debugPersistence: this.createDebugPersistence?.(id),
