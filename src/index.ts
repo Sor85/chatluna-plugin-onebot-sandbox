@@ -32,7 +32,7 @@ import { SandboxMcpService, type SandboxMcpQuotaConfig } from './mcp/service'
 import type { SandboxMcpEndpointDescription } from './mcp/types'
 import { SandboxTestSpaceService } from './test-spaces'
 import { registerSandboxBotTools, type SandboxBotToolsConfig } from './chatluna/tools'
-import { EDITABLE_PRESETS_SCHEMA, registerEditablePresetChoices } from './chatluna/presets'
+import { EDITABLE_PRESETS_SCHEMA, registerEditablePresetChoices, SandboxChatLunaPresets } from './chatluna/presets'
 import { resolve } from 'node:path'
 import type { SandboxAppearance, SandboxPersistenceMode } from './types'
 
@@ -288,6 +288,8 @@ export function apply(ctx: Context, config: Config) {
     httpApi: SandboxHttpApiCapabilityCatalog
     mcpEndpoint: SandboxMcpEndpointDescription
   } | undefined
+  // 编辑机器人的预设选项与测试端点的预设工具读写同一份，端点构造失败时编辑弹窗仍可切换。
+  const presets = new SandboxChatLunaPresets(ctx, config.presetEditing.editablePresets)
   try {
     const mcp = new SandboxMcpService(ctx, control, {
       dataDirectory: resolve(baseDir, 'data/chatluna/onebot-sandbox'),
@@ -299,7 +301,7 @@ export function apply(ctx: Context, config: Config) {
       maxConcurrentWaits: config.testEndpoint.shared.maxConcurrentWaits,
       maxConcurrentUploads: config.testEndpoint.shared.maxConcurrentUploads,
       testSpaces,
-      editablePresets: config.presetEditing.editablePresets,
+      presets,
     })
     const server = new SandboxTestEndpointServer(ctx, mcp, {
       host: config.testEndpoint.shared.host,
@@ -341,7 +343,7 @@ export function apply(ctx: Context, config: Config) {
     sandboxAccentColor: config.sandboxAccentColor,
     sandboxMarkRecalledMessages: config.sandboxMarkRecalledMessages,
   }
-  registerConsole(createWebuiRegistrar(ctx), control, appearance, endpoint, testSpaces)
+  registerConsole(createWebuiRegistrar(ctx), control, appearance, endpoint, testSpaces, presets)
   registerSettings(ctx, Settings, 'chatluna-plugin-onebot-sandbox')
   registerEditablePresetChoices(ctx)
   onStart(ctx, async () => {

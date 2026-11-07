@@ -3,6 +3,8 @@ import { MemorySessionStore } from '@chatluna/session'
 import { SandboxChatLunaModelCalls, type SandboxModelCallReader } from '../src/chatluna/model-calls'
 import { editablePresetChoices, SandboxChatLunaPresets, type SandboxPresetEditor } from '../src/chatluna/presets'
 import { SandboxChatLunaError } from '../src/chatluna/runtime'
+import { registerConsole, type SandboxConsoleRegistrar } from '../src/console'
+import type { SandboxAppearance } from '../src/types'
 import { createMcpTestService, stopMcpTestApps } from './helpers/mcp-service-harness'
 
 afterEach(async () => {
@@ -259,5 +261,37 @@ describe('模型调用与预设工具', () => {
       .rejects.toMatchObject({ code: 'participant_not_found' })
     await service.callTool(credential.token, 'set_bot_preset', { botId: '20001', presetId: '宁宁' })
     expect([...rules.keys()]).toEqual(['onebot-sandbox-preset-20001'])
+  })
+})
+
+describe('编辑机器人弹窗的预设选项', () => {
+  const appearance: SandboxAppearance = { sandboxTimBubbleTail: true, sandboxIncomingBubbleStyle: 'shadow', sandboxAccentColor: '#2563eb', sandboxMarkRecalledMessages: true }
+  const listen = (presets: SandboxPresetEditor) => {
+    const { control } = createMcpTestService(['read'], false)
+    const listeners = new Map<string, (...args: any[]) => any>()
+    const registrar: SandboxConsoleRegistrar = { addEntry() {}, addListener(event, callback) { listeners.set(event, callback as never) }, broadcast() {} }
+    registerConsole(registrar, control, appearance, undefined, undefined, presets)
+    return listeners
+  }
+
+  it('列出预设与当前切换，切换与撤销都写路由规则，只接受存在的沙盒机器人', async () => {
+    const { editor, rules } = presetRuntime()
+    const listeners = listen(editor)
+    expect(listeners.get('onebot-sandbox.bot-presets')?.()).toMatchObject({
+      available: true,
+      presets: expect.arrayContaining([{ id: '宁宁', name: '宁宁', status: 'ok' }]),
+      assignments: [],
+    })
+    const assigned = await listeners.get('onebot-sandbox.set-bot-preset')?.({ botId: '20001', presetId: '宁宁' })
+    expect(assigned.assignments).toEqual([{ botId: '20001', presetId: '宁宁', ruleId: 'onebot-sandbox-preset-20001' }])
+    await expect(listeners.get('onebot-sandbox.set-bot-preset')?.({ botId: '10001', presetId: '宁宁' })).rejects.toThrow('机器人不存在')
+    await expect(listeners.get('onebot-sandbox.set-bot-preset')?.({ botId: '20001', presetId: '不存在' })).rejects.toMatchObject({ reason: 'not_found' })
+    expect((await listeners.get('onebot-sandbox.set-bot-preset')?.({ botId: '20001', presetId: null })).assignments).toEqual([])
+    expect(rules.size).toBe(0)
+  })
+
+  it('预设服务没有加载时标成不可用而不是报错', () => {
+    const listeners = listen(new SandboxChatLunaPresets(host({}), []))
+    expect(listeners.get('onebot-sandbox.bot-presets')?.()).toEqual({ available: false, presets: [], assignments: [] })
   })
 })

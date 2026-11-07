@@ -3,6 +3,7 @@ import type {} from '@chatluna/ui-server'
 import { ApiError } from '@chatluna/server'
 import type { SandboxConsoleBroadcasts, SandboxConsoleEvents } from './console-contract'
 import type { SandboxConsoleRegistrar } from './console'
+import { SandboxChatLunaError, type SandboxChatLunaErrorReason } from './chatluna/runtime'
 import { SandboxDomainError } from './types'
 
 /**
@@ -20,9 +21,18 @@ export interface SandboxSignal {
 
 export const SIGNAL_STATE = 'onebot-sandbox.signal'
 
+const CHATLUNA_ERROR_CODES = {
+  unavailable: 'UNAVAILABLE',
+  not_found: 'NOT_FOUND',
+  forbidden: 'FORBIDDEN',
+  conflict: 'CONFLICT',
+  invalid: 'INVALID_ARGUMENT',
+} as const satisfies Record<SandboxChatLunaErrorReason, string>
+
 /** 领域错误是调用方可以修正的输入问题，映射成 400；其余异常保持 500 并由服务端记录堆栈。 */
 function toApiError(error: unknown): unknown {
   if (error instanceof ApiError) return error
+  if (error instanceof SandboxChatLunaError) return new ApiError(CHATLUNA_ERROR_CODES[error.reason], error.message)
   if (error instanceof SandboxDomainError || (error instanceof Error && error.constructor === Error)) {
     return new ApiError('INVALID_ARGUMENT', error.message)
   }

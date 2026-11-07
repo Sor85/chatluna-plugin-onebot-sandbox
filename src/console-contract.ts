@@ -31,6 +31,7 @@ import type {
   SetGroupAnnouncementInput,
   SetMessageReactionInput,
 } from './types'
+import type { SandboxPresetAssignment } from './chatluna/presets'
 import type { ListSandboxTestCallRecordsInput, SandboxTestCallRecordsPage } from './mcp/call-records'
 import type { SandboxHttpApiCapabilityCatalog } from './mcp/http-api'
 import type {
@@ -123,10 +124,25 @@ export interface SandboxTestSpaceConsoleEvents {
   'onebot-sandbox.delete-test-space': (input: { spaceId: string }) => void
 }
 
+/** 机器人预设：编辑机器人时可选的 ChatLuna 预设与沙盒写下的切换。 */
+export interface SandboxBotPresetCatalog {
+  /** ChatLuna 的预设服务是否已加载；没加载时两份列表都为空。 */
+  available: boolean
+  presets: { id: string; name: string; status: string }[]
+  assignments: SandboxPresetAssignment[]
+}
+
+export interface SandboxPresetConsoleEvents {
+  'onebot-sandbox.bot-presets': () => SandboxBotPresetCatalog
+  /** `presetId` 为 null 时撤掉切换，恢复路由原本的预设。 */
+  'onebot-sandbox.set-bot-preset': (input: SpaceScoped<{ botId: string; presetId: string | null }>) => Promise<SandboxBotPresetCatalog>
+}
+
 /** 端点集合是全体分组的并集；服务端注册与客户端消费都以它为唯一名单。 */
 export interface SandboxConsoleEvents extends
   SandboxConversationConsoleEvents,
   SandboxEnvironmentConsoleEvents,
+  SandboxPresetConsoleEvents,
   SandboxDebugRecordConsoleEvents,
   SandboxTestEndpointConsoleEvents,
   SandboxTestSpaceConsoleEvents {}

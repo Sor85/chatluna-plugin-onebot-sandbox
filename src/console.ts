@@ -1,5 +1,8 @@
 import { listConversationIds } from './conversation-resolution'
+import { SandboxChatLunaError } from './chatluna/runtime'
+import type { SandboxPresetEditor } from './chatluna/presets'
 import type {
+  SandboxBotPresetCatalog,
   SandboxConsoleBroadcasts,
   SandboxConsoleEvents,
   SpaceScoped,
@@ -100,6 +103,7 @@ export function registerConsole(
   appearance: SandboxAppearance,
   endpoint?: SandboxConsoleTestEndpoint,
   testSpaces?: SandboxTestSpaceService,
+  presets?: SandboxPresetEditor,
 ) {
   console.addEntry()
 
@@ -338,6 +342,25 @@ export function registerConsole(
     await (await resolveReadyControl(input, true)).performGroupAction(assertInteractionInput(withoutSpaceId(input)) as PerformGroupActionInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
   }, { authority: 4 })
+  if (presets) {
+    const presetCatalog = (): SandboxBotPresetCatalog => {
+      try {
+        const { presets: records, assignments } = presets.list()
+        return { available: true, presets: records.map(({ id, name, status }) => ({ id, name, status })), assignments }
+      } catch (error) {
+        // 预设服务没加载是常态（没装 ChatLuna 预设包），编辑弹窗据此隐藏选项而不是报错。
+        if (error instanceof SandboxChatLunaError && error.reason === 'unavailable') return { available: false, presets: [], assignments: [] }
+        throw error
+      }
+    }
+    registerListener('onebot-sandbox.bot-presets', presetCatalog, { authority: 4 })
+    registerListener('onebot-sandbox.set-bot-preset', async (input: SpaceScoped<{ botId: string; presetId: string | null }>) => {
+      const bot = resolveControl(input, false).getSnapshot().participants.find(({ id }) => id === input.botId)
+      if (bot?.kind !== 'bot') throw new SandboxDomainError(`机器人不存在：${input.botId}`)
+      await presets.assign(input.botId, input.presetId ?? undefined)
+      return presetCatalog()
+    }, { authority: 4 })
+  }
   registerListener('onebot-sandbox.debug-records', listDebugRecords, { authority: 4 })
   registerListener('onebot-sandbox.debug-record', getDebugRecord, { authority: 4 })
   registerListener('onebot-sandbox.clear-debug-records', clearDebugRecords, { authority: 4 })

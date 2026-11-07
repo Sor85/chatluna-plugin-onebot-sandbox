@@ -148,6 +148,10 @@
   line-height: 18px;
 }
 
+.sandbox-entity-hint.is-error {
+  color: var(--destructive);
+}
+
 .sandbox-entity-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 140px;

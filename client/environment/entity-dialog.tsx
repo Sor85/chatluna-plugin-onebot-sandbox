@@ -20,6 +20,7 @@ import {
   SelectValue,
   Switch,
 } from '@chatluna/ui-kit'
+import type { SandboxBotPresetCatalog } from '../../src/console-contract'
 import { getOneBotProfileBaseline } from '../../src/onebot-profiles'
 import {
   getSandboxBots,
@@ -34,7 +35,7 @@ import { SandboxAvatar } from '../shared/avatar'
 import { useDiscardConfirm } from '../shared/discard-confirm'
 import { OverlayScrollbar } from '../shared/overlay-scrollbar'
 import { useSandbox, useWorkspace } from '../workspace/context'
-import { errorText } from '../workspace/store'
+import { errorText, invoke } from '../workspace/store'
 import { AvatarChoices } from './avatar-picker'
 import { ImplementationSelect } from './create-popover'
 import './entity-dialog.css'
@@ -55,6 +56,15 @@ interface Draft {
   disabledCapabilities: string[]
   members: SandboxGroupMember[]
 }
+
+/** 「跟随路由规则」的选项值；预设 ID 由 v2 按文件名生成，不含冒号，不会与它撞上。 */
+const FOLLOW_ROUTE = 'onebot-sandbox:follow-route'
+
+/** 机器人的预设选项：未读取、服务未加载、读取失败或读到的目录。 */
+type PresetState =
+  | { status: 'loading' }
+  | { status: 'failed'; error: string }
+  | { status: 'ready'; catalog: SandboxBotPresetCatalog }
 
 const EMPTY_DRAFT: Draft = {
   id: '', name: '', avatar: '', personalNote: '', sex: 'unset', implementation: 'napcat', enabled: true, disabledCapabilities: [], members: [],
@@ -78,6 +88,10 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
   const [picking, setPicking] = React.useState(false)
   const [capabilitySearch, setCapabilitySearch] = React.useState('')
   const [editingMemberId, setEditingMemberId] = React.useState('')
+  // 预设不在场景快照里，打开时另外读取，所以不进 Draft：读到之前两份都是 FOLLOW_ROUTE，选单禁用。
+  const [presetState, setPresetState] = React.useState<PresetState>({ status: 'loading' })
+  const [preset, setPreset] = React.useState(FOLLOW_ROUTE)
+  const [initialPreset, setInitialPreset] = React.useState(FOLLOW_ROUTE)
   const scroller = React.useRef<HTMLDivElement>(null)
   const capabilityScroller = React.useRef<HTMLDivElement>(null)
   const users = getSandboxUsers(snapshot)
@@ -94,7 +108,7 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
     setDraft(next)
     setInitial(next)
   }
-  const dirty = mode === 'edit' && JSON.stringify(draft) !== JSON.stringify(initial)
+  const dirty = mode === 'edit' && (JSON.stringify(draft) !== JSON.stringify(initial) || preset !== initialPreset)
   const { requestClose, confirm } = useDiscardConfirm(dirty, () => onOpenChange(false))
 
   React.useEffect(() => {
@@ -127,11 +141,32 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, target?.type, target?.id])
 
-  const runAction = async (input: ManageSandboxEnvironmentInput) => {
+  React.useEffect(() => {
+    setPreset(FOLLOW_ROUTE)
+    setInitialPreset(FOLLOW_ROUTE)
+    if (!open || mode !== 'edit' || target?.type !== 'bot') return
+    const botId = target.id
+    let active = true
+    setPresetState({ status: 'loading' })
+    invoke('onebot-sandbox.bot-presets', undefined).then((catalog) => {
+      if (!active) return
+      const assigned = catalog.assignments.find((assignment) => assignment.botId === botId)?.presetId ?? FOLLOW_ROUTE
+      setPresetState({ status: 'ready', catalog })
+      setPreset(assigned)
+      setInitialPreset(assigned)
+    }, (failure) => {
+      if (active) setPresetState({ status: 'failed', error: errorText(failure) })
+    })
+    return () => { active = false }
+  }, [open, mode, target?.type, target?.id])
+
+  /** `prepare` 先于环境变更执行：预设依赖外部服务，更容易失败，失败时整次保存都不落地。 */
+  const runAction = async (input: ManageSandboxEnvironmentInput, prepare?: () => Promise<unknown>) => {
     if (busy) return
     setBusy(true)
     setError('')
     try {
+      await prepare?.()
       await store.manageEnvironment(input)
       onOpenChange(false)
     } catch (failure) {
@@ -165,6 +200,13 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
           avatar: draft.avatar,
           profile: accountProfile(),
         },
+      }, preset === initialPreset ? undefined : async () => {
+        await invoke('onebot-sandbox.set-bot-preset', {
+          botId: draft.id,
+          presetId: preset === FOLLOW_ROUTE ? null : preset,
+          ...(store.spaceId ? { spaceId: store.spaceId } : {}),
+        })
+        setInitialPreset(preset)
       })
     } else if (target?.type === 'group') {
       void runAction({ action: 'update-group', data: { id: draft.id, name: draft.name, avatar: draft.avatar, members: draft.members.map((member) => ({ ...member })) } })
@@ -207,6 +249,23 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
   const entityLabel = t(`sandbox.kind.${type}`)
   const editingParticipant = participants.find(({ id }) => id === editingMemberId)
   const editingMember = memberOf(editingMemberId)
+  const presetItems = presetState.status === 'ready' ? [
+    { value: FOLLOW_ROUTE, label: t('sandbox.entity.presetFollowRoute') },
+    ...presetState.catalog.presets.map(({ id, name, status }) => {
+      const label = name === id ? id : `${name}（${id}）`
+      return { value: id, label: status === 'error' ? t('sandbox.entity.presetError', { name: label }) : label }
+    }),
+    // 规则指向的预设已被删掉时仍列出并标明，否则选单显示空白，也无从看出该恢复默认。
+    ...(preset !== FOLLOW_ROUTE && !presetState.catalog.presets.some(({ id }) => id === preset)
+      ? [{ value: preset, label: t('sandbox.entity.presetMissing', { id: preset }) }]
+      : []),
+  ] : [{ value: FOLLOW_ROUTE, label: t('sandbox.entity.presetFollowRoute') }]
+  const presetReady = presetState.status === 'ready' && presetState.catalog.available
+  const presetHint = presetState.status === 'loading'
+    ? t('sandbox.entity.presetLoading')
+    : presetState.status === 'failed'
+      ? t('sandbox.entity.presetFailed', { error: presetState.error })
+      : presetState.catalog.available ? t('sandbox.entity.presetHint') : t('sandbox.entity.presetUnavailable')
   const roleItems = [
     { value: 'owner', label: t('sandbox.role.owner') },
     { value: 'admin', label: t('sandbox.role.admin') },
@@ -291,6 +350,16 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
                       <Switch checked={draft.enabled} onCheckedChange={(value) => setDraft((current) => ({ ...current, enabled: value === true }))} />
                     </label>
                     <ImplementationSelect value={draft.implementation} onChange={(implementation) => setDraft((value) => ({ ...value, implementation }))} />
+                    <div className="sandbox-entity-field">
+                      <Label>{t('sandbox.entity.preset')}</Label>
+                      <Select value={preset} disabled={!presetReady} onValueChange={(value) => value && setPreset(value)} items={presetItems}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent className="sandbox-glass">
+                          {presetItems.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <p className={cn('sandbox-entity-hint', presetState.status === 'failed' && 'is-error')}>{presetHint}</p>
+                    </div>
                     <div className="sandbox-entity-field">
                       <div className="sandbox-entity-section-title">
                         <Label>{t('sandbox.entity.capabilities')}</Label>
