@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { MemorySessionStore } from '@chatluna/session'
 import { SandboxChatLunaModelCalls, type SandboxModelCallReader } from '../src/chatluna/model-calls'
-import { SandboxChatLunaPresets, type SandboxPresetEditor } from '../src/chatluna/presets'
+import { editablePresetChoices, SandboxChatLunaPresets, type SandboxPresetEditor } from '../src/chatluna/presets'
 import { SandboxChatLunaError } from '../src/chatluna/runtime'
 import { createMcpTestService, stopMcpTestApps } from './helpers/mcp-service-harness'
 
@@ -186,6 +186,24 @@ describe('测试预设：写权限按插件设置收窄', () => {
     await editor.assign('20001', '宁宁')
     await editor.assign('20001', undefined)
     expect(rules.size).toBe(0)
+  })
+})
+
+describe('设置页的可编辑预设选项', () => {
+  it('只列出可按源文本编辑的非测试预设，已登记但不存在的预设标明后保留', () => {
+    const schema = editablePresetChoices([
+      { id: '宁宁', name: '宁宁', editable: 'source' },
+      { id: 'cat', name: '猫娘', editable: 'source' },
+      { id: 'sandbox-test-a', name: 'sandbox-test-a', editable: 'source' },
+      { id: 'plugin-x', name: 'plugin-x', editable: 'none' },
+    ], ['宁宁', 'gone'])
+    expect(schema.type).toBe('array')
+    expect(schema.meta.role).toBe('select')
+    expect(schema.inner?.list?.map((item) => [item.value, item.meta.description])).toEqual([
+      ['宁宁', '宁宁'],
+      ['cat', '猫娘（cat）'],
+      ['gone', 'gone（预设已不存在）'],
+    ])
   })
 })
 

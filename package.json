@@ -66,6 +66,7 @@
   "devDependencies": {
     "@chatluna/chat": "workspace:*",
     "@chatluna/core": "workspace:*",
+    "@chatluna/preset": "workspace:*",
     "@chatluna/runtime-config": "workspace:*",
     "@chatluna/schema": "workspace:*",
     "@chatluna/server": "workspace:*",
@@ -74,6 +75,7 @@
     "@chatluna/ui-client": "workspace:*",
     "@chatluna/ui-kit": "workspace:*",
     "@chatluna/ui-schema-form": "workspace:*",
+    "@chatluna/ui-schema-registry": "workspace:*",
     "@chatluna/ui-server": "workspace:*",
     "@chatluna/ui-storage": "workspace:*",
     "@cordisjs/plugin-database": "4.1.1",

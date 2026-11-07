@@ -2,6 +2,8 @@ import { errorDetail } from './error-detail'
 import { onDispose, onStart } from './lifecycle'
 import type { Context } from 'cordis'
 import Schema from 'schemastery'
+// 给 Schema 补上 `dynamic` 等 v2 扩展；设置 schema 在模块求值时就用到它。
+import '@chatluna/schema'
 import type {} from '@chatluna/ui-server'
 import type {} from '@cordisjs/plugin-database'
 import { resolveBaseDir } from './base-dir'
@@ -30,6 +32,7 @@ import { SandboxMcpService, type SandboxMcpQuotaConfig } from './mcp/service'
 import type { SandboxMcpEndpointDescription } from './mcp/types'
 import { SandboxTestSpaceService } from './test-spaces'
 import { registerSandboxBotTools, type SandboxBotToolsConfig } from './chatluna/tools'
+import { EDITABLE_PRESETS_SCHEMA, registerEditablePresetChoices } from './chatluna/presets'
 import { resolve } from 'node:path'
 import type { SandboxAppearance, SandboxPersistenceMode } from './types'
 
@@ -180,7 +183,8 @@ const botToolFields = {
 // 不必登记；这里只登记用户允许改动的已有预设，写权限的判定在 `src/chatluna/presets.ts`。
 const presetEditingFields = {
   presetEditing: Schema.object({
-    editablePresets: Schema.array(String).default([]).extra('label', '可编辑预设')
+    // 选项由服务端按当前预设列表生成（`src/chatluna/presets.ts` 的 `registerEditablePresetChoices`）。
+    editablePresets: Schema.dynamic(EDITABLE_PRESETS_SCHEMA).default([]).extra('label', '可编辑预设')
       .description('测试工具除了`sandbox-test-`前缀的测试预设，还可以修改这些预设；只能修改，不能删除'),
   }).description('预设编辑'),
 }
@@ -339,6 +343,7 @@ export function apply(ctx: Context, config: Config) {
   }
   registerConsole(createWebuiRegistrar(ctx), control, appearance, endpoint, testSpaces)
   registerSettings(ctx, Settings, 'chatluna-plugin-onebot-sandbox')
+  registerEditablePresetChoices(ctx)
   onStart(ctx, async () => {
     await control.waitForSceneReady()
     await endpoint?.server.start().catch((error) => ctx.logger.error('%s\n%s', 'test endpoint listener failed to start', errorDetail(error)))

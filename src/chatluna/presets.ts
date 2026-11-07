@@ -1,3 +1,7 @@
+import type { Context } from 'cordis'
+import Schema from 'schemastery'
+import type {} from '@chatluna/preset'
+import type {} from '@chatluna/ui-schema-registry'
 import { findChatLunaRuntime, readRecord, SandboxChatLunaError } from './runtime'
 
 /**
@@ -245,4 +249,45 @@ export class SandboxChatLunaPresets implements SandboxPresetEditor {
     }, { by: RULE_WRITER }))
     return { botId, presetId, ruleId }
   }
+}
+
+/** 设置页「可编辑预设」的动态 schema 名，`src/index.ts` 的字段经 `Schema.dynamic` 引用它。 */
+export const EDITABLE_PRESETS_SCHEMA = 'onebot-sandbox.editable-presets'
+
+/**
+ * 「可编辑预设」的可选项：v2 里能按源文本编辑、又不是测试预设的预设。
+ *
+ * 测试预设总是可写，插件提供的预设总是只读，两者列出来勾了也不改变什么，所以不进选项。已经登记、
+ * 但预设已经不在的 ID 仍然列出并标明，否则多选控件会把它当成未知值悄悄丢掉，用户也无从取消。
+ */
+export function editablePresetChoices(presets: readonly { id: string; name: string; editable: string }[], selected: readonly string[]): Schema {
+  const candidates = presets.filter((preset) => preset.editable === 'source' && !isTestPresetId(preset.id))
+  const known = new Set(candidates.map(({ id }) => id))
+  const choices = [
+    ...candidates.map((preset) => Schema.const(preset.id).description(preset.name === preset.id ? preset.id : `${preset.name}（${preset.id}）`)),
+    ...selected.filter((id) => !known.has(id)).map((id) => Schema.const(id).description(`${id}（预设已不存在）`)),
+  ]
+  return Schema.array(Schema.union(choices)).role('select')
+}
+
+function readSelected(doc: Record<string, unknown>): string[] {
+  const value = readRecord(doc.presetEditing)?.editablePresets
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+/**
+ * 登记「可编辑预设」的选项来源。设置页按需向服务端解析，预设增删时让已打开的设置页重新解析。
+ *
+ * `schemas` 只在这一处子作用域里注入，`presets` 按名称现取，理由同 `findChatLunaRuntime`：
+ * 写进插件的 `inject` 会让被测插件每次重载都连带重建沙盒。
+ */
+export function registerEditablePresetChoices(ctx: Context): void {
+  ctx.inject(['schemas'], (inner) => {
+    inner.schemas.define(EDITABLE_PRESETS_SCHEMA, ({ doc }) => {
+      const presets = findChatLunaRuntime(ctx, 'presets', (service) => (typeof service.list === 'function' ? service : undefined))
+      const records = presets ? (presets.list as () => PresetRecordLike[]).call(presets) : []
+      return editablePresetChoices(records, readSelected(doc))
+    })
+    inner.on('presets/change', () => inner.schemas.invalidate(EDITABLE_PRESETS_SCHEMA))
+  })
 }
