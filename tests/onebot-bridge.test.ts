@@ -519,7 +519,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
         })
       })
     }
-    for (const name of ['friend-request', 'guild-request', 'guild-member-added', 'guild-member-updated', 'guild-updated', 'guild-member-removed']) listen(name)
+    for (const name of ['friend-request', 'guild-member-request', 'guild-member-added', 'guild-member-updated', 'guild-updated', 'guild-member-removed']) listen(name)
     ;(app.on as unknown as (name: string, listener: (session: unknown) => void) => void)('notice', (session) => {
       const value = session as { onebot?: { notice_type?: string } }
       if (value.onebot?.notice_type) rawNotices.push(value.onebot.notice_type)
@@ -537,13 +537,56 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
 
     expect(standardEvents).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'friend-request', userId: '10004', rawType: 'friend' }),
-      expect.objectContaining({ type: 'guild-request', userId: '10004', guildId: '30001', rawType: 'group' }),
+      expect.objectContaining({ type: 'guild-member-request', userId: '10004', guildId: '30001', rawType: 'group' }),
       expect.objectContaining({ type: 'guild-member-added', userId: '10004', guildId: '30001', rawType: 'group_increase' }),
       expect.objectContaining({ type: 'guild-member-updated', userId: '10003', guildId: '30001', rawType: 'group_card' }),
       expect.objectContaining({ type: 'guild-updated', guildId: '30001', rawType: 'group_name' }),
       expect.objectContaining({ type: 'guild-member-removed', userId: '10003', guildId: '30001', rawType: 'group_decrease' }),
     ]))
     expect(rawNotices).toEqual(expect.arrayContaining(['group_increase', 'group_card', 'group_name', 'group_decrease']))
+  })
+
+  it('申请事件与 adapter-onebot 同形：flag 在 messageId、附言在 content，插件凭它们就能处理申请', async () => {
+    const { app, control } = await createControl()
+    type RequestSession = {
+      type?: string
+      messageId?: string
+      content?: string
+      userId?: string
+      guildId?: string
+      channelId?: string
+      bot: { handleFriendRequest(id: string, approve: boolean): Promise<void>; handleGuildRequest(id: string, approve: boolean): Promise<void>; handleGuildMemberRequest(id: string, approve: boolean): Promise<void> }
+    }
+    const received: RequestSession[] = []
+    for (const name of ['friend-request', 'guild-request', 'guild-member-request']) {
+      ;(app.on as unknown as (name: string, listener: (session: RequestSession) => void) => void)(name, (session) => {
+        received.push(session)
+      })
+    }
+
+    control.createUser({ id: '10004', name: '申请用户' })
+    await control.performFriendAction({ action: 'delete', operatorId: '10004', targetId: '20001' })
+    const friend = await control.performFriendAction({ action: 'request', operatorId: '10004', targetId: '20001', comment: '加个好友' })
+    const join = await control.performGroupAction({ action: 'request-join', operatorId: '10004', groupId: '30001', comment: '想进群' })
+    control.createGroup({ id: '30030', name: '邀请群', members: [{ participantId: '10001', role: 'owner' }] })
+    const invite = await control.performGroupAction({ action: 'invite', operatorId: '10001', groupId: '30030', targetId: '20001', comment: '来玩' })
+
+    expect(received.map(({ type, messageId, content, userId, guildId, channelId }) => ({ type, messageId, content, userId, guildId, channelId }))).toEqual([
+      { type: 'friend-request', messageId: friend.requestId, content: '加个好友', userId: '10004', guildId: undefined, channelId: 'private:10004:20001' },
+      { type: 'guild-member-request', messageId: join.requestId, content: '想进群', userId: '10004', guildId: '30001', channelId: 'group:30001' },
+      { type: 'guild-request', messageId: invite.requestId, content: '来玩', userId: '10001', guildId: '30030', channelId: 'group:30030' },
+    ])
+
+    // 像 toolbox 这类插件一样只用标准字段处理申请。
+    for (const session of received) {
+      if (session.type === 'friend-request') await session.bot.handleFriendRequest(session.messageId!, true)
+      else if (session.type === 'guild-member-request') await session.bot.handleGuildMemberRequest(session.messageId!, true)
+      else await session.bot.handleGuildRequest(session.messageId!, true)
+    }
+    const scene = control.getSnapshot()
+    expect(scene.requests.filter(({ status }) => status === 'pending')).toEqual([])
+    expect(scene.groups.find(({ id }) => id === '30001')?.members.map(({ participantId }) => participantId)).toContain('10004')
+    expect(scene.groups.find(({ id }) => id === '30030')?.members.map(({ participantId }) => participantId)).toContain('20001')
   })
 
   it('NapCat 扩展群管理与合并转发 action 走沙盒域逻辑', async () => {

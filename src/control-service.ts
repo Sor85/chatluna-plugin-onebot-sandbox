@@ -2788,8 +2788,13 @@ export class SandboxControlService {
       type: 'friend-request',
       timestamp: Date.now(),
       user: { id: userId, name: this.getUser(userId).name },
+      channel: { id: resolveDirectConversationId(this.scene, userId, botId), type: 1 },
     })
+    // adapter-onebot 把申请的 flag 放进 messageId、附言放进 content，插件按这两个标准字段处理申请
+    // （handleFriendRequest(session.messageId, ...)），只写在 session.onebot 里插件就拿不到。
     Object.assign(session, {
+      messageId: flag,
+      content: comment,
       onebot: {
         time: Math.floor(Date.now() / 1000),
         self_id: Number(botId),
@@ -2840,13 +2845,18 @@ export class SandboxControlService {
       : group.members.flatMap(({ participantId, role }) => this.isBot(participantId) && (role === 'owner' || role === 'admin') ? [participantId] : [])
     await Promise.all(botIds.map(async (botId) => {
       const bot = this.getRuntimeBot(botId)
+      // 与 adapter-onebot 一致：加群申请是 guild-member-request，邀请机器人入群才是 guild-request；
+      // flag 与附言同样放进 messageId、content。
       const session = bot.session({
-        type: 'guild-request',
+        type: subType === 'add' ? 'guild-member-request' : 'guild-request',
         timestamp: Date.now(),
         guild: { id: group.id, name: group.name },
+        channel: { id: resolveGroupConversationId(this.scene, group.id), type: 0 },
         user: { id: request.requesterId, name: this.getParticipant(request.requesterId).name },
       })
       Object.assign(session, {
+        messageId: request.id,
+        content: request.comment,
         onebot: {
           time: Math.floor(Date.now() / 1000),
           self_id: Number(botId),
