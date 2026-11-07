@@ -15,7 +15,7 @@ const message = (id: string, role: string, content: unknown[], meta?: Record<str
   id, role, content, source: { kind: 'test' }, ...(meta ? { meta } : {}),
 })
 
-/** 一回合两步：第一步调用工具，第二步给出回复。entry 序号就是数组下标。 */
+/** 一回合两步：第一步调用工具，第二步给出回复。entry 序号就是数组下标；回合与步骤同 v2 一样从 1 开始。 */
 async function sessionStore() {
   const store = new MemorySessionStore()
   const inline = 'A'.repeat(5000)
@@ -24,13 +24,13 @@ async function sessionStore() {
       config: { provider: 'p', model: 'm' },
       system: '系统提示词',
       tools: [{ name: 'search', description: '搜索', parameters: { type: 'object' } }],
-      turn: 0,
+      turn: 1,
     } },
     { n: 1, time: 1, kind: 'message', message: message('u1', 'user', [{ type: 'text', text: '你好' }, { type: 'image', source: { type: 'data', data: inline } }]) },
-    { n: 2, time: 2, kind: 'message', message: message('a1', 'assistant', [{ type: 'tool-call', toolCallId: 'c1', toolName: 'search', input: {} }], { turn: 0, step: 0 }) },
+    { n: 2, time: 2, kind: 'message', message: message('a1', 'assistant', [{ type: 'tool-call', toolCallId: 'c1', toolName: 'search', input: {} }], { turn: 1, step: 1 }) },
     { n: 3, time: 3, kind: 'message', message: message('t1', 'tool', [{ type: 'tool-result', toolCallId: 'c1', output: 'ok' }]) },
     { n: 4, time: 4, kind: 'message', message: message('a2', 'assistant', [{ type: 'text', text: '你好呀' }], {
-      turn: 0, step: 1, usage: { inputTokens: 10, outputTokens: 2 }, finish: 'stop', raw: [{ type: 'text', text: '<think>想</think>你好呀' }],
+      turn: 1, step: 2, usage: { inputTokens: 10, outputTokens: 2 }, finish: 'stop', raw: [{ type: 'text', text: '<think>想</think>你好呀' }],
     }) },
   ] as never)
   return store
@@ -42,8 +42,8 @@ describe('模型调用：读 ChatLuna 会话日志', () => {
 
     const calls = await reader.list('s1')
     expect(calls?.map(({ seq, turn, step, text, toolCalls }) => ({ seq, turn, step, text, toolCalls }))).toEqual([
-      { seq: 2, turn: 0, step: 0, text: '', toolCalls: ['search'] },
-      { seq: 4, turn: 0, step: 1, text: '你好呀', toolCalls: [] },
+      { seq: 2, turn: 1, step: 1, text: '', toolCalls: ['search'] },
+      { seq: 4, turn: 1, step: 2, text: '你好呀', toolCalls: [] },
     ])
 
     const detail = await reader.get('s1', 4, { lastMessages: 2 })
@@ -152,6 +152,7 @@ describe('测试预设：写权限按插件设置收窄', () => {
     await editor.create({ id: 'sandbox-test-b', loader: 'md' })
     await editor.create({ id: 'sandbox-test-c', copyFrom: '宁宁' })
     await expect(editor.create({ id: 'sandbox-test-d', copyFrom: '不存在' })).rejects.toMatchObject({ reason: 'not_found' })
+    await expect(editor.create({ id: 'sandbox-test-a', loader: 'md' })).rejects.toMatchObject({ reason: 'invalid', message: expect.stringContaining('预设已存在') })
     expect(writes).toEqual(['create sandbox-test-b', 'duplicate 宁宁 sandbox-test-c'])
   })
 
@@ -210,9 +211,9 @@ describe('设置页的可编辑预设选项', () => {
 describe('模型调用与预设工具', () => {
   const fakeModelCalls = (): SandboxModelCallReader => ({
     list: async (sessionId) => (sessionId === 's1'
-      ? [{ seq: 2, turn: 0, step: 0, time: 0, text: '', toolCalls: [] }, { seq: 4, turn: 1, step: 0, time: 1, text: '好', toolCalls: [] }]
+      ? [{ seq: 2, turn: 1, step: 1, time: 0, text: '', toolCalls: [] }, { seq: 4, turn: 2, step: 1, time: 1, text: '好', toolCalls: [] }]
       : undefined),
-    get: async (_sessionId, seq) => ({ seq, turn: 1, step: 0, time: 1, text: '好', toolCalls: [], response: { content: [] } }),
+    get: async (_sessionId, seq) => ({ seq, turn: seq === 2 ? 1 : 2, step: 1, time: 1, text: '好', toolCalls: [], response: { content: [] } }),
   })
   const failingPresets = (reason: SandboxChatLunaError['reason']): SandboxPresetEditor => {
     const reject = (): never => {
@@ -227,6 +228,9 @@ describe('模型调用与预设工具', () => {
     const listed = await service.callTool(credential.token, 'list_model_calls', { sessionId: 's1', limit: 1 }) as { total: number; calls: { seq: number }[]; tracePage: string }
     expect(listed).toMatchObject({ total: 2, calls: [{ seq: 4 }], tracePage: '/traces/s1' })
     expect(await service.callTool(credential.token, 'get_model_call', { sessionId: 's1' })).toMatchObject({ seq: 4, sessionId: 's1' })
+    expect(await service.callTool(credential.token, 'get_model_call', { sessionId: 's1', turn: 1 })).toMatchObject({ seq: 2 })
+    // v2 的步骤从 1 开始；越界按下限收敛，step 0 读的是第一步。
+    expect(await service.callTool(credential.token, 'get_model_call', { sessionId: 's1', turn: 2, step: 0 })).toMatchObject({ seq: 4 })
 
     const { messageId } = await control.sendMessage({ operatorId: '10001', conversationId: 'private:10001:20001', content: '你好' })
     await expect(service.callTool(credential.token, 'get_model_call', { messageId })).rejects.toMatchObject({ code: 'model_call_not_found' })

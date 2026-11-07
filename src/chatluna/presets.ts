@@ -193,6 +193,8 @@ export class SandboxChatLunaPresets implements SandboxPresetEditor {
       throw new SandboxChatLunaError('forbidden', `测试预设的 ID 必须以 ${TEST_PRESET_PREFIX} 开头：${input.id}`)
     }
     const presets = this.presets()
+    // v2 对已存在的文件报 revision 冲突，原样转出去会让调用方以为重读后重试就行。
+    if (presets.get(input.id)) throw new SandboxChatLunaError('invalid', `预设已存在：${input.id}；修改它用 save_preset，或换一个 ID`)
     if (input.copyFrom !== undefined) {
       this.require(input.copyFrom)
       return this.summarize(await guarded(() => presets.duplicate(input.copyFrom!, input.id, RULE_WRITER)))

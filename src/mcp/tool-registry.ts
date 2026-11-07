@@ -951,8 +951,8 @@ async function getModelCall(runtime: SandboxMcpToolRuntime, args: Record<string,
   const includeToolSchemas = optionalBoolean(args.includeToolSchemas, 'includeToolSchemas') ?? false
   let seq = optionalNumber(args.seq, 'seq', { min: 0 })
   if (seq === undefined) {
-    const turn = optionalNumber(args.turn, 'turn', { min: 0 })
-    const step = optionalNumber(args.step, 'step', { min: 0 })
+    const turn = optionalNumber(args.turn, 'turn', { min: 1 })
+    const step = optionalNumber(args.step, 'step', { min: 1 })
     const position = turn === undefined ? target.focus : { turn, step }
     const calls = await readModelCalls(runtime, target.sessionId)
     const match = position
@@ -2212,8 +2212,8 @@ const TOOL_ENTRIES: SandboxMcpToolEntry[] = [
         botId: { type: 'string', description: '与 conversationId 一起用：只看这个机器人的回复' },
         sessionId: { type: 'string', description: 'ChatLuna 会话 ID；只给它时读最近一步' },
         seq: { type: 'number', minimum: 0, description: 'list_model_calls 返回的 seq，优先于 turn/step' },
-        turn: { type: 'number', minimum: 0 },
-        step: { type: 'number', minimum: 0 },
+        turn: { type: 'number', minimum: 1, description: 'list_model_calls 返回的 turn；从 1 开始' },
+        step: { type: 'number', minimum: 1, description: 'list_model_calls 返回的 step，从 1 开始；只给 turn 时读这一回合的最后一步' },
         lastMessages: { type: 'number', minimum: 1, maximum: 1000, default: 30, description: '请求里只返回最后这么多条消息；request.messageCount 是总数' },
         includeToolSchemas: { type: 'boolean', default: false, description: '带上工具的完整参数 schema；默认只给名字与说明' },
       },
