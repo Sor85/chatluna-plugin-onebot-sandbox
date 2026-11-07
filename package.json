@@ -1,6 +1,6 @@
 {
   "name": "chatluna-plugin-onebot-sandbox",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "在 WebUI 中模拟 QQ（OneBot v11）环境，测试 ChatLuna 及其插件在私聊、群聊中的行为",
   "type": "module",
   "license": "MIT",
