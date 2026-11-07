@@ -386,8 +386,10 @@ export const Composer = React.forwardRef<ComposerHandle, {
       setCompactStack(element.clientWidth < fullWidth + COMPOSER_FIXED_WIDTH + COMPOSER_MIN_INPUT_WIDTH)
       // 回复与附件共用一个浮动包络，消息区底部留白按包络真实高度计算。28 = 胶囊距底 20px + 置底时
       // 末条消息与输入区的可视间隙 8px；包络与胶囊之间的 8px 已计入包络高度。
-      const formHeight = Math.ceil(element.getBoundingClientRect().height)
-      const overlay = context.current ? Math.ceil(context.current.getBoundingClientRect().height) + 8 : 0
+      // 量布局高度（offsetHeight）而不是 getBoundingClientRect：进出测试空间的缩放动画期间工作区带 scale，
+      // 量到的是缩小后的高度，动画结束时布局尺寸不变、ResizeObserver 不再触发，留白就一直偏小。
+      const formHeight = element.offsetHeight
+      const overlay = context.current ? context.current.offsetHeight + 8 : 0
       onSpaceChange?.(formHeight + overlay + 28)
     }
     const observer = new ResizeObserver(update)
