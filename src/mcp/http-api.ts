@@ -66,6 +66,11 @@ export const HTTP_API_ERROR_STATUS: Record<SandboxMcpStableErrorCode, number> = 
   media_not_found: 404,
   invalid_media_url: 400,
   digest_mismatch: 400,
+  // 被测 ChatLuna 的运行时
+  chatluna_unavailable: 503,
+  model_call_not_found: 404,
+  preset_not_found: 404,
+  preset_forbidden: 403,
   // 传输层
   method_not_allowed: 405,
   payload_too_large: 413,

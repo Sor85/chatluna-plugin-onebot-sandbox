@@ -3,6 +3,8 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from 'cordis'
+import { SandboxChatLunaModelCalls, type SandboxModelCallReader } from '../chatluna/model-calls'
+import { SandboxChatLunaPresets, type SandboxPresetEditor } from '../chatluna/presets'
 import {
   SandboxChatLunaWakeup,
   readSandboxResponderRuntimes,
@@ -78,6 +80,12 @@ export interface SandboxMcpServiceOptions extends Partial<SandboxMcpQuotaConfig>
   testSpaces?: SandboxTestSpaceService
   /** 唤醒规则的来源；省略时读本服务所在 Koishi 实例里的被测响应插件运行时。 */
   wakeup?: SandboxWakeupReader
+  /** 模型调用的来源；省略时读本服务所在实例里 ChatLuna 的会话日志。 */
+  modelCalls?: SandboxModelCallReader
+  /** 预设读写；省略时读写本服务所在实例里 ChatLuna 的预设与路由服务。 */
+  presets?: SandboxPresetEditor
+  /** 测试预设之外允许修改的预设 ID（插件设置 `presetEditing.editablePresets`）。 */
+  editablePresets?: readonly string[]
 }
 
 const READ_RESOURCES = [
@@ -141,6 +149,11 @@ export const STABLE_ERROR_CODES = [
   'media_not_found',
   'invalid_media_url',
   'digest_mismatch',
+  // 被测 ChatLuna 的运行时：模型调用与预设
+  'chatluna_unavailable',
+  'model_call_not_found',
+  'preset_not_found',
+  'preset_forbidden',
   // HTTP 测试接口的传输层拒绝。MCP 表述不会发出这两个码：JSON-RPC 自己就把方法与请求体
   // 形状固定住了，只有普通 HTTP 才存在「换个动词打同一条路径」和「请求体过大」两种失败。
   'method_not_allowed',
@@ -270,11 +283,15 @@ export class SandboxMcpService {
   private testSpaces?: SandboxTestSpaceService
   /** 被测机器人当前的唤醒规则；工具声明、测试指南与 `get_wakeup_rules` 都问它。 */
   private wakeup: SandboxWakeupReader
+  private modelCalls: SandboxModelCallReader
+  private presets: SandboxPresetEditor
 
   constructor(private ctx: Context, private control: SandboxControlService, options: SandboxMcpServiceOptions) {
     this.testSpaces = options.testSpaces
     // 默认读本服务所在实例的被测运行时。每次读取都现取，因此被测插件重载或改配置后无需重启端点。
     this.wakeup = options.wakeup ?? new SandboxChatLunaWakeup(() => readSandboxResponderRuntimes(ctx))
+    this.modelCalls = options.modelCalls ?? new SandboxChatLunaModelCalls(ctx)
+    this.presets = options.presets ?? new SandboxChatLunaPresets(ctx, options.editablePresets ?? [])
     mkdirSync(options.dataDirectory, { recursive: true })
     this.credentialFile = join(options.dataDirectory, 'test-credentials.json')
     this.eventLimit = options.eventLimit ?? 1000
@@ -695,6 +712,8 @@ export class SandboxMcpService {
       appendEvent: (type, data, eventSpaceId = spaceId) => this.appendEvent(type, data, eventSpaceId),
       waitFor: (waitArgs, predicate) => this.waitFor(waitArgs, predicate),
       readWakeupRules: (targets) => this.wakeup.read(targets),
+      modelCalls: this.modelCalls,
+      presets: this.presets,
       requireTestSpaces: () => this.requireTestSpaces(),
       rememberUploadedMedia: (mediaId, media) => this.rememberUploadedMedia(this.mediaCacheKey(spaceId, mediaId), media),
       findUploadedMedia: (mediaId) => this.uploadedMedia.get(this.mediaCacheKey(spaceId, mediaId)),

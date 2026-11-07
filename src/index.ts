@@ -78,6 +78,7 @@ export interface Config extends SandboxAppearance {
   sceneMessageMaxBytes: number
   testEndpoint: SandboxTestEndpointConfig
   botTools: SandboxBotToolsConfig
+  presetEditing: { editablePresets: string[] }
 }
 
 /**
@@ -175,6 +176,15 @@ const botToolFields = {
   }).description('工具调用'),
 }
 
+// 预设编辑同样服务于测试工具，放进测试端点分区。测试预设（`sandbox-test-`前缀）由工具自己新建，
+// 不必登记；这里只登记用户允许改动的已有预设，写权限的判定在 `src/chatluna/presets.ts`。
+const presetEditingFields = {
+  presetEditing: Schema.object({
+    editablePresets: Schema.array(String).default([]).extra('label', '可编辑预设')
+      .description('测试工具除了`sandbox-test-`前缀的测试预设，还可以修改这些预设；只能修改，不能删除'),
+  }).description('预设编辑'),
+}
+
 /**
  * 插件设置的完整 schema，由沙盒工作台的「设置」页渲染（`src/settings.ts`）。
  *
@@ -190,7 +200,7 @@ export const Settings = Schema.intersect([
     Schema.object(sceneMessageFields).extra('i18n', 'group.sceneMessages').description('场景消息'),
   ]).extra('i18n', 'group.storage').extra('label', '数据存储')
     .description('模拟环境的保存位置，以及消息的保留上限。上限按主环境与每个 AI 测试空间分别计算'),
-  Schema.object({ ...endpointFields, ...botToolFields }).extra('i18n', 'group.endpoint').extra('label', '测试端点')
+  Schema.object({ ...endpointFields, ...botToolFields, ...presetEditingFields }).extra('i18n', 'group.endpoint').extra('label', '测试端点')
     .description('供 AI 客户端操控沙盒的 MCP 与 HTTP 接口，同一组工具也可以交给 ChatLuna 机器人调用。两个端点共用监听器、访问限制与调用配额，配额按测试凭证分别计数，超出返回 429'),
 ]) as unknown as Schema<Config>
 
@@ -200,7 +210,7 @@ export const Settings = Schema.intersect([
  */
 export const Config = Schema.object(
   Object.fromEntries(
-    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...endpointFields, ...botToolFields })
+    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...endpointFields, ...botToolFields, ...presetEditingFields })
       .map(([key, field]) => [key, (field as Schema).hidden()]),
   ),
 ).description('设置在 OneBot 沙盒工作台的「设置」页编辑') as unknown as Schema<Config>
@@ -285,6 +295,7 @@ export function apply(ctx: Context, config: Config) {
       maxConcurrentWaits: config.testEndpoint.shared.maxConcurrentWaits,
       maxConcurrentUploads: config.testEndpoint.shared.maxConcurrentUploads,
       testSpaces,
+      editablePresets: config.presetEditing.editablePresets,
     })
     const server = new SandboxTestEndpointServer(ctx, mcp, {
       host: config.testEndpoint.shared.host,

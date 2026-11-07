@@ -58,6 +58,7 @@
     "@chatluna/core": ">=2.0.0-alpha.0",
     "@chatluna/schema": ">=2.0.0-alpha.0",
     "@chatluna/server": ">=2.0.0-alpha.0",
+    "@chatluna/session": ">=2.0.0-alpha.0",
     "@chatluna/tool": ">=2.0.0-alpha.0",
     "@chatluna/ui-server": ">=2.0.0-alpha.0",
     "cordis": "^4.0.0-rc.12"
@@ -68,6 +69,7 @@
     "@chatluna/runtime-config": "workspace:*",
     "@chatluna/schema": "workspace:*",
     "@chatluna/server": "workspace:*",
+    "@chatluna/session": "workspace:*",
     "@chatluna/tool": "workspace:*",
     "@chatluna/ui-client": "workspace:*",
     "@chatluna/ui-kit": "workspace:*",

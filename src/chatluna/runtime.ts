@@ -59,3 +59,20 @@ export function findChatLunaRuntime<T>(
     if (resolved) return resolved
   }
 }
+
+/**
+ * 读写被测 ChatLuna 运行时时的领域拒绝，由调用方（测试端点的工具执行体）换成自己的稳定错误码。
+ *
+ * - `unavailable`：需要的服务没有加载。
+ * - `not_found`：会话、模型调用或预设不存在。
+ * - `forbidden`：沙盒不允许改这个对象（预设既不是测试预设也不在白名单里）。
+ * - `conflict`：乐观锁冲突，重读后再改。
+ * - `invalid`：参数在 v2 那一侧不成立（预设 ID 不合法、加载器不存在）。
+ */
+export type SandboxChatLunaErrorReason = 'unavailable' | 'not_found' | 'forbidden' | 'conflict' | 'invalid'
+
+export class SandboxChatLunaError extends Error {
+  constructor(readonly reason: SandboxChatLunaErrorReason, message: string) {
+    super(message)
+  }
+}

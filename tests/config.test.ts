@@ -31,10 +31,11 @@ describe('插件持久化配置', () => {
   it('每个顶层字段都有标题', () => {
     for (const [key, field] of Object.entries(Config.dict ?? {})) {
       // 两个分组各是所在分区的唯一字段，分区标题就是它的标题；分组里的字段另外核对。
-      if (key === 'testEndpoint' || key === 'botTools') continue
+      if (key === 'testEndpoint' || key === 'botTools' || key === 'presetEditing') continue
       expect(labelOf(field), key).toMatch(/\S/)
     }
     for (const [key, field] of Object.entries(Config.dict?.botTools.dict ?? {})) expect(labelOf(field), key).toMatch(/\S/)
+    for (const [key, field] of Object.entries(Config.dict?.presetEditing.dict ?? {})) expect(labelOf(field), key).toMatch(/\S/)
   })
 
   /**

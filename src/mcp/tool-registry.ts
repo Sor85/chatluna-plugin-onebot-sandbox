@@ -4,6 +4,9 @@ import {
   normalizeGroupMemberFromUnknown,
   parseAccountProfileFromUnknown,
 } from '../account-profile'
+import type { SandboxModelCallReader } from '../chatluna/model-calls'
+import { TEST_PRESET_PREFIX, type SandboxPresetEditor, type SandboxPresetSummary } from '../chatluna/presets'
+import { SandboxChatLunaError } from '../chatluna/runtime'
 import type { SandboxWakeupRules, SandboxWakeupTarget } from '../chatluna/wakeup'
 import type { SandboxControlService } from '../control-service'
 import {
@@ -110,6 +113,10 @@ export interface SandboxMcpToolRuntime {
   waitFor(args: Record<string, unknown>, predicate: (event: SandboxMcpEvent) => boolean): Promise<SandboxMcpWaitResult>
   /** 被测机器人当前的唤醒规则；省略 `target` 时同时给出私聊与群聊两份通用规则。 */
   readWakeupRules(targets?: readonly SandboxWakeupTarget[]): SandboxWakeupRules
+  /** 被测机器人的模型调用：ChatLuna 会话日志里每一步的请求与响应。 */
+  readonly modelCalls: SandboxModelCallReader
+  /** ChatLuna 预设的读写与沙盒机器人的预设切换，写权限已按插件设置收窄。 */
+  readonly presets: SandboxPresetEditor
   requireTestSpaces(): SandboxTestSpaceService
   rememberUploadedMedia(mediaId: string, media: SandboxMedia): void
   findUploadedMedia(mediaId: string): SandboxMedia | undefined
@@ -851,6 +858,166 @@ function exportScene(runtime: SandboxMcpToolRuntime): SandboxMcpExport {
   return { testApiVersion: 1, exportedAt: new Date().toISOString(), scene: runtime.control.getSnapshot() }
 }
 
+// —— 执行体：模型调用与测试预设 ——
+// 两者读写的都是被测 ChatLuna 的运行时（会话日志、预设、路由），不是沙盒场景；领域拒绝由
+// `SandboxChatLunaError` 带出，在这里统一换成稳定错误码。
+
+async function withChatLuna<T>(run: () => T | Promise<T>, notFound: 'model_call_not_found' | 'preset_not_found'): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    if (!(error instanceof SandboxChatLunaError)) throw error
+    switch (error.reason) {
+      case 'unavailable':
+        throw new SandboxMcpError('chatluna_unavailable', error.message, true, '确认 ChatLuna 对应的插件已经启用后重试。')
+      case 'not_found':
+        // 两个码各写一处字面量：错误码契约测试按 `new SandboxMcpError('<码>'` 枚举在用的码。
+        throw notFound === 'preset_not_found'
+          ? new SandboxMcpError('preset_not_found', error.message, false, '用 list_presets 查看现有预设的 ID。')
+          : new SandboxMcpError('model_call_not_found', error.message)
+      case 'forbidden':
+        throw new SandboxMcpError('preset_forbidden', error.message, false, `新建以 ${TEST_PRESET_PREFIX} 开头的测试预设，或请用户在插件设置的可编辑预设里加入这个预设。`)
+      case 'conflict':
+        throw new SandboxMcpError('revision_conflict', error.message, true, '用 get_preset 读取最新的 revision 后再保存。')
+      case 'invalid':
+        throw new SandboxMcpError('invalid_arguments', error.message)
+    }
+  }
+}
+
+function tracePageUrl(sessionId: string): string {
+  return `/traces/${encodeURIComponent(sessionId)}`
+}
+
+/**
+ * 要读哪个 ChatLuna 会话：直接给会话 ID，或者给一条机器人回复、一条会话，按回复上记下的出处找。
+ *
+ * 出处由 `src/chatluna/state.ts` 在机器人发消息时写进 `message.chatLuna.trace`，所以只有经 ChatLuna
+ * 生成的回复带它；命令回复与沙盒手动发出的消息没有。按回复找时同时记下它所在的那一步。
+ */
+function resolveModelCallSession(
+  runtime: SandboxMcpToolRuntime,
+  args: Record<string, unknown>,
+): { sessionId: string; focus?: { turn: number; step: number }; messageId?: string } {
+  if (args.sessionId !== undefined) return { sessionId: requireString(args.sessionId, 'sessionId') }
+  const snapshot = runtime.control.getSnapshot()
+  if (args.messageId !== undefined) {
+    const messageId = requireString(args.messageId, 'messageId')
+    const message = snapshot.messages.find(({ id }) => id === messageId)
+    if (!message) throw new SandboxMcpError('model_call_not_found', `消息不存在：${messageId}`)
+    const trace = message.chatLuna?.trace
+    if (!trace) throw new SandboxMcpError('model_call_not_found', `消息 ${messageId} 没有模型调用出处：只有 ChatLuna 生成的机器人回复带出处`)
+    return { sessionId: trace.sessionId, focus: { turn: trace.turn, step: trace.step }, messageId }
+  }
+  if (args.conversationId !== undefined) {
+    const conversationId = requireString(args.conversationId, 'conversationId')
+    if (!resolveConversation(snapshot, conversationId)) throw new SandboxMcpError('conversation_not_found', `会话不存在：${conversationId}`)
+    const botId = args.botId === undefined ? undefined : requireString(args.botId, 'botId')
+    const ids = new Set(readConversationMessageIds(snapshot, conversationId))
+    const message = snapshot.messages
+      .filter((item) => ids.has(item.id) && item.chatLuna?.trace && (botId === undefined || item.authorId === botId))
+      .at(-1)
+    if (!message?.chatLuna?.trace) {
+      throw new SandboxMcpError('model_call_not_found', `会话 ${conversationId} 里还没有带模型调用出处的机器人回复`)
+    }
+    const { trace } = message.chatLuna
+    return { sessionId: trace.sessionId, focus: { turn: trace.turn, step: trace.step }, messageId: message.id }
+  }
+  throw new SandboxMcpError('invalid_arguments', 'sessionId、messageId、conversationId 至少需要提供一项')
+}
+
+async function readModelCalls(runtime: SandboxMcpToolRuntime, sessionId: string) {
+  const calls = await withChatLuna(() => runtime.modelCalls.list(sessionId), 'model_call_not_found')
+  if (!calls) throw new SandboxMcpError('model_call_not_found', `ChatLuna 会话不存在：${sessionId}`)
+  return calls
+}
+
+async function listModelCalls(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
+  const target = resolveModelCallSession(runtime, args)
+  const limit = requireNumber(args.limit, 'limit', { fallback: 20, min: 1, max: 200 })
+  const calls = await readModelCalls(runtime, target.sessionId)
+  return {
+    sessionId: target.sessionId,
+    tracePage: tracePageUrl(target.sessionId),
+    ...(target.messageId ? { messageId: target.messageId, focus: target.focus } : {}),
+    total: calls.length,
+    calls: calls.slice(-limit),
+  }
+}
+
+async function getModelCall(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
+  const target = resolveModelCallSession(runtime, args)
+  const lastMessages = requireNumber(args.lastMessages, 'lastMessages', { fallback: 30, min: 1, max: 1000 })
+  const includeToolSchemas = optionalBoolean(args.includeToolSchemas, 'includeToolSchemas') ?? false
+  let seq = optionalNumber(args.seq, 'seq', { min: 0 })
+  if (seq === undefined) {
+    const turn = optionalNumber(args.turn, 'turn', { min: 0 })
+    const step = optionalNumber(args.step, 'step', { min: 0 })
+    const position = turn === undefined ? target.focus : { turn, step }
+    const calls = await readModelCalls(runtime, target.sessionId)
+    const match = position
+      ? calls.filter((call) => call.turn === position.turn && (position.step === undefined || call.step === position.step)).at(-1)
+      : calls.at(-1)
+    if (!match) throw new SandboxMcpError('model_call_not_found', `会话 ${target.sessionId} 里没有这一步模型调用`)
+    seq = match.seq
+  }
+  const resolvedSeq = seq
+  const detail = await withChatLuna(
+    () => runtime.modelCalls.get(target.sessionId, resolvedSeq, { lastMessages, includeToolSchemas }),
+    'model_call_not_found',
+  )
+  if (!detail) throw new SandboxMcpError('model_call_not_found', `会话 ${target.sessionId} 的第 ${resolvedSeq} 条记录不是模型调用`)
+  return { sessionId: target.sessionId, tracePage: tracePageUrl(target.sessionId), ...detail }
+}
+
+function listPresets(runtime: SandboxMcpToolRuntime) {
+  return withChatLuna(() => ({ testPresetPrefix: TEST_PRESET_PREFIX, ...runtime.presets.list() }), 'preset_not_found')
+}
+
+function getPreset(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
+  const presetId = requireString(args.presetId, 'presetId')
+  return withChatLuna(() => runtime.presets.get(presetId), 'preset_not_found')
+}
+
+/** 源文本已写入、解析却失败时 v2 照样返回，并沿用上一次成功解析的内容；不提示的话调用方会以为改动已经生效。 */
+function withParseWarning(preset: SandboxPresetSummary) {
+  return preset.status === 'error'
+    ? { preset, warning: '源文本已写入，但解析失败，ChatLuna 仍在使用上一次成功解析的内容；按 diagnostics 修正后重新保存' }
+    : { preset }
+}
+
+async function createTestPreset(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
+  const presetId = requireString(args.presetId, 'presetId')
+  const loader = args.loader === undefined ? undefined : requireString(args.loader, 'loader')
+  const copyFrom = args.copyFrom === undefined ? undefined : requireString(args.copyFrom, 'copyFrom')
+  if (args.text !== undefined && typeof args.text !== 'string') throw new SandboxMcpError('invalid_arguments', 'text 必须是字符串')
+  if (copyFrom !== undefined && args.text !== undefined) throw new SandboxMcpError('invalid_arguments', 'copyFrom 与 text 不能同时提供：复制后再用 save_preset 修改')
+  const text = args.text as string | undefined
+  return withParseWarning(await withChatLuna(() => runtime.presets.create({ id: presetId, loader, text, copyFrom }), 'preset_not_found'))
+}
+
+async function savePreset(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
+  const presetId = requireString(args.presetId, 'presetId')
+  if (typeof args.text !== 'string') throw new SandboxMcpError('invalid_arguments', 'text 必须是字符串')
+  const text = args.text
+  const revision = requireString(args.revision, 'revision')
+  return withParseWarning(await withChatLuna(() => runtime.presets.save(presetId, text, revision), 'preset_not_found'))
+}
+
+function deleteTestPreset(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
+  const presetId = requireString(args.presetId, 'presetId')
+  const revision = args.revision === undefined ? undefined : requireString(args.revision, 'revision')
+  return withChatLuna(() => runtime.presets.remove(presetId, revision), 'preset_not_found')
+}
+
+function setBotPreset(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
+  const botId = requireString(args.botId, 'botId')
+  const bot = runtime.control.getSnapshot().participants.find((participant) => participant.id === botId)
+  if (bot?.kind !== 'bot') throw new SandboxMcpError('participant_not_found', `机器人不存在：${botId}`)
+  const presetId = args.presetId === undefined ? undefined : requireString(args.presetId, 'presetId')
+  return withChatLuna(() => runtime.presets.assign(botId, presetId), 'preset_not_found')
+}
+
 // —— 执行体：媒体与消息发送 ——
 
 function uploadMedia(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
@@ -1476,6 +1643,31 @@ const TOOL_ENTRIES: SandboxMcpToolEntry[] = [
     run: getWakeupRules,
   },
   {
+    name: 'list_presets',
+    scope: 'read',
+    description: '列出 ChatLuna 的预设、可用的预设格式，以及沙盒机器人当前切到的预设',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      description: `writable 表示能否用 save_preset 修改：ID 以 ${TEST_PRESET_PREFIX} 开头的测试预设总是可以，其余预设要在插件设置的可编辑预设里。assignments 是 set_bot_preset 写下的切换。`,
+    },
+    quota: 'read', spaceResolution: 'none', idempotent: false, requiresConfirmation: false,
+    run: listPresets,
+  },
+  {
+    name: 'get_preset',
+    scope: 'read',
+    description: '读取一个预设的源文本、revision 与解析诊断',
+    inputSchema: {
+      type: 'object',
+      properties: { presetId: { type: 'string' } },
+      required: ['presetId'],
+      description: '返回的 source.revision 是 save_preset 的乐观锁；插件提供的预设没有源文本，改给出解析后的 data。',
+    },
+    quota: 'read', spaceResolution: 'none', idempotent: false, requiresConfirmation: false,
+    run: getPreset,
+  },
+  {
     name: 'upload_media',
     scope: 'interact',
     description: '上传供消息引用的媒体',
@@ -1874,6 +2066,73 @@ const TOOL_ENTRIES: SandboxMcpToolEntry[] = [
     run: importScene,
   },
   {
+    name: 'create_test_preset',
+    scope: 'manage',
+    description: `新建测试预设（ID 必须以 ${TEST_PRESET_PREFIX} 开头），可以复制一个已有预设`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        presetId: { type: 'string', description: `新预设的 ID，以 ${TEST_PRESET_PREFIX} 开头，只能含字母、数字、下划线、点与连字符` },
+        loader: { type: 'string', description: '预设格式，取 list_presets 返回的 loaders[].id；与 copyFrom 二选一' },
+        text: { type: 'string', description: '预设源文本；省略时用该格式的模板' },
+        copyFrom: { type: 'string', description: '复制这个预设的源文件，格式随源预设；不能与 text 同时提供' },
+      },
+      required: ['presetId'],
+      description: '预设是 ChatLuna 的全局资源，不随测试空间删除；用完以后用 delete_test_preset 删掉。新建后用 set_bot_preset 让沙盒机器人用上它。',
+    },
+    quota: 'mutation', spaceResolution: 'none', idempotent: false, requiresConfirmation: false,
+    run: createTestPreset,
+  },
+  {
+    name: 'save_preset',
+    scope: 'manage',
+    description: '保存预设源文本：测试预设，或插件设置里允许编辑的预设',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        presetId: { type: 'string' },
+        text: { type: 'string', description: '完整的新源文本' },
+        revision: { type: 'string', description: 'get_preset 返回的 source.revision；预设在此之后被改过时拒绝保存' },
+      },
+      required: ['presetId', 'text', 'revision'],
+      description: '保存后 ChatLuna 立即重新加载。解析失败时源文本照样写入，但 ChatLuna 沿用旧内容，返回值会带 warning 与 diagnostics。',
+    },
+    quota: 'mutation', spaceResolution: 'none', idempotent: false, requiresConfirmation: false,
+    run: savePreset,
+  },
+  {
+    name: 'delete_test_preset',
+    scope: 'manage',
+    description: `删除测试预设（只限 ${TEST_PRESET_PREFIX} 开头的），并撤掉指向它的机器人切换`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        presetId: { type: 'string' },
+        revision: { type: 'string', description: '可选乐观锁；省略时不检查' },
+      },
+      required: ['presetId'],
+    },
+    quota: 'mutation', spaceResolution: 'none', idempotent: false, requiresConfirmation: false,
+    run: deleteTestPreset,
+  },
+  {
+    name: 'set_bot_preset',
+    scope: 'manage',
+    description: '把沙盒机器人切到指定预设，或恢复为 ChatLuna 路由原本的预设',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spaceId: SPACE_OPTIONAL,
+        botId: { type: 'string', description: '沙盒机器人的参与者 ID' },
+        presetId: { type: 'string', description: '要切到的预设；省略时撤掉切换，恢复路由原本的预设' },
+      },
+      required: ['botId'],
+      description: '写成一条只命中这个机器人（OneBot 平台上的这个 selfId）的 ChatLuna 路由规则，持久保存，重启后仍然生效；按频道等写得更具体的用户规则仍会盖过它。切换后会话历史保留，从下一条消息起按新预设回复。',
+    },
+    quota: 'mutation', spaceResolution: 'read', idempotent: false, requiresConfirmation: false,
+    run: setBotPreset,
+  },
+  {
     name: 'list_onebot_debug_records',
     scope: 'debug',
     description: '读取 OneBot 调试记录（默认折叠大型值）',
@@ -1920,6 +2179,48 @@ const TOOL_ENTRIES: SandboxMcpToolEntry[] = [
     // 主环境的证据。这正是「算不算写操作不能从配额档推导」的那个反例。
     quota: 'read', spaceResolution: 'mutation', idempotent: false, requiresConfirmation: false,
     run: clearOneBotDebugRecords,
+  },
+  {
+    name: 'list_model_calls',
+    scope: 'debug',
+    description: '列出被测机器人一个 ChatLuna 会话里的模型调用（每一步的位置、回复摘要、工具调用、用量）',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spaceId: SPACE_OPTIONAL,
+        messageId: { type: 'string', description: '机器人的一条回复：读生成它的那个 ChatLuna 会话' },
+        conversationId: { type: 'string', description: '沙盒会话：读其中最近一条机器人回复所在的 ChatLuna 会话' },
+        botId: { type: 'string', description: '与 conversationId 一起用：只看这个机器人的回复' },
+        sessionId: { type: 'string', description: 'ChatLuna 会话 ID（trace 页地址里的那一段）' },
+        limit: { type: 'number', minimum: 1, maximum: 200, default: 20, description: '只返回最后这么多步' },
+      },
+      description: 'messageId、conversationId、sessionId 三选一。返回的 seq 交给 get_model_call 读完整请求与响应。',
+    },
+    quota: 'read', spaceResolution: 'read', idempotent: false, requiresConfirmation: false,
+    run: listModelCalls,
+  },
+  {
+    name: 'get_model_call',
+    scope: 'debug',
+    description: '读取一步模型调用的完整请求体（模型配置、系统提示词、工具、消息）与响应体',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spaceId: SPACE_OPTIONAL,
+        messageId: { type: 'string', description: '机器人的一条回复：读生成它的那一步' },
+        conversationId: { type: 'string', description: '沙盒会话：读其中最近一条机器人回复的那一步' },
+        botId: { type: 'string', description: '与 conversationId 一起用：只看这个机器人的回复' },
+        sessionId: { type: 'string', description: 'ChatLuna 会话 ID；只给它时读最近一步' },
+        seq: { type: 'number', minimum: 0, description: 'list_model_calls 返回的 seq，优先于 turn/step' },
+        turn: { type: 'number', minimum: 0 },
+        step: { type: 'number', minimum: 0 },
+        lastMessages: { type: 'number', minimum: 1, maximum: 1000, default: 30, description: '请求里只返回最后这么多条消息；request.messageCount 是总数' },
+        includeToolSchemas: { type: 'boolean', default: false, description: '带上工具的完整参数 schema；默认只给名字与说明' },
+      },
+      description: '内容与 ChatLuna trace 页一致，是归一化后的请求与响应，不是供应商的原始 HTTP 报文；内联图片等 Base64 数据换成占位。',
+    },
+    quota: 'read', spaceResolution: 'read', idempotent: false, requiresConfirmation: false,
+    run: getModelCall,
   },
   {
     name: 'list_test_call_records',
