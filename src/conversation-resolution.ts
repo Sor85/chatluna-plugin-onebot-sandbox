@@ -326,6 +326,38 @@ export function resolveGroupConversationId(scene: SandboxSnapshot, groupId: stri
   return findGroupRootConversation(scene, groupId)?.id ?? createGroupConversationId(groupId)
 }
 
+/** adapter-onebot 给私聊事件的 channelId：`private:` 加对方账号（从接收的机器人一侧看）。 */
+export function toOneBotDirectChannelId(peerId: string): string {
+  return `private:${peerId}`
+}
+
+/**
+ * 会话在 Koishi 一侧的 channelId，与 adapter-onebot 一致：群聊是裸群号，私聊是 `private:<对方账号>`。
+ *
+ * 被测插件会按真实格式拼 channelId（例如按群号唤醒、按 `private:<QQ号>` 发私聊），沙盒给出别的
+ * 格式，ChatLuna 就会把同一个群当成两条路由、各有一份历史。会话实例在真实平台上没有对应物，
+ * 沿用实例自己的 ID，v2 因此把它当作独立的频道。
+ */
+export function toOneBotChannelId(conversation: ResolvedConversation, botId: string): string {
+  if (conversation.kind === 'instance') return conversation.id
+  if (conversation.type === 'group') return conversation.groupId!
+  return toOneBotDirectChannelId(resolveConversationPeerId(conversation, botId) ?? botId)
+}
+
+/**
+ * 把 Koishi 一侧的 channelId 解析回沙盒会话 ID，是 {@link toOneBotChannelId} 的反向。
+ *
+ * 沙盒自己的会话 ID（`group:*`、`private:*:*`、实例 ID）原样认；`private:<账号>` 按这个机器人与该账号
+ * 的私聊解析，裸群号按该群的群聊解析。解析不出时原样返回，交给调用方的可见性校验报错。
+ */
+export function resolveOneBotChannelId(scene: SandboxSnapshot, channelId: string, botId: string): string {
+  if (findConversationRow(scene, channelId)) return channelId
+  const direct = /^private:([^:]+)$/.exec(channelId)
+  if (direct) return resolveDirectConversationId(scene, direct[1], botId)
+  if (scene.groups.some(({ id }) => id === channelId)) return resolveGroupConversationId(scene, channelId)
+  return channelId
+}
+
 /** 确保一对参与者的私聊根会话存在，就地写入场景。 */
 export function ensureDirectRootConversation(
   scene: SandboxSnapshot,

@@ -87,6 +87,25 @@ describe('SnowLuma 实现配置', () => {
       .rejects.toThrow('SnowLuma 基线不支持 OneBot action：getGroupShutList')
   })
 
+  it('Satori 消息 ID 是 SnowLuma 的哈希 message_id，与事件里的 message_id 同值', async () => {
+    const control = await createControl()
+    const bot = await createSnowLuma(control)
+    const received: Array<{ messageId?: string, raw?: number }> = []
+    bot.ctx.middleware((session: Session) => {
+      if (session.selfId !== '20002') return
+      received.push({ messageId: session.messageId, raw: (session as Session & { onebot?: { message_id?: number } }).onebot?.message_id })
+    })
+
+    const sent = await control.sendMessage({ operatorId: '10001', conversationId: 'group:30001', content: '给 SnowLuma' })
+    expect(received).toEqual([{ messageId: String(getOneBotMessageId('snowluma', sent.messageId)), raw: getOneBotMessageId('snowluma', sent.messageId) }])
+    expect(received[0]!.messageId).not.toBe(String(getOneBotMessageSequence(sent.messageId)))
+
+    const [replyId] = await bot.sendMessage('30001', '回一句')
+    const reply = control.getSnapshot().messages.at(-1)!
+    expect(replyId).toBe(String(getOneBotMessageId('snowluma', reply.id)))
+    await expect(bot.getMessage('30001', replyId!)).resolves.toMatchObject({ id: replyId, content: '回一句' })
+  })
+
   it('禁言列表、群公告与批量踢人使用 SnowLuma 的字段名', async () => {
     const control = await createControl()
     control.createUser({ id: '10004', name: '待移除成员' })

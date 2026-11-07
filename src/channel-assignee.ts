@@ -7,8 +7,9 @@
  * 于是整条会话表现成「只有 @ 能唤醒」，三处无痕，只能靠读 Koishi 源码或查 channel 表定位。
  *
  * `autoAssign` 只在 channel 行**不存在**时把接收者写成受理人，已经存在的过期受理人永远不会被纠正。
- * 而 `group:*` 这些 channelId 完全归沙盒所有：上一次场景里的机器人号、被删掉重加的插件实例都可能
- * 在表里留下一个再也对不上的受理人。因此投递前把它对齐一次，这不是替用户改配置，是清自己的垃圾状态。
+ * 上一次场景里的机器人号、被删掉重加的插件实例都可能在表里留下一个再也对不上的受理人，因此投递前
+ * 把它对齐一次。群聊根会话的 channelId 与 adapter-onebot 一样是裸群号：同一个 Koishi 里若还有真实
+ * OneBot 机器人在同号的群里，两边写的是同一行，受理人会随最后一次投递来回切换。
  *
  * 只对齐 `assignee`，不动 `flag`：那道门里的 ignore 标记会连 @ 一起挡掉，属于用户显式设下的语义，
  * 沙盒不该替他清。私聊也不对齐：那道门只在 `!session.isDirect` 时生效。
@@ -25,7 +26,7 @@ export interface SandboxChannelAssigneeRow {
 export interface SandboxChannelAssigneeTarget {
   /** 收件机器人的标识，也就是这条会话该有的受理人。 */
   botId: string
-  /** Koishi 侧的频道标识，等于沙盒的会话 ID。 */
+  /** Koishi 侧的频道标识，即投递时 Session 的 channelId（`toOneBotChannelId`）。 */
   channelId: string
   groupId: string
 }

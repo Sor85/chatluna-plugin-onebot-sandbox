@@ -50,7 +50,7 @@ export function toOneBotMessageSegments(content: string, media?: SandboxMedia[])
       data: { file: item.reference, url: item.reference, name: item.name },
     }))
     const generatedLabel = media.length === 1 ? `[${getMediaLabel(media[0])}] ${media[0].name}` : ''
-    if (content && content !== generatedLabel) segments.push({ type: 'text', data: { text: content } })
+    if (content && content !== generatedLabel) segments.push(...h.parse(content).flatMap(toOneBotElementSegments))
     return segments
   }
   return h.parse(content).flatMap(toOneBotElementSegments)

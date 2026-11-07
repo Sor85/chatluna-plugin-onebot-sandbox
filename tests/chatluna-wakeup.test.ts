@@ -178,7 +178,7 @@ describe('按调用方没给出的维度写的路由规则', () => {
 describe('get_wakeup_rules 按投递时的路由身份解析', () => {
   type WakeupResult = SandboxWakeupRules & { conversationId?: string }
 
-  it('群聊按群号、会话 ID、机器人与发言者构造身份，会话里每个机器人一份', async () => {
+  it('群聊按群号、机器人与发言者构造身份，频道 ID 是裸群号，会话里每个机器人一份', async () => {
     const { identities, reader } = runtime()
     const { service, credential, control } = createMcpTestService(['read'], false, { wakeup: reader })
     control.createBot({ id: '20002', name: '第二机器人', implementation: 'llbot', enabled: true })
@@ -191,8 +191,8 @@ describe('get_wakeup_rules 按投递时的路由身份解析', () => {
     const rules = await service.callTool(credential.token, 'get_wakeup_rules', { conversationId: 'group:30001', operatorId: '10002' }) as WakeupResult
     expect(rules.scopes.map(({ botId }) => botId)).toEqual(['20001', '20002'])
     expect(identities.slice(-2)).toEqual([
-      { platform: 'onebot', selfId: '20001', isDirect: false, guildId: '30001', channelId: 'group:30001', userId: '10002' },
-      { platform: 'onebot', selfId: '20002', isDirect: false, guildId: '30001', channelId: 'group:30001', userId: '10002' },
+      { platform: 'onebot', selfId: '20001', isDirect: false, guildId: '30001', channelId: '30001', userId: '10002' },
+      { platform: 'onebot', selfId: '20002', isDirect: false, guildId: '30001', channelId: '30001', userId: '10002' },
     ])
 
     const one = await service.callTool(credential.token, 'get_wakeup_rules', { conversationId: 'group:30001', botId: '20002' }) as WakeupResult
@@ -207,7 +207,7 @@ describe('get_wakeup_rules 按投递时的路由身份解析', () => {
     const { identities, reader } = runtime()
     const { service, credential, control } = createMcpTestService(['read'], false, { wakeup: reader })
     await service.callTool(credential.token, 'get_wakeup_rules', { conversationId: 'private:10001:20001' })
-    expect(identities.at(-1)).toEqual({ platform: 'onebot', selfId: '20001', isDirect: true, channelId: 'private:10001:20001', userId: '10001' })
+    expect(identities.at(-1)).toEqual({ platform: 'onebot', selfId: '20001', isDirect: true, channelId: 'private:10001', userId: '10001' })
 
     const instance = control.createConversationInstance({ operatorId: '10001', rootConversationId: 'group:30001' })
     await service.callTool(credential.token, 'get_wakeup_rules', { conversationId: instance.conversationId })

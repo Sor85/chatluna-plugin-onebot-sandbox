@@ -166,7 +166,7 @@ describe('模拟 QQ 环境好友关系', () => {
       {
         type: 'notice',
         subtype: 'poke',
-        channelId: 'private:10004:20001',
+        channelId: 'private:10004',
         sessionTargetId: '20001',
         noticeType: 'notify',
         userId: 10004,
@@ -175,7 +175,7 @@ describe('模拟 QQ 环境好友关系', () => {
       {
         type: 'notice',
         subtype: undefined,
-        channelId: 'private:10004:20001',
+        channelId: 'private:10004',
         sessionTargetId: undefined,
         noticeType: 'friend_del',
         userId: 10004,

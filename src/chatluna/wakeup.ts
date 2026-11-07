@@ -93,7 +93,7 @@ export interface SandboxWakeupRules {
 
 /**
  * 要解析唤醒规则的一条会话。字段与沙盒投递入站消息时构造的 Session 一一对应
- * （`inbound-delivery.ts`：频道 ID 是会话 ID，群聊带群号，用户是发言者），因此解析出来的规则就是真实
+ * （`inbound-delivery.ts`：频道 ID 按 adapter-onebot 的格式，群聊带群号，用户是发言者），因此解析出来的规则就是真实
  * 投递时被测服务看到的那一份。
  */
 export interface SandboxWakeupTarget {
@@ -101,7 +101,7 @@ export interface SandboxWakeupTarget {
   conversationKey?: string
   /** 接收消息的被测机器人账号，即路由身份的 selfId。 */
   botId?: string
-  /** 会话 ID，即路由身份的 channelId。会话实例用实例自己的 ID：v2 按频道区分路由。 */
+  /** 路由身份的 channelId：根会话是裸群号或 `private:<对方账号>`，会话实例用实例自己的 ID（v2 按频道区分路由）。 */
   channelId?: string
   /** 群号，即路由身份的 guildId。 */
   guildId?: string

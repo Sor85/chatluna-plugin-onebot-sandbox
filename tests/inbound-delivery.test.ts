@@ -333,8 +333,8 @@ describe('入站投递：Koishi channel 受理人对齐', () => {
     }))
 
     expect(harness.channelAlignments).toEqual([
-      { botId: '20001', channelId: 'group:30001', groupId: '30001' },
-      { botId: '20002', channelId: 'group:30001', groupId: '30001' },
+      { botId: '20001', channelId: '30001', groupId: '30001' },
+      { botId: '20002', channelId: '30001', groupId: '30001' },
     ])
   })
 

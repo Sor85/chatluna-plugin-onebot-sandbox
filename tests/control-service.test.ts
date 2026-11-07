@@ -126,6 +126,46 @@ describe('模拟 QQ 环境消息闭环', () => {
     expect(rawMessage?.map(({ type }) => type)).toEqual(['image', 'file', 'text'])
   })
 
+  it('带媒体的消息里 @ 仍是 at 元素与 at 段，两条媒体发送路径一致', async () => {
+    const app = new App()
+    const mediaDirectory = await mkdtemp(join(tmpdir(), 'chatluna-sandbox-media-'))
+    temporaryDirectories.push(mediaDirectory)
+    let control: SandboxControlService | undefined
+    app.plugin((ctx) => {
+      control = new SandboxControlService(ctx, { mediaDirectory })
+    })
+    runningApps.push(app)
+
+    const sessions: Array<{ atIds: string[]; segments?: Array<{ type: string, data: Record<string, string> }>; raw?: string }> = []
+    app.middleware((session) => {
+      const onebot = (session as typeof session & {
+        onebot?: { message?: Array<{ type: string, data: Record<string, string> }>; raw_message?: string }
+      }).onebot
+      sessions.push({
+        atIds: (session.elements ?? []).filter(({ type }) => type === 'at').map(({ attrs }) => String(attrs.id)),
+        segments: onebot?.message,
+        raw: onebot?.raw_message,
+      })
+    })
+    await app.start()
+    if (!control) throw new Error('沙盒控制服务未注册')
+
+    const image = { fileName: '图.png', mimeType: 'image/png', dataBase64: Buffer.from('a').toString('base64') }
+    const content = '<at id="20001"/> 看图'
+    await control.sendMediaMessage({ operatorId: '10001', conversationId: 'group:30001', content, media: [image] })
+    await control.sendStoredMediaMessage({ operatorId: '10001', conversationId: 'group:30001', content, media: control.storeMediaBatch([image]) })
+
+    expect(sessions).toHaveLength(2)
+    // 媒体在前，Koishi 的 stripped.atSelf 只认开头的 @，与真实 QQ 一样是 false；判定器按元素找 @。
+    for (const session of sessions) {
+      expect(session.atIds).toEqual(['20001'])
+      expect(session.segments?.map(({ type }) => type)).toEqual(['image', 'at', 'text'])
+      expect(session.segments?.[1]).toEqual({ type: 'at', data: { qq: '20001' } })
+      expect(session.raw).toContain('[CQ:at,qq=20001]')
+      expect(session.raw).not.toContain('<at')
+    }
+  })
+
   it('拒绝不支持或超限的媒体内容', async () => {
     const app = new App()
     const mediaDirectory = await mkdtemp(join(tmpdir(), 'chatluna-sandbox-media-'))
@@ -450,12 +490,14 @@ describe('模拟 QQ 环境消息闭环', () => {
       replyToMessageId: first.messageId,
     })
 
+    // 与 adapter-onebot 一致，Satori 的消息 ID 是十进制的 message_id（LLBot 即消息序号），不是沙盒消息 ID。
+    const satoriId = (messageId: string) => String(getOneBotMessageSequence(messageId))
     expect(sessions).toEqual([
-      expect.objectContaining({ selfId: '20002', messageId: first.messageId, rawSelfId: 20002, rawUserId: 10001, rawMessageType: 'private' }),
+      expect.objectContaining({ selfId: '20002', messageId: satoriId(first.messageId), rawSelfId: 20002, rawUserId: 10001, rawMessageType: 'private' }),
       expect.objectContaining({
         selfId: '20002',
-        messageId: second.messageId,
-        quoteId: first.messageId,
+        messageId: satoriId(second.messageId),
+        quoteId: satoriId(first.messageId),
         rawSelfId: 20002,
         rawUserId: 10001,
         rawMessageType: 'private',
@@ -617,7 +659,8 @@ describe('模拟 QQ 环境消息闭环', () => {
       platform: 'onebot',
       selfId: '20001',
       userId: '10001',
-      channelId: 'private:10001:20001',
+      // 与 adapter-onebot 一致：私聊的 channelId 是 `private:` 加对方账号，不是沙盒会话 ID。
+      channelId: 'private:10001',
       content: '你好',
     })
     expect(control.getSnapshot().messages).toEqual([
@@ -676,7 +719,7 @@ describe('模拟 QQ 环境消息闭环', () => {
     })
     expect(control.getSnapshot().groups[0].announcements.some(({ id }) => id === announcementId)).toBe(false)
     expect(receivedSession).toEqual({
-      channelId: 'group:30001',
+      channelId: '30001',
       guildId: '30001',
       channelType: Universal.Channel.Type.TEXT,
     })

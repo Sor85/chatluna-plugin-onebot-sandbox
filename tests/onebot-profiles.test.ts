@@ -114,7 +114,7 @@ describe('OneBot 实现配置', () => {
     expect(updatedGroup.members.map(({ participantId }) => participantId)).not.toContain('10005')
   })
 
-  it('两种实现都提供群禁言列表和 camelCase 群资料查询', async () => {
+  it('两种实现都提供群禁言列表和 camelCase 群资料查询；禁言列表按各自上游的形状', async () => {
     const control = await createControl()
     control.createBot({ id: '20002', name: 'LLBot 机器人', implementation: 'llbot', enabled: true })
     const group = control.getSnapshot().groups[0]
@@ -129,11 +129,25 @@ describe('OneBot 实现配置', () => {
 
     await control.bot.internal._request('set_group_ban', { group_id: 30001, user_id: 10003, duration: 300 })
     for (const botId of ['20001', '20002']) {
-      await expect(control.getRuntimeBot(botId).internal._request('get_group_shut_list', { group_id: '30001' }))
-        .resolves.toMatchObject({ status: 'ok', data: [expect.objectContaining({ user_id: 10003 })] })
       await expect(control.getRuntimeBot(botId).internal.getGroupInfo('30001'))
         .resolves.toMatchObject({ group_id: 30001 })
     }
+    const shutList = async (botId: string) => {
+      const { data } = await control.getRuntimeBot(botId).internal._request('get_group_shut_list', { group_id: '30001' }) as { data: Record<string, unknown>[] }
+      expect(data).toHaveLength(1)
+      return data[0]
+    }
+    // NapCat 原样转出 QQ 内核的 ShutUpGroupMember，LLBot 映射出同名 camelCase 子集；两者都没有 user_id。
+    const napcat = await shutList('20001')
+    expect(napcat).toMatchObject({ uin: '10003', nick: expect.any(String), cardName: expect.any(String), role: 2, isRobot: false })
+    expect(napcat.shutUpTime).toBeGreaterThan(Math.floor(Date.now() / 1000))
+    expect(napcat.uid).not.toBe('10003')
+    expect(napcat).not.toHaveProperty('user_id')
+    const llbot = await shutList('20002')
+    expect(Object.keys(llbot).sort()).toEqual([
+      'cardName', 'joinTime', 'lastSpeakTime', 'memberRealLevel', 'memberSpecialTitle', 'nick', 'role', 'shutUpTime', 'uid', 'uin',
+    ])
+    expect(llbot).toMatchObject({ uin: '10003', role: 2, shutUpTime: napcat.shutUpTime })
   })
 
   it('提供 WebQQ 使用的好友分组，并只为 NapCat 提供最近会话', async () => {

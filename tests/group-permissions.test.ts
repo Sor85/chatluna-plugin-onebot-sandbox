@@ -174,9 +174,9 @@ describe('模拟 QQ 环境群权限操作', () => {
     }))
     expect(pokeMessage).not.toHaveProperty('botId')
     expect(notices).toContainEqual({
-      // 与 adapter-onebot 对齐：群戳一戳会话需要 subtype=poke、targetId 与群会话 channelId。
+      // 与 adapter-onebot 对齐：群戳一戳会话需要 subtype=poke、targetId 与 channelId（裸群号）。
       sessionSubtype: 'poke',
-      channelId: 'group:30001',
+      channelId: '30001',
       sessionTargetId: '10001',
       noticeType: 'notify',
       subType: 'poke',

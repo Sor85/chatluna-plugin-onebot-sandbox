@@ -16,6 +16,7 @@ import {
   listRootConversations,
   readConversationMessageIds,
   resolveConversation,
+  toOneBotChannelId,
   type ResolvedConversation,
 } from '../conversation-resolution'
 import { getOneBotCapabilityMatrix } from '../onebot-profiles'
@@ -625,7 +626,7 @@ export function readCapabilityMatrix(control: SandboxControlService, implementat
 /**
  * 被测机器人当前的唤醒规则。
  *
- * 传了会话就按投递时的路由身份解析（机器人、群号、会话 ID、发言者，见 `readWakeupTargets`）：v2 的路由规则
+ * 传了会话就按投递时的路由身份解析（机器人、群号、频道 ID、发言者，见 `readWakeupTargets`）：v2 的路由规则
  * 可以按其中任意一维覆盖唤醒配置。会话实例用它自己的 ID，v2 把实例当作独立的频道路由，答案可能与根会话
  * 不同。省略会话时给出私聊与群聊两份通用规则：按会话、机器人或发言者写的覆盖会明确标成待判定。
  */
@@ -649,7 +650,8 @@ function getWakeupRules(runtime: SandboxMcpToolRuntime, args: Record<string, unk
 /**
  * 一条会话上每个被测机器人各自的路由身份。
  *
- * 字段与 `inbound-delivery.ts` 投递时构造的 Session 一致：频道 ID 是会话 ID，群聊带群号，用户是发言者。
+ * 字段与 `inbound-delivery.ts` 投递时构造的 Session 一致：频道 ID 按 adapter-onebot 的格式（`toOneBotChannelId`，
+ * 私聊因此每个机器人一份），群聊带群号，用户是发言者。
  * 同一条群消息会投给群里每个机器人，各自按自己的 selfId 解析规则，因此一个机器人一份答案；传了 botId
  * 只答那一个。私聊的发言者就是会话里那位普通用户；群聊的发言者要调用方用 operatorId 指定。
  */
@@ -675,7 +677,7 @@ function readWakeupTargets(
       conversationType: 'group',
       ...(conversation.groupId ? { conversationKey: conversation.groupId, guildId: conversation.groupId } : {}),
       botId: id,
-      channelId: conversation.id,
+      channelId: toOneBotChannelId(conversation, id),
       ...(operatorId ? { userId: operatorId } : {}),
     }))
   }
@@ -684,7 +686,7 @@ function readWakeupTargets(
     conversationType: 'direct',
     ...(speaker ? { conversationKey: speaker, userId: speaker } : {}),
     botId: id,
-    channelId: conversation.id,
+    channelId: toOneBotChannelId(conversation, id),
   }))
 }
 

@@ -17,11 +17,11 @@ function createHost() {
   return { ctx, emit }
 }
 
-function createStore(validate = () => true) {
+function createStore(resolve: (bot: string, channelId: string) => string | undefined = (_bot, channelId) => channelId) {
   const { ctx, emit } = createHost()
   const archived: Array<{ result: SandboxMessageChatLuna, ids: readonly string[] }> = []
   let changes = 0
-  const store = new SandboxChatLunaStateStore(ctx, validate, () => {
+  const store = new SandboxChatLunaStateStore(ctx, resolve, () => {
     changes += 1
   }, (_bot, _conversation, result, ids) => {
     archived.push({ result, ids: [...ids] })
@@ -184,7 +184,7 @@ describe('ChatLuna v2 agent 事件', () => {
   })
 
   it('不属于沙盒机器人的会话不建立映射，也不广播', () => {
-    const { store, emit, changes } = createStore(() => false)
+    const { store, emit, changes } = createStore(() => undefined)
     emit('chat/receive', session, { sessionId: '42' })
     emit('chatluna/agent-status', { agent, status: 'busy' })
     emit('chatluna/agent-step', { agent, step: step(1, 1) })

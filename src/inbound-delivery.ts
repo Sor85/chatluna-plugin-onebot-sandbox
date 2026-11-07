@@ -2,10 +2,10 @@ import { Random } from './random'
 import { Universal, h } from '@satorijs/core'
 import type { SandboxChannelAssigneeTarget } from './channel-assignee'
 import type { ChatInboundConversation } from './chatluna/conversation-lines'
-import type { ResolvedConversation } from './conversation-resolution'
+import { toOneBotChannelId, type ResolvedConversation } from './conversation-resolution'
 import { createOneBotDebugError, type AppendOneBotDebugRecordInput } from './onebot-debug'
 import { toOneBotRawMessage, type SandboxOneBotMessageSegment } from './onebot-message'
-import { getOneBotMessageEventFields, getOneBotMessageId, getOneBotMessageSequence } from './onebot-profiles'
+import { getOneBotMessageEventFields, getOneBotMessageId, getOneBotMessageSequence, getSatoriMessageId } from './onebot-profiles'
 import {
   SandboxDomainError,
   type SandboxBotDelivery,
@@ -277,7 +277,7 @@ export function createInboundDelivery({
   const alignInboundChannel = async (botId: string, context: InboundMessageContext): Promise<void> => {
     if (!context.group) return
     try {
-      await alignChannelAssignee({ botId, channelId: context.conversation.id, groupId: context.group.id })
+      await alignChannelAssignee({ botId, channelId: toOneBotChannelId(context.conversation, botId), groupId: context.group.id })
     } catch (error) {
       logger.warn('对齐 Koishi channel 受理人失败；这条会话可能只有 @ 消息能被被测插件收到。', error)
     }
@@ -356,16 +356,21 @@ export function createInboundDelivery({
         timestamp: Date.now(),
         user: { id: context.operator.id, name: context.operator.name },
         channel: {
-          id: context.conversation.id,
+          id: toOneBotChannelId(context.conversation, recipientBot.id),
           type: context.conversation.type === 'group' ? 0 : 1,
         },
         guild: context.group ? { id: context.group.id, name: context.group.name } : undefined,
         message: {
-          id: messageId,
-          messageId,
+          id: getSatoriMessageId(recipientBot.implementation, messageId),
+          messageId: getSatoriMessageId(recipientBot.implementation, messageId),
           content: elements.join(''),
           elements,
-          quote,
+          // 引用的消息 ID 同样按接收机器人的实现换算，与 adapter-onebot 经 getMessage 取回的引用一致。
+          quote: quote && {
+            ...quote,
+            id: getSatoriMessageId(recipientBot.implementation, quote.id),
+            messageId: getSatoriMessageId(recipientBot.implementation, quote.id),
+          },
         },
       })
       Object.assign(session, { onebot: payload })

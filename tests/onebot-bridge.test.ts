@@ -147,6 +147,31 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     ])
   })
 
+  it('Satori 接口认 adapter-onebot 格式的 channelId，也认沙盒会话 ID', async () => {
+    const { control } = await createControl()
+    const bot = control.bot
+
+    // 插件按真实格式拼 channelId：群聊是裸群号，私聊是 `private:<QQ号>`。
+    const [groupMessageId] = await bot.sendMessage('30001', '按群号发')
+    const [directMessageId] = await bot.sendMessage('private:10001', '按 QQ 号发')
+    await bot.sendMessage('group:30001', '按会话 ID 发')
+    // 返回的是 Satori 消息 ID，即十进制的 message_id（NapCat 是消息序号）。
+    const bySatoriId = (satoriId: string | undefined) => control.getSnapshot().messages
+      .find(({ id }) => String(getOneBotMessageSequence(id)) === satoriId)
+    expect(bySatoriId(groupMessageId)?.conversationId).toBe('group:30001')
+    expect(bySatoriId(directMessageId)?.conversationId).toBe('private:10001:20001')
+
+    const history = await bot.getMessageList('30001')
+    expect(history.data.map(({ content }) => content)).toEqual(['按群号发', '按会话 ID 发'])
+    expect(history.data[0]?.channel?.id).toBe('30001')
+    await expect(bot.getMessage('private:10001', directMessageId!)).resolves.toMatchObject({ channel: { id: 'private:10001' } })
+    await bot.deleteMessage('30001', groupMessageId!)
+    expect(bySatoriId(groupMessageId)?.lifecycle?.status).toBe('recalled')
+
+    await expect(bot.sendMessage('39999', '不存在的群')).rejects.toThrow('会话不存在：39999')
+    await expect(bot.sendMessage('private:10099', '不是好友')).rejects.toThrow()
+  })
+
   it('群聊消息提供昵称唤醒所需的标准 Session 字段', async () => {
     const { app, control } = await createControl()
     let captured: {
@@ -159,7 +184,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
       text?: string
     } | undefined
     app.middleware((session) => {
-      if (session.channelId !== 'group:30001') return
+      if (session.channelId !== '30001') return
       captured = {
         guildId: session.guildId,
         channelId: session.channelId,
@@ -180,7 +205,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
 
     expect(captured).toEqual({
       guildId: '30001',
-      channelId: 'group:30001',
+      channelId: '30001',
       isDirect: false,
       selfId: '20001',
       userId: '10001',
@@ -220,9 +245,10 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
       data: { user_id: 20002, nickname: '第二机器人' },
     })
     const sent = await control.sendMessage({ operatorId: '10001', conversationId: 'group:30001', content: '多机器人事件' })
+    // Satori 消息 ID 是十进制的 message_id；NapCat 与 LLBot 都是消息序号。
     expect(received).toEqual(expect.arrayContaining([
-      { selfId: '20001', rawSelfId: 20001, messageId: sent.messageId },
-      { selfId: '20002', rawSelfId: 20002, messageId: sent.messageId },
+      { selfId: '20001', rawSelfId: 20001, messageId: String(getOneBotMessageSequence(sent.messageId)) },
+      { selfId: '20002', rawSelfId: 20002, messageId: String(getOneBotMessageSequence(sent.messageId)) },
     ]))
 
     await secondBot.internal._request('set_qq_profile', { nickname: '第二机器人新昵称' })
@@ -359,7 +385,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
       lifecycle: expect.objectContaining({ status: 'recalled', operatorId: '20001' }),
     }))
     await bot.deleteMessage('private:10001:20001', standardMessageId)
-    expect(control.getSnapshot().messages.find(({ id }) => id === standardMessageId)).toEqual(expect.objectContaining({
+    expect(control.getSnapshot().messages.find(({ id }) => String(getOneBotMessageSequence(id)) === standardMessageId)).toEqual(expect.objectContaining({
       lifecycle: expect.objectContaining({ status: 'recalled', operatorId: '20001' }),
     }))
     await expect(bot.internal._request('get_msg', { message_id: groupResult.data.message_id }))
@@ -437,7 +463,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
       h('quote', { id: quoted.messageId }),
       h.text('标准 Koishi 引用'),
     ])
-    expect(control.getSnapshot().messages.find(({ id }) => id === quotedReplyId)).toMatchObject({
+    expect(control.getSnapshot().messages.find(({ id }) => String(getOneBotMessageSequence(id)) === quotedReplyId)).toMatchObject({
       replyToMessageId: quoted.messageId,
       content: '标准 Koishi 引用',
     })
@@ -572,9 +598,9 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     const invite = await control.performGroupAction({ action: 'invite', operatorId: '10001', groupId: '30030', targetId: '20001', comment: '来玩' })
 
     expect(received.map(({ type, messageId, content, userId, guildId, channelId }) => ({ type, messageId, content, userId, guildId, channelId }))).toEqual([
-      { type: 'friend-request', messageId: friend.requestId, content: '加个好友', userId: '10004', guildId: undefined, channelId: 'private:10004:20001' },
-      { type: 'guild-member-request', messageId: join.requestId, content: '想进群', userId: '10004', guildId: '30001', channelId: 'group:30001' },
-      { type: 'guild-request', messageId: invite.requestId, content: '来玩', userId: '10001', guildId: '30030', channelId: 'group:30030' },
+      { type: 'friend-request', messageId: friend.requestId, content: '加个好友', userId: '10004', guildId: undefined, channelId: 'private:10004' },
+      { type: 'guild-member-request', messageId: join.requestId, content: '想进群', userId: '10004', guildId: '30001', channelId: '30001' },
+      { type: 'guild-request', messageId: invite.requestId, content: '来玩', userId: '10001', guildId: '30030', channelId: '30030' },
     ])
 
     // 像 toolbox 这类插件一样只用标准字段处理申请。
@@ -859,11 +885,11 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
 
     await bot.internal._request('set_group_ban', { group_id: 30003, user_id: 10003, duration: 600 })
     const shutList = await bot.internal._request('get_group_shut_list', { group_id: 30003 }) as {
-      data: Array<{ user_id: number; shut_up_timestamp: number }>
+      data: Array<{ uin: string; shutUpTime: number }>
     }
     expect(shutList.data).toHaveLength(1)
-    expect(shutList.data[0].user_id).toBe(10003)
-    expect(shutList.data[0].shut_up_timestamp).toBeGreaterThan(Math.floor(Date.now() / 1000))
+    expect(shutList.data[0].uin).toBe('10003')
+    expect(shutList.data[0].shutUpTime).toBeGreaterThan(Math.floor(Date.now() / 1000))
     await bot.internal._request('set_group_ban', { group_id: 30003, user_id: 10003, duration: 0 })
     await expect(bot.internal._request('get_group_shut_list', { group_id: 30003 })).resolves.toMatchObject({ data: [] })
 
@@ -898,14 +924,15 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
   it('Satori sendMessage 按真实适配器的 send_*_msg 形态记入调试记录', async () => {
     const { control } = await createControl()
 
-    const [messageId] = await control.bot.sendMessage('group:30001', '经 Satori 发出的群消息')
+    const [messageId] = await control.bot.sendMessage('30001', '经 Satori 发出的群消息')
     const { records } = await control.getOneBotDebugStore().getRecords({ direction: 'action' })
+    // 返回的 Satori 消息 ID 与 adapter-onebot 一样是 message_id 的十进制字符串。
     expect(records[0]).toMatchObject({
       requestedAction: 'sendMessage',
       action: 'send_group_msg',
       status: 'success',
-      payload: { channel_id: 'group:30001', message: '经 Satori 发出的群消息' },
-      result: { retcode: 0, data: { message_id: getOneBotMessageSequence(messageId) } },
+      payload: { channel_id: '30001', message: '经 Satori 发出的群消息' },
+      result: { retcode: 0, data: { message_id: Number(messageId) } },
     })
   })
 
@@ -951,12 +978,14 @@ describe('插件视角的继承前缀', () => {
 
     // 声明了会话的单条读取按「在那个会话里可读」判定：继承前缀仍然归属根会话，
     // 按归属比对会让插件在分支里按 ID 取历史莫名失败。
+    // 返回的 id 是 Satori 消息 ID，即十进制的 message_id；按沙盒消息 ID 或 message_id 都读得到。
+    const satoriId = String(getOneBotMessageSequence(inherited.messageId))
     await expect(bot.getMessage(conversationId, inherited.messageId)).resolves.toMatchObject({
-      id: inherited.messageId,
+      id: satoriId,
       content: '分叉点那句话',
     })
-    const bySequence = await bot.getMessage(conversationId, String(getOneBotMessageSequence(inherited.messageId)))
-    expect(bySequence.id).toBe(inherited.messageId)
+    const bySequence = await bot.getMessage(conversationId, satoriId)
+    expect(bySequence.id).toBe(satoriId)
     // 类型与群号由消息实体的会话解释，实例的两者都继承根会话：群分支里的继承前缀仍是群聊。
     expect(bySequence.channel?.type).toBe(Universal.Channel.Type.TEXT)
     expect(bySequence.guild?.id).toBe('30001')
@@ -1028,8 +1057,8 @@ describe('插件视角的继承前缀', () => {
     await expect(bot.getMessage(conversationId, afterFork.messageId)).rejects.toThrow(`消息不存在：${afterFork.messageId}`)
     await expect(bot.getMessage('private:10001:20001', own.messageId)).rejects.toThrow(`消息不存在：${own.messageId}`)
     // 同一批消息在它们各自可读的会话里照常读得到。
-    await expect(bot.getMessage('private:10001:20001', afterFork.messageId)).resolves.toMatchObject({ id: afterFork.messageId })
-    await expect(bot.getMessage(conversationId, own.messageId)).resolves.toMatchObject({ id: own.messageId })
+    await expect(bot.getMessage('private:10001:20001', afterFork.messageId)).resolves.toMatchObject({ id: String(getOneBotMessageSequence(afterFork.messageId)) })
+    await expect(bot.getMessage(conversationId, own.messageId)).resolves.toMatchObject({ id: String(getOneBotMessageSequence(own.messageId)) })
 
     // 出站消息的引用目标走同一处判定：机器人不能在分支里引用分叉点之后的原会话消息。
     await expect(bot.sendMessage(conversationId, [
@@ -1057,7 +1086,7 @@ describe('插件视角的继承前缀', () => {
 
     // 游标仍是消息 ID 派生的 message_seq：在分支里读到的那条继承前缀，其游标在历史查询里
     // 照常可用，插件不需要为分支准备第二套取历史的代码。
-    const cursor = getOneBotMessageSequence((await bot.getMessage(conversationId, forkPointId)).id!)
+    const cursor = Number((await bot.getMessage(conversationId, forkPointId)).id)
     await expect(bot.internal._request('get_friend_msg_history', {
       user_id: 10001,
       message_seq: cursor,

@@ -170,6 +170,15 @@ const baselines: Record<SandboxImplementationProfile, SandboxOneBotProfileBaseli
     appVersion: 'sandbox-2026.07.24',
     capabilities: createCapabilities([
       {
+        id: 'group.member.shut-list',
+        action: 'get_group_shut_list',
+        handler: 'get_group_shut_list',
+        description: '获取指定群当前处于禁言状态的成员列表；原样返回 QQ 内核的 ShutUpGroupMember：uin 是字符串 QQ 号，昵称 nick、群名片 cardName、禁言到期时间 shutUpTime，role 是内核编号（2 成员、3 管理员、4 群主），uid 是与 QQ 号无关的内核 ID',
+        aliases: ['getGroupShutList'],
+        surface: 'native',
+        supported: true,
+      },
+      {
         id: 'contact.recent.list',
         action: 'get_recent_contact',
         handler: 'get_recent_contact',
@@ -221,6 +230,15 @@ const baselines: Record<SandboxImplementationProfile, SandboxOneBotProfileBaseli
     appName: 'LLOneBot',
     appVersion: 'sandbox-2026.07.24',
     capabilities: createCapabilities([
+      {
+        id: 'group.member.shut-list',
+        action: 'get_group_shut_list',
+        handler: 'get_group_shut_list',
+        description: '获取指定群当前处于禁言状态的成员列表；每项是 uid、uin（字符串 QQ 号）、nick、cardName、role（2 成员、3 管理员、4 群主）、禁言到期时间 shutUpTime、memberRealLevel、memberSpecialTitle、joinTime、lastSpeakTime',
+        aliases: ['getGroupShutList'],
+        surface: 'native',
+        supported: true,
+      },
       {
         id: 'group.notice.delete',
         action: '_delete_group_notice',
@@ -435,6 +453,17 @@ function hashOneBotMessageId(messageId: string): number {
 /** 一条沙盒消息在某个实现里的 OneBot message_id；NapCat 与 LLBot 就是消息序号。 */
 export function getOneBotMessageId(profile: SandboxImplementationProfile, messageId: string): number {
   return profile === 'snowluma' ? hashOneBotMessageId(messageId) : getOneBotMessageSequence(messageId)
+}
+
+/**
+ * Satori 一侧的消息 ID（`session.messageId`、`Universal.Message.id`、`sendMessage` 的返回值）。
+ *
+ * adapter-onebot 写的是 `'' + message_id`，十进制字符串，口径与该实现的 message_id 相同。沙盒自身的消息
+ * ID 不外露：插件拿它调原始 action 在沙盒里查得到（{@link resolveOneBotMessageId} 两种都认），换到真实
+ * 实现上就查不到了。
+ */
+export function getSatoriMessageId(profile: SandboxImplementationProfile, messageId: string): string {
+  return String(getOneBotMessageId(profile, messageId))
 }
 
 /**

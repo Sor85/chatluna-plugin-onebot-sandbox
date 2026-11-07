@@ -20,6 +20,7 @@ import {
   getOneBotMessageId,
   getOneBotMessageSequence,
   getOneBotProfileBaseline,
+  getSatoriMessageId,
   resolveOneBotAction,
   resolveOneBotMessageId,
 } from './onebot-profiles'
@@ -35,6 +36,8 @@ import {
   resolveConversationPeerId,
   resolveDirectConversationId,
   resolveGroupConversationId,
+  resolveOneBotChannelId,
+  toOneBotChannelId,
 } from './conversation-resolution'
 import {
   forwardNodeText,
@@ -77,6 +80,14 @@ function readNestedForwardId(segment: unknown): string | undefined {
 // OneBot 用秒级到期时间戳表示禁言，未禁言固定为 0。
 function getGroupMemberMuteTimestamp(member: SandboxGroupMember): number {
   return isSandboxGroupMemberMuted(member) ? Math.floor(new Date(member.mutedUntil!).getTime() / 1000) : 0
+}
+
+/** QQ 内核的群角色编号（NapCat `NTGroupMemberRole`）：成员 2、管理员 3、群主 4。 */
+const KERNEL_GROUP_ROLE: Record<SandboxGroupMember['role'], number> = { member: 2, admin: 3, owner: 4 }
+
+/** 内核 uid 是与 QQ 号无关的不透明字符串；沙盒没有这一层，按账号派生一个形似的值。 */
+function toKernelUid(participantId: string): string {
+  return `u_sandbox_${participantId}`
 }
 
 export namespace SandboxBot {
@@ -546,28 +557,79 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
         if (action === 'get_group_shut_list') {
           const groupId = this.normalizeOneBotGroupId(params.group_id)
           await this.getGuild(groupId)
-          const group = this.control.getSnapshot().groups.find(({ id }) => id === groupId)!
+          const snapshot = this.control.getSnapshot()
+          const group = snapshot.groups.find(({ id }) => id === groupId)!
+          const muted = group.members.filter((member) => isSandboxGroupMemberMuted(member))
+          const participantOf = (id: string) => snapshot.participants.find((participant) => participant.id === id)
+          // 三家形状各不相同，按上游原样给出：SnowLuma 是 OneBot 风格的 snake_case；LLBot 从群成员表
+          // 映射出同名 camelCase 子集；NapCat 原样转出 QQ 内核的 ShutUpGroupMember。后两者的 uin 是字符串，
+          // uid 是与 QQ 号无关的内核 ID，把它当 QQ 号用的插件在真实环境同样会失败。
           if (this.implementation === 'snowluma') {
             return {
               status: 'ok',
               retcode: 0,
-              data: group.members.filter((member) => isSandboxGroupMemberMuted(member)).map((member) => ({
+              data: muted.map((member) => ({
                 user_id: Number(member.participantId),
-                nickname: this.control.getSnapshot().participants.find(({ id }) => id === member.participantId)?.name ?? member.participantId,
+                nickname: participantOf(member.participantId)?.name ?? member.participantId,
                 shut_up_time: getGroupMemberMuteTimestamp(member),
               })),
             }
           }
+          const members = muted.map((member) => ({
+            uid: toKernelUid(member.participantId),
+            uin: member.participantId,
+            nick: participantOf(member.participantId)?.name ?? member.participantId,
+            cardName: member.card ?? '',
+            role: KERNEL_GROUP_ROLE[member.role],
+            shutUpTime: getGroupMemberMuteTimestamp(member),
+            memberRealLevel: Number.parseInt(member.level ?? '', 10) || 0,
+            memberSpecialTitle: member.title ?? '',
+            joinTime: member.joinTime ?? 0,
+            lastSpeakTime: member.lastSentTime ?? 0,
+          }))
+          if (this.implementation === 'llbot') return { status: 'ok', retcode: 0, data: members }
           return {
             status: 'ok',
             retcode: 0,
-            data: group.members.filter((member) => isSandboxGroupMemberMuted(member)).map((member) => ({
-              group_id: Number(groupId),
-              user_id: Number(member.participantId),
-              nickname: this.control.getSnapshot().participants.find(({ id }) => id === member.participantId)?.name ?? member.participantId,
-              card: member.card ?? '',
+            data: members.map((member) => ({
+              uid: member.uid,
+              qid: '',
+              uin: member.uin,
+              nick: member.nick,
+              remark: '',
+              cardType: 0,
+              cardName: member.cardName,
               role: member.role,
-              shut_up_timestamp: getGroupMemberMuteTimestamp(member),
+              avatarPath: '',
+              shutUpTime: member.shutUpTime,
+              isDelete: false,
+              isSpecialConcerned: false,
+              isSpecialShield: false,
+              isRobot: participantOf(member.uin)?.kind === 'bot',
+              groupHonor: {},
+              memberRealLevel: member.memberRealLevel,
+              memberLevel: member.memberRealLevel,
+              globalGroupLevel: 0,
+              globalGroupPoint: 0,
+              memberTitleId: 0,
+              memberSpecialTitle: member.memberSpecialTitle,
+              specialTitleExpireTime: '0',
+              userShowFlag: 0,
+              userShowFlagNew: 0,
+              richFlag: 0,
+              mssVipType: 0,
+              bigClubLevel: 0,
+              bigClubFlag: 0,
+              autoRemark: '',
+              creditLevel: 0,
+              joinTime: member.joinTime,
+              lastSpeakTime: member.lastSpeakTime,
+              memberFlag: 0,
+              memberFlagExt: 0,
+              memberMobileFlag: 0,
+              memberFlagExt2: 0,
+              isSpecialShielded: false,
+              cardNameId: 0,
             })),
           }
         }
@@ -812,13 +874,13 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
   }
 
   async getMessage(channelId: string, messageId: string): Promise<Universal.Message> {
-    const message = this.requireReadableMessage(messageId, channelId)
+    const message = this.requireReadableMessage(messageId, this.resolveChannelId(channelId))
     return this.toUniversalMessage(message)
   }
 
   async getMessageList(channelId: string): Promise<Universal.BidiList<Universal.Message>> {
     const snapshot = this.control.getSnapshot()
-    const conversation = this.getVisibleConversation(channelId, snapshot)
+    const conversation = this.getVisibleConversation(resolveOneBotChannelId(snapshot, channelId, this.selfId), snapshot)
     const conversationMessageIds = new Set(readConversationMessageIds(snapshot, conversation.id))
     // 与 get_msg / 历史查询一致：已撤回消息不得以原文形式暴露给机器人。
     const messages = snapshot.messages
@@ -828,8 +890,9 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
   }
 
   async deleteMessage(channelId: string, messageId: string): Promise<void> {
-    this.getVisibleConversation(channelId)
-    await this.control.recallBotMessage(this.selfId, messageId, channelId)
+    const conversationId = this.resolveChannelId(channelId)
+    this.getVisibleConversation(conversationId)
+    await this.control.recallBotMessage(this.selfId, messageId, conversationId)
   }
 
   async deleteFriend(userId: string): Promise<void> {
@@ -875,6 +938,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
 
   async sendMessage(channelId: string, fragment: Fragment, _referrer?: unknown, options: Universal.SendOptions = {}) {
     if (this.status !== 1) throw new Error(`机器人已离线：${this.selfId}`)
+    const conversationId = this.resolveChannelId(channelId)
     // 覆盖 Bot.sendMessage 后不会再经过 MessageEncoder；必须在原始消息 Session 上执行组件转换，
     // 否则 poke 等插件发送的 <execute> 会被当作字面文本，命令永远不会执行。
     const renderSession = options.session ?? this.session({
@@ -883,7 +947,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
         id: channelId,
         // channel 类型来自解析出的会话，不按 ID 前缀推断：会话实例 ID 没有 `group:` 前缀，
         // 按前缀推断会把群实例判成私聊 channel，群专属的组件转换与判断随之走错分支。
-        type: resolveConversation(this.control.getSnapshot(), channelId)?.type === 'group'
+        type: resolveConversation(this.control.getSnapshot(), conversationId)?.type === 'group'
           ? 0
           : 1,
       },
@@ -893,12 +957,12 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     if (!message.content && !message.mediaSources.length) return []
     // ChatLuna 与 Koishi 插件经 Satori sendMessage 发消息，不经过 action 层；真实适配器在这里会发出
     // send_group_msg / send_private_msg，调试页按这一形态补记，否则机器人的回复在调试记录里不可见。
-    const action = resolveConversation(this.control.getSnapshot(), channelId)?.type === 'group' ? 'send_group_msg' : 'send_private_msg'
+    const action = resolveConversation(this.control.getSnapshot(), conversationId)?.type === 'group' ? 'send_group_msg' : 'send_private_msg'
     const payload = { channel_id: channelId, message: transformed.join('') }
     const startedAt = Date.now()
     try {
-      const messageId = await this.deliverOutboundMessage(channelId, message)
-      const conversationObservation = this.observeConversation({ conversationId: channelId })
+      const messageId = await this.deliverOutboundMessage(conversationId, message)
+      const conversationObservation = this.observeConversation({ conversationId })
       this.control.recordOneBotDebug({
         botId: this.selfId,
         implementation: this.implementation,
@@ -911,7 +975,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
         result: { status: 'ok', retcode: 0, data: { message_id: getOneBotMessageId(this.implementation, messageId) } },
         ...(conversationObservation ? { conversationObservation } : {}),
       })
-      return [messageId]
+      return [getSatoriMessageId(this.implementation, messageId)]
     } catch (error) {
       this.control.recordOneBotDebug({
         botId: this.selfId,
@@ -1192,7 +1256,8 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
   }
 
   /**
-   * Koishi 的 channelId 在群聊中是沙盒逻辑会话 ID；OneBot action 只接受真实群号。
+   * 群实例的 channelId 是实例 ID，插件把它当群号传进 OneBot action 时换回真实群号；也认沙盒的
+   * `group:*` 会话 ID。根会话的 channelId 已经是裸群号。
    *
    * 群号从解析出的会话读，不按 `group:` 前缀推断：会话实例 ID 沿用随机 ID 命名空间、没有群前缀，
    * 剥前缀会把群实例的 channelId 原样当成群号。解析不出会话时原样返回，插件直接传真实群号仍然可用。
@@ -1257,6 +1322,11 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
    * 快照可选：`getSnapshot` 每次克隆整份场景，需要顺带读消息列表的调用方传入自己那一份，
    * 一次 action 因此只克隆一遍。
    */
+  /** Satori 接口收到的 channelId 可能是 adapter-onebot 格式，也可能是沙盒会话 ID，见 {@link resolveOneBotChannelId}。 */
+  private resolveChannelId(channelId: string): string {
+    return resolveOneBotChannelId(this.control.getSnapshot(), channelId, this.selfId)
+  }
+
   private getVisibleConversation(channelId: string, snapshot = this.control.getSnapshot()) {
     // WebQQ 可见快照会截断最近消息；机器人 action 必须按完整逻辑会话判断可见性。
     try {
@@ -1375,16 +1445,16 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     // 回复消息本身仍可读取，但引用目标撤回后不能通过 quote 旁路泄露原文。
     const readableReply = reply && !isRecalledMessage(reply) ? reply : undefined
     return {
-      id: message.id,
-      messageId: message.id,
-      channel: conversation ? { id: conversation.id, type: conversation.type === 'group' ? 0 : 1 } : undefined,
+      id: getSatoriMessageId(this.implementation, message.id),
+      messageId: getSatoriMessageId(this.implementation, message.id),
+      channel: conversation ? { id: toOneBotChannelId(conversation, this.selfId), type: conversation.type === 'group' ? 0 : 1 } : undefined,
       guild: conversation?.groupId ? { id: conversation.groupId, name: snapshot.groups.find(({ id }) => id === conversation.groupId)?.name } : undefined,
       user,
       content: message.content,
       elements: h.parse(message.content),
       quote: readableReply ? {
-        id: readableReply.id,
-        messageId: readableReply.id,
+        id: getSatoriMessageId(this.implementation, readableReply.id),
+        messageId: getSatoriMessageId(this.implementation, readableReply.id),
         content: readableReply.content,
         user: await this.getUser(readableReply.authorId),
       } : undefined,

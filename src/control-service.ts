@@ -46,8 +46,9 @@ import {
   requireVisibleConversation,
   resolveConversation,
   resolveConversationPeerId,
-  resolveDirectConversationId,
-  resolveGroupConversationId,
+  resolveOneBotChannelId,
+  toOneBotChannelId,
+  toOneBotDirectChannelId,
   validateSceneConversations,
   type ResolvedConversation,
 } from './conversation-resolution'
@@ -57,7 +58,7 @@ import {
   type MessageCapabilityDenial,
   type MessageCapabilityInput,
 } from './message-capabilities'
-import { getOneBotCapabilityMatrix, getOneBotMessageId, getOneBotMessageSequence, normalizeDisabledCapabilities, resolveOneBotMessageId, type SandboxOneBotCapability } from './onebot-profiles'
+import { getOneBotCapabilityMatrix, getOneBotMessageId, getOneBotMessageSequence, getSatoriMessageId, normalizeDisabledCapabilities, resolveOneBotMessageId, type SandboxOneBotCapability } from './onebot-profiles'
 import {
   createRelationshipActions,
   denyGroupAuthority,
@@ -452,9 +453,10 @@ export class SandboxControlService {
     this.reclaimSceneMessages()
     // 初始场景在默认头像落盘后再冻结，reset 才能恢复到可显示的实体头像集合。
     this.initialScene = structuredClone(this.scene)
-    this.chatLunaState = new SandboxChatLunaStateStore(ctx, (botParticipantId, conversationId) => {
+    this.chatLunaState = new SandboxChatLunaStateStore(ctx, (botParticipantId, channelId) => {
       const participant = this.scene.participants.find(({ id }) => id === botParticipantId)
-      return participant?.kind === 'bot' && !!findVisibleConversation(this.scene, botParticipantId, conversationId)
+      if (participant?.kind !== 'bot') return undefined
+      return findVisibleConversation(this.scene, botParticipantId, resolveOneBotChannelId(this.scene, channelId, botParticipantId))?.id
     }, () => this.notifySceneMutation(), (botParticipantId, conversationId, result, messageIds) => {
       this.archiveChatLunaResult(botParticipantId, conversationId, result, messageIds)
     })
@@ -603,7 +605,8 @@ export class SandboxControlService {
     try {
       url = new URL(value)
     } catch {
-      throw new SandboxDomainError('头像必须是受管媒体引用、Data URL、base64:// 或 HTTP(S) URL')
+      // set_qq_avatar 也走这里，文案要让模型看得懂：不提沙盒内部的「受管媒体」，明说本地路径不读。
+      throw new SandboxDomainError('头像来源不受支持：只接受 HTTP(S) URL、base64://、Data URL 或 sandbox-media:// 媒体引用，不读取本地文件路径')
     }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new SandboxDomainError('头像 URL 仅支持 HTTP(S)')
     const response = await fetch(url, { signal: AbortSignal.timeout(10_000) })
@@ -724,15 +727,14 @@ export class SandboxControlService {
         size: media.size,
       })
     })
-    if (text) elements.push(h.text(text))
-    const onebotMessage: Array<{ type: string; data: Record<string, string> }> = input.media.map((media) => ({
-      type: media.type === 'audio' ? 'record' : media.type,
-      data: { file: media.reference },
-    }))
-    if (context.reply) onebotMessage.unshift({ type: 'reply', data: { id: String(getOneBotMessageSequence(context.reply.id)) } })
-    if (text) onebotMessage.push({ type: 'text', data: { text } })
-    const rawMessage = `${context.reply ? `[CQ:reply,id=${getOneBotMessageSequence(context.reply.id)}]` : ''}${input.media.map((media) => `[CQ:${media.type === 'audio' ? 'record' : media.type},file=${media.reference}]`).join('')}${text}`
-    await this.dispatchMessageToBots(context, message, elements, onebotMessage, rawMessage)
+    // 文字部分按消息元素解析，与纯文字消息同一口径：`<at>` 要成为 at 元素与 at 段，否则判定器认不出 @。
+    if (text) elements.push(...h.parse(text))
+    const onebotMessage: SandboxOneBotMessageSegment[] = [
+      ...(context.reply ? [{ type: 'reply', data: { id: String(getOneBotMessageSequence(context.reply.id)) } }] : []),
+      ...input.media.map((media) => ({ type: media.type === 'audio' ? 'record' : media.type, data: { file: media.reference } })),
+      ...(text ? toOneBotMessageSegments(text) : []),
+    ]
+    await this.dispatchMessageToBots(context, message, elements, onebotMessage, toOneBotRawMessage(onebotMessage))
     return { messageId: message.id, revision: this.scene.revision }
   }
 
@@ -1960,15 +1962,15 @@ export class SandboxControlService {
         size: item.size,
       })
     })
-    if (text) elements.push(h.text(text))
+    // 文字部分按消息元素解析，与纯文字消息同一口径：`<at>` 要成为 at 元素与 at 段，否则判定器认不出 @。
+    if (text) elements.push(...h.parse(text))
     const onebotMessage: SandboxOneBotMessageSegment[] = [
       ...(context.reply ? [{ type: 'reply', data: { id: String(getOneBotMessageSequence(context.reply.id)) } }] : []),
       ...media.map((item) => ({ type: item.type === 'audio' ? 'record' : item.type, data: { file: item.reference } })),
-      ...(text ? [{ type: 'text', data: { text } }] : []),
+      ...(text ? toOneBotMessageSegments(text) : []),
     ]
-    // raw message 与另两路同源：手搓那份与助手函数逐段对得上（回复段、媒体段、文本段），
-    // 但没有任何东西保证它继续一致。媒体段只带文件引用这处口径不动，改它会改变被测插件收到的
-    // 事件保真度，归「OneBot 事件构造的两个方向」候选。
+    // raw message 由同一组段生成，与 `sendStoredMediaMessage` 同源。媒体段只带文件引用这处口径不动，
+    // 改它会改变被测插件收到的事件保真度，归「OneBot 事件构造的两个方向」候选。
     const delivery = this.dispatchMessageToBots(context, message, elements, onebotMessage, toOneBotRawMessage(onebotMessage))
     return { result: { messageId: message.id, revision: this.scene.revision }, delivery }
   }
@@ -2257,8 +2259,8 @@ export class SandboxControlService {
       type: 'message-deleted',
       timestamp: Date.now(),
       user: { id: peerId, name: this.getParticipant(peerId).name },
-      channel: { id: conversation.id, type: 1 },
-      message: { id: messageId, messageId },
+      channel: { id: toOneBotChannelId(conversation, botId), type: 1 },
+      message: { id: getSatoriMessageId(this.implementationOf(botId), messageId), messageId: getSatoriMessageId(this.implementationOf(botId), messageId) },
     })
     Object.assign(session, {
       onebot: {
@@ -2788,7 +2790,7 @@ export class SandboxControlService {
       type: 'friend-request',
       timestamp: Date.now(),
       user: { id: userId, name: this.getUser(userId).name },
-      channel: { id: resolveDirectConversationId(this.scene, userId, botId), type: 1 },
+      channel: { id: toOneBotDirectChannelId(userId), type: 1 },
     })
     // adapter-onebot 把申请的 flag 放进 messageId、附言放进 content，插件按这两个标准字段处理申请
     // （handleFriendRequest(session.messageId, ...)），只写在 session.onebot 里插件就拿不到。
@@ -2815,9 +2817,8 @@ export class SandboxControlService {
       type: 'notice',
       timestamp: Date.now(),
       user: { id: userId, name: this.getUser(userId).name },
-      // channelId 使用沙盒私聊会话 ID 而非 adapter-onebot 的 `private:QQ号`，
-      // 插件收到事件后 session.send() 才能直接回落到同一会话。
-      channel: { id: resolveDirectConversationId(this.scene, userId, botId), type: 1 },
+      // channelId 与 adapter-onebot 一致是 `private:QQ号`；插件 session.send() 时机器人按它解析回这条私聊。
+      channel: { id: toOneBotDirectChannelId(userId), type: 1 },
     })
     if (noticeType === 'notify') {
       // adapter-onebot 把 notify/poke 映射为 type=notice、subtype=poke 并附带 targetId；
@@ -2851,7 +2852,7 @@ export class SandboxControlService {
         type: subType === 'add' ? 'guild-member-request' : 'guild-request',
         timestamp: Date.now(),
         guild: { id: group.id, name: group.name },
-        channel: { id: resolveGroupConversationId(this.scene, group.id), type: 0 },
+        channel: { id: group.id, type: 0 },
         user: { id: request.requesterId, name: this.getParticipant(request.requesterId).name },
       })
       Object.assign(session, {
@@ -2903,8 +2904,8 @@ export class SandboxControlService {
         type: standardType,
         timestamp: Date.now(),
         guild: { id: group.id, name: group.name },
-        // channelId 与消息事件一致使用沙盒群会话 ID，插件在通知回调里 session.send() 才能落回本群。
-        channel: { id: resolveGroupConversationId(this.scene, group.id), type: 0 },
+        // channelId 与消息事件、adapter-onebot 一致是裸群号；插件在通知回调里 session.send() 落回本群。
+        channel: { id: group.id, type: 0 },
         user: user ? { id: user.id, name: user.name, avatar: user.avatar, isBot: this.isBot(user.id) } : undefined,
         operator: operator ? { id: operator.id, name: operator.name, avatar: operator.avatar, isBot: this.isBot(operator.id) } : undefined,
         member: member && user ? {
@@ -2913,7 +2914,9 @@ export class SandboxControlService {
           nick: member.card ?? user.name,
           roles: [{ id: member.role }],
         } : undefined,
-        message: options.messageId ? { id: options.messageId, messageId: options.messageId } : undefined,
+        message: options.messageId
+          ? { id: getSatoriMessageId(this.implementationOf(botId), options.messageId), messageId: getSatoriMessageId(this.implementationOf(botId), options.messageId) }
+          : undefined,
       })
       if (noticeType === 'notify' && noticeData.sub_type === 'poke') {
         // 与 adapter-onebot 对齐：群戳一戳的 session 需要 subtype=poke 与 targetId，插件靠它们过滤事件。

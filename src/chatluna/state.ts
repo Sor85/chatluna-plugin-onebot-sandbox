@@ -6,7 +6,11 @@ import type {
   SandboxMessageTraceReference,
 } from '../types'
 
-type ValidateTarget = (botParticipantId: string, conversationId: string) => boolean
+/**
+ * 把 Session 上的 channelId 解析成沙盒会话 ID：根会话的 channelId 是 adapter-onebot 格式（裸群号、
+ * `private:<账号>`），与会话 ID 不同。不是沙盒机器人可见的会话时返回 undefined，不建立映射。
+ */
+type ResolveTarget = (botParticipantId: string, channelId: string) => string | undefined
 type ArchiveResult = (
   botParticipantId: string,
   conversationId: string,
@@ -71,14 +75,14 @@ function readNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
 }
 
-function readSessionTarget(session: unknown): SandboxChatLunaTarget | undefined {
+function readSessionTarget(session: unknown): { botParticipantId: string, channelId: string } | undefined {
   const value = readRecord(session)
   const bot = readRecord(value?.bot)
   const channel = readRecord(value?.channel)
   const botParticipantId = readString(value?.selfId) ?? readString(bot?.selfId)
-  const conversationId = readString(value?.channelId) ?? readString(channel?.id)
-  if (!botParticipantId || !conversationId) return
-  return { botParticipantId, conversationId }
+  const channelId = readString(value?.channelId) ?? readString(channel?.id)
+  if (!botParticipantId || !channelId) return
+  return { botParticipantId, channelId }
 }
 
 function readAgentSessionId(agent: ChatLunaAgentPayload | undefined): string | undefined {
@@ -115,7 +119,7 @@ export class SandboxChatLunaStateStore {
 
   constructor(
     private ctx: Context,
-    private validateTarget: ValidateTarget,
+    private resolveTarget: ResolveTarget,
     private onChange: () => void = () => {},
     private archiveResult: ArchiveResult = () => {},
   ) {
@@ -123,9 +127,11 @@ export class SandboxChatLunaStateStore {
     // v2 的 dispatch 先唤醒 agent（同步发出 busy）再发 `chat/receive`，会话第一次被唤醒时 busy 先到、
     // 映射后到。busy 不论映射与否都先记下，映射晚到时若 agent 仍在 busy 就当场开始回合。
     this.disposers.push(on('chat/receive', (session, result) => {
-      const target = readSessionTarget(session)
+      const source = readSessionTarget(session)
       const sessionId = readString(result?.sessionId)
-      if (!target || !sessionId || !this.validateTarget(target.botParticipantId, target.conversationId)) return
+      const conversationId = source && this.resolveTarget(source.botParticipantId, source.channelId)
+      if (!source || !sessionId || !conversationId) return
+      const target = { botParticipantId: source.botParticipantId, conversationId }
       this.agentTargets.set(sessionId, target)
       if (this.busySessions.has(sessionId) && !this.turns.has(sessionId)) this.begin(sessionId, target)
     }))

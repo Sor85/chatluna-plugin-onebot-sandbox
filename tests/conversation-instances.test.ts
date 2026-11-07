@@ -55,8 +55,8 @@ describe('会话实例端到端', () => {
     await control.sendMessage({ operatorId: '10001', conversationId, content: '在实例里提问' })
     await control.sendMessage({ operatorId: '10001', conversationId: 'private:10001:20001', content: '根会话里提问' })
 
-    // 插件看到的会话标识是实例本身，不是它的根会话。
-    expect(observed.map(({ channelId }) => channelId)).toEqual([conversationId, 'private:10001:20001'])
+    // 插件看到的会话标识是实例本身，不是它的根会话；根会话是 adapter-onebot 的 `private:<对方账号>`。
+    expect(observed.map(({ channelId }) => channelId)).toEqual([conversationId, 'private:10001'])
     const scene = control.getSnapshot()
     const reply = scene.messages.find(({ content }) => content === '实例里的回复')
     expect(reply?.conversationId).toBe(conversationId)

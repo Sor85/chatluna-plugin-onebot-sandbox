@@ -7,7 +7,8 @@ import type { SandboxControlService } from '../../src/control-service'
  *
  * ChatLuna 的等待态由宿主事件推动，测试必须在真实的事件总线上广播 v2 的 `chat/receive` 与
  * `chatluna/agent-status` / `chatluna/agent-step` 才能观察到 thinking 的建立与结束。
- * 状态归属靠 Session 的 selfId 与 channelId 判定，因此 Session 必须来自被测机器人的运行时。
+ * 状态归属靠 Session 的 selfId 与 channelId 判定，因此 Session 必须来自被测机器人的运行时，channelId
+ * 与投递时一样用 adapter-onebot 的格式（裸群号、`private:<对方账号>`）。
  */
 export async function emitChatLunaEvent(app: App, event: string, ...args: unknown[]): Promise<void> {
   await (app.parallel as unknown as (event: string, ...args: unknown[]) => Promise<void>)(event, ...args)
@@ -17,7 +18,7 @@ export function createGroupSession(control: SandboxControlService, botParticipan
   return control.getRuntimeBot(botParticipantId).session({
     type: 'message',
     user: { id: '10001', name: '测试用户1' },
-    channel: { id: `group:${groupId}`, type: Universal.Channel.Type.TEXT },
+    channel: { id: groupId, type: Universal.Channel.Type.TEXT },
     guild: { id: groupId, name: '测试群' },
   })
 }
@@ -26,7 +27,7 @@ export function createDirectSession(control: SandboxControlService, botParticipa
   return control.getRuntimeBot(botParticipantId).session({
     type: 'message',
     user: { id: userId, name: '测试用户1' },
-    channel: { id: `private:${userId}:${botParticipantId}`, type: Universal.Channel.Type.DIRECT },
+    channel: { id: `private:${userId}`, type: Universal.Channel.Type.DIRECT },
   })
 }
 
