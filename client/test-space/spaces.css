@@ -44,6 +44,8 @@
 .sandbox-space-card {
   position: relative;
   display: grid;
+  /* 限制内部列宽，避免长标题的最小内容宽度把底栏操作挤出卡片。 */
+  grid-template-columns: minmax(0, 1fr);
   min-height: 250px;
   overflow: hidden;
   border: 1px solid var(--sandbox-border);
