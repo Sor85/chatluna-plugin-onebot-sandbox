@@ -295,7 +295,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     expect(bot.user).toMatchObject({
       id: '20001',
       name: '新 ChatLuna',
-      avatar: expect.stringMatching(/^sandbox-media:\/\//),
+      avatar: `data:image/png;base64,${Buffer.from('koishi-avatar').toString('base64')}`,
     })
 
     control.updateBot({ id: '20001', name: '新 ChatLuna', implementation: 'napcat', enabled: false })

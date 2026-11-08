@@ -1,5 +1,5 @@
 import type { Translate } from '@chatluna/ui-client/client'
-import type { SchemaDocument, SchemaDocumentNode } from '@chatluna/schema'
+import type { SchemaDocument } from '@chatluna/schema'
 
 /** schema 文案的键前缀，后接节点的文案 ID 与 `label`/`description`。 */
 export const SCHEMA_LOCALE_PREFIX = 'sandbox.settings.schema.'
@@ -60,7 +60,7 @@ export function schemaTexts(document: SchemaDocument): SchemaText[] {
  * 语言文件里缺的键原样保留服务端的中文，新增字段忘了补译文时不会显示成键名。
  */
 export function localizeSchema(document: SchemaDocument, t: Translate): SchemaDocument {
-  const refs: Record<string, SchemaDocumentNode> = { ...document.refs }
+  const refs: SchemaDocument['refs'] = { ...document.refs }
   visit(document, document.uid, undefined, '', (id, textId) => {
     const node = refs[id]!
     const meta = { ...node.meta }

@@ -3,7 +3,7 @@ import { DatabaseIcon, InfoIcon, PaletteIcon, SaveIcon, ServerCogIcon, SlidersHo
 import { Alert, AlertDescription, Button, cn, Spinner } from '@chatluna/ui-kit'
 import { apiErrorMessage, callAction, toast, useLive } from '@chatluna/ui-client/client'
 import { SchemaForm, useFormValidation } from '@chatluna/ui-schema-form/client'
-import type { SchemaDocument, SchemaDocumentNode } from '@chatluna/schema'
+import type { SchemaDocument } from '@chatluna/schema'
 import { useT } from '../i18n'
 import { OverlayScrollbar } from '../shared/overlay-scrollbar'
 import { AboutPanel } from './about'
@@ -49,7 +49,7 @@ function sectionsOf(document: SchemaDocument, fallbackTitle: string): SettingsSe
   return ids.map((id) => {
     const node = document.refs[id]!
     const { label, description, ...meta } = node.meta ?? {}
-    const stripped: SchemaDocumentNode = { ...node, meta }
+    const stripped: SchemaDocument['refs'][string] = { ...node, meta }
     return {
       title: textOf(label) ?? textOf(description) ?? fallbackTitle,
       description: textOf(label) ? textOf(description) : undefined,

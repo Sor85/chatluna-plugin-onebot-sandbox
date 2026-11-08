@@ -7,6 +7,7 @@ import type { Context } from 'cordis'
 import { Random } from './random'
 import { h } from '@satorijs/core'
 import { resolve } from 'node:path'
+import { Resvg } from '@resvg/resvg-js'
 import { SandboxBot } from './bot'
 import { BUILTIN_AVATARS, findBuiltinAvatarByReference, getBuiltinAvatarReference, pickUnusedBuiltinAvatar } from './builtin-avatars'
 import { SandboxChannelAssignee } from './channel-assignee'
@@ -411,6 +412,7 @@ export class SandboxControlService {
   private initialScene: SandboxSnapshot
   private oneBotDebug: SandboxOneBotDebugStore
   private mediaStorage: SandboxMediaStorage
+  private builtinAvatarSources = new Map<string, string>()
   private mediaDirectory: string
   private ownsMediaDirectory: boolean
   private persistence?: SandboxScenePersistence
@@ -611,6 +613,35 @@ export class SandboxControlService {
     // 否则两步之间的任意场景变更会把尚未被引用的媒体当成孤儿回收。
     this.mediaStorage.pin(media.id)
     return media
+  }
+
+  /** Satori consumers receive image bytes, while scene snapshots keep content-addressed references. */
+  resolveImageSource(reference?: string): string | undefined {
+    const id = reference?.match(/^sandbox-media:\/\/([a-f0-9]{32})$/)?.[1]
+    if (!id) return reference
+    const media = this.mediaStorage.readById(id)
+    const builtin = findBuiltinAvatarByReference(`sandbox-media://${id}`)
+    if (builtin) {
+      const cached = this.builtinAvatarSources.get(id)
+      if (cached) return cached
+      // Only trusted built-in SVGs are rendered; user SVGs never gain server-side file access.
+      const png = new Resvg(builtin.svg, { fitTo: { mode: 'width', value: 256 }, font: { loadSystemFonts: false } }).render().asPng()
+      const source = `data:image/png;base64,${png.toString('base64')}`
+      this.builtinAvatarSources.set(id, source)
+      return source
+    }
+    return `data:${media.mimeType};base64,${media.dataBase64}`
+  }
+
+  private toSatoriMediaElement(item: SandboxMedia): ReturnType<typeof h> {
+    const source = item.type === 'image' ? this.resolveImageSource(item.reference) : item.reference
+    return h(item.type === 'image' ? 'img' : item.type, {
+      src: source,
+      ...(item.type === 'image' ? { url: source } : { file: item.reference }),
+      title: item.name,
+      mime: item.mimeType,
+      size: item.size,
+    })
   }
 
   async importAvatar(kind: 'user' | 'bot' | 'group', entityId: string, input?: string): Promise<string | undefined> {
@@ -1078,7 +1109,7 @@ export class SandboxControlService {
     else delete bot.profile
     const runtime = this.runtimeBots.get(bot.id)
     if (runtime) {
-      runtime.user = { id: bot.id, name: bot.name, avatar: bot.avatar }
+      runtime.user = { id: bot.id, name: bot.name, avatar: this.resolveImageSource(bot.avatar) }
       runtime.status = bot.enabled ? 1 : 0
       runtime.updateImplementation(bot.implementation, bot.disabledCapabilities)
     }
@@ -1108,7 +1139,7 @@ export class SandboxControlService {
     if (profile) bot.profile = profile
     else delete bot.profile
     const runtime = this.getRuntimeBot(botId)
-    runtime.user = { id: bot.id, name: bot.name, avatar: bot.avatar }
+    runtime.user = { id: bot.id, name: bot.name, avatar: this.resolveImageSource(bot.avatar) }
     this.commitSceneMutation()
     return { status: 'ok', retcode: 0, data: null }
   }
@@ -1967,20 +1998,7 @@ export class SandboxControlService {
     // 占位 content 仅用于会话预览与历史可读性，派发给机器人的消息只携带媒体段与用户真实文本。
     const content = text || media.map((item) => `[${this.getMediaLabel(item)}] ${item.name}`).join(' ')
     const message = this.appendMessage(input.operatorId, context.conversation.id, content, input.replyToMessageId, media)
-    const elements = media.map((item) => {
-      // ChatLuna 的图片转换器只读取 img.src/url，不会解析 sandbox-media RPC 引用；
-      // 因此这里必须把受控媒体正文转成 Data URL，避免模型只收到媒体 ID 或哈希文本。
-      const source = item.type === 'image'
-        ? `data:${item.mimeType};base64,${this.mediaStorage.read(item).dataBase64}`
-        : item.reference
-      return h(item.type === 'image' ? 'img' : item.type, {
-        src: source,
-        ...(item.type === 'image' ? { url: source } : { file: item.reference }),
-        title: item.name,
-        mime: item.mimeType,
-        size: item.size,
-      })
-    })
+    const elements = media.map((item) => this.toSatoriMediaElement(item))
     // 文字部分按消息元素解析，与纯文字消息同一口径：`<at>` 要成为 at 元素与 at 段，否则判定器认不出 @。
     if (text) elements.push(...h.parse(text))
     const onebotMessage: SandboxOneBotMessageSegment[] = [
@@ -2576,7 +2594,7 @@ export class SandboxControlService {
       id: reply.id,
       messageId: reply.id,
       content: reply.content,
-      elements: h.parse(reply.content),
+      elements: [...(reply.media ?? []).map((item) => this.toSatoriMediaElement(item)), ...h.parse(reply.content)],
       timestamp: new Date(reply.createdAt).getTime(),
       user: {
         id: reply.authorId,
@@ -2673,7 +2691,7 @@ export class SandboxControlService {
         implementation: profile.implementation,
         disabledCapabilities: profile.disabledCapabilities,
       })
-      runtime.user = { id: profile.id, name: profile.name, avatar: profile.avatar }
+      runtime.user = { id: profile.id, name: profile.name, avatar: this.resolveImageSource(profile.avatar) }
       runtime.status = profile.enabled ? 1 : 0
       runtime.updateImplementation(profile.implementation, profile.disabledCapabilities)
     }
@@ -2925,10 +2943,10 @@ export class SandboxControlService {
         guild: { id: group.id, name: group.name },
         // channelId 与消息事件、adapter-onebot 一致是裸群号；插件在通知回调里 session.send() 落回本群。
         channel: { id: group.id, type: 0 },
-        user: user ? { id: user.id, name: user.name, avatar: user.avatar, isBot: this.isBot(user.id) } : undefined,
+        user: user ? { id: user.id, name: user.name, avatar: this.resolveImageSource(user.avatar), isBot: this.isBot(user.id) } : undefined,
         operator: operator ? { id: operator.id, name: operator.name, avatar: operator.avatar, isBot: this.isBot(operator.id) } : undefined,
         member: member && user ? {
-          user: { id: user.id, name: user.name, avatar: user.avatar, isBot: this.isBot(user.id) },
+          user: { id: user.id, name: user.name, avatar: this.resolveImageSource(user.avatar), isBot: this.isBot(user.id) },
           name: user.name,
           nick: member.card ?? user.name,
           roles: [{ id: member.role }],

@@ -138,7 +138,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     this.selfId = config.selfId
     this.implementation = config.implementation
     this.disabledCapabilities = config.disabledCapabilities ?? []
-    this.user = { id: config.selfId, name: config.name, avatar: config.avatar }
+    this.user = { id: config.selfId, name: config.name, avatar: control.resolveImageSource(config.avatar) }
     this.status = 1
     const executeRequest = async (
       capability: ReturnType<typeof resolveOneBotAction>,
@@ -825,7 +825,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     const snapshot = this.control.getSnapshot()
     const participant = snapshot.participants.find(({ id }) => id === userId)
     if (!participant) throw new Error(`参与者不存在：${userId}`)
-    return { id: participant.id, name: participant.name, avatar: participant.avatar, isBot: participant.kind === 'bot' }
+    return { id: participant.id, name: participant.name, avatar: this.control.resolveImageSource(participant.avatar), isBot: participant.kind === 'bot' }
   }
 
   async getFriendList(): Promise<Universal.List<Universal.Friend>> {
