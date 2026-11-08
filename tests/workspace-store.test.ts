@@ -31,6 +31,20 @@ beforeEach(() => {
 })
 
 describe('WebQQ 工作区异步加载', () => {
+  it('Sandbox 群名片编辑只提交单字段及空间 ID，保存后保持原操作者视角', async () => {
+    storage.set('chatluna.onebot-sandbox.selection.test-space', storedSelection)
+    callAction.mockImplementation((_name: string, input: GetSandboxWorkspaceInput) => Promise.resolve(workspaceFor(input.operatorId)))
+    const store = new WorkspaceStore('test-space')
+    await store.load()
+    callAction.mockClear()
+    await store.manageEnvironment({ action: 'set-group-card', data: { groupId: '30001', targetId: '10001', card: '群名片' } })
+    expect(callAction).toHaveBeenNthCalledWith(1, 'onebot-sandbox.manage-environment', {
+      spaceId: 'test-space', action: 'set-group-card', data: { groupId: '30001', targetId: '10001', card: '群名片' },
+    })
+    expect(callAction).toHaveBeenNthCalledWith(2, 'onebot-sandbox.workspace', { spaceId: 'test-space', operatorId: '10003' })
+    expect(store.getView().currentOperatorId).toBe('10003')
+    expect(store.getView().activeConversationId).toBe('group:30001')
+  })
   it('进入页面时的变更信号等待本地操作者恢复，不让默认视角覆盖私聊', async () => {
     const initial = deferred<void>()
     const refresh = deferred<void>()

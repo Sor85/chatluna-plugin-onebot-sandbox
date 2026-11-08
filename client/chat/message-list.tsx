@@ -363,6 +363,11 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                           <PencilIcon />{t('sandbox.menu.editEntity', { kind: t(isBot ? 'sandbox.kind.bot' : 'sandbox.kind.user') })}<ExtensionMark />
                         </ContextMenuItem>
                       )}
+                      {group && getCurrentGroupMember(message.authorId, presentation) && (
+                        <ContextMenuItem onClick={() => dialogs.openGroupAction('sandbox-card', message.authorId, group.id)}>
+                          <TagIcon />{t('sandbox.member.setCard')}<ExtensionMark />
+                        </ContextMenuItem>
+                      )}
                       {!outgoing && (
                         <>
                           {getMessageGroupMemberActions(message.authorId, presentation).includes('mention') && (

@@ -42,7 +42,7 @@ interface SandboxContextValue {
 export interface SandboxDialogs {
   openEntity(mode: 'edit' | 'delete', target: { type: 'user' | 'bot' | 'group', id: string }): void
   openRemark(targetId: string): void
-  openGroupAction(mode: 'card' | 'name' | 'title', targetId: string, groupId?: string): void
+  openGroupAction(mode: 'card' | 'sandbox-card' | 'name' | 'title', targetId: string, groupId?: string): void
   openConversationRename(conversationId: string): void
   openProfile(participantId: string, anchor?: { x: number, y: number }): void
   openGroupProfile(groupId: string, anchor?: { x: number, y: number }): void

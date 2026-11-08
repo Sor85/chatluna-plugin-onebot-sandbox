@@ -27,7 +27,7 @@ import { useSandbox, useWorkspace } from './context'
 
 type TextDialog =
   | { kind: 'remark', targetId: string, value: string }
-  | { kind: 'card' | 'name' | 'title', targetId: string, groupId: string, value: string }
+  | { kind: 'card' | 'sandbox-card' | 'name' | 'title', targetId: string, groupId: string, value: string }
   | { kind: 'rename', conversationId: string, value: string }
 
 export interface OverlayState {
@@ -106,6 +106,7 @@ function TextActionDialog({ dialog, onClose }: { dialog?: TextDialog, onClose():
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
   const shown = useRetained(dialog)
+  const scroller = React.useRef<HTMLDivElement>(null)
   const { requestClose, confirm } = useDiscardConfirm(!!dialog && value !== dialog.value, onClose)
 
   // 布局阶段回填：打开的首帧就是本次的值，不闪出上一次输入的内容。
@@ -124,6 +125,7 @@ function TextActionDialog({ dialog, onClose }: { dialog?: TextDialog, onClose():
       else if (dialog.kind === 'rename') await store.renameConversationInstance({ conversationId: dialog.conversationId, title: value })
       else if (dialog.kind === 'name') await store.performGroupAction({ action: 'set-name', groupId: dialog.groupId, name: value })
       else if (dialog.kind === 'title') await store.performGroupAction({ action: 'set-title', groupId: dialog.groupId, targetId: dialog.targetId, title: value })
+      else if (dialog.kind === 'sandbox-card') await store.manageEnvironment({ action: 'set-group-card', data: { groupId: dialog.groupId, targetId: dialog.targetId, card: value } })
       else await store.performGroupAction({ action: 'set-card', groupId: dialog.groupId, targetId: dialog.targetId, card: value })
       onClose()
     } catch (failure) {
@@ -133,24 +135,30 @@ function TextActionDialog({ dialog, onClose }: { dialog?: TextDialog, onClose():
     }
   }
 
-  const kind = shown?.kind ?? 'remark'
+  const kind = shown?.kind === 'sandbox-card' ? 'card' : shown?.kind ?? 'remark'
   return (
     <Dialog open={!!dialog} onOpenChange={(open) => !open && requestClose()}>
-      <DialogContent>
+      <DialogContent className="flex flex-col overflow-hidden text-sm leading-6">
         <DialogHeader>
           <DialogTitle>{t(`sandbox.text.${kind}.title`)}</DialogTitle>
-          <DialogDescription>{t(`sandbox.text.${kind}.description`)}</DialogDescription>
+          <DialogDescription>{t(shown?.kind === 'sandbox-card' ? 'sandbox.text.card.sandboxDescription' : `sandbox.text.${kind}.description`)}</DialogDescription>
         </DialogHeader>
-        <Input
-          autoFocus
-          value={value}
-          placeholder={t(`sandbox.text.${kind}.placeholder`)}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing) void submit()
-          }}
-        />
-        {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+        <div className="relative -mx-5 flex min-h-0 flex-col">
+          <div ref={scroller} className="min-h-0 space-y-2 overflow-y-auto px-5 py-0.5" style={{ scrollbarWidth: 'none' }}>
+            <Input
+              autoFocus
+              value={value}
+              aria-label={t(`sandbox.text.${kind}.placeholder`)}
+              placeholder={t(`sandbox.text.${kind}.placeholder`)}
+              onChange={(event) => setValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) void submit()
+              }}
+            />
+            {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+          </div>
+          <OverlayScrollbar target={scroller} className="inset-y-0" />
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={requestClose}>{t('sandbox.common.cancel')}</Button>
           <Button disabled={busy} onClick={submit}>{busy ? t('sandbox.common.saving') : t('sandbox.common.save')}</Button>

@@ -328,6 +328,18 @@ export function registerConsole(
       case 'update-group':
         activeControl.updateGroup(command.data.avatar === undefined ? command.data : { ...command.data, avatar: await activeControl.importAvatar('group', command.data.id, command.data.avatar) })
         break
+      case 'set-group-card': {
+        const { groupId, targetId, card } = command.data
+        const group = activeControl.getSnapshot().groups.find(({ id }) => id === groupId)
+        if (!group) throw new SandboxDomainError(`群组不存在：${groupId}`)
+        if (!group.members.some(({ participantId }) => participantId === targetId)) throw new SandboxDomainError(`群成员不存在：${targetId}`)
+        // 只接受目标名片，在最新群资料上修改，避免客户端整群快照覆盖其他成员的变更。
+        activeControl.updateGroup({
+          ...group,
+          members: group.members.map((member) => member.participantId === targetId ? { ...member, card } : member),
+        })
+        break
+      }
       case 'delete-group':
         activeControl.deleteGroup(command.data)
         break

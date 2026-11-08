@@ -154,6 +154,7 @@ export type ManageSandboxEnvironmentInput =
   | { action: 'delete-bot', data: DeleteSandboxBotInput }
   | { action: 'create-group', data: CreateSandboxGroupInput }
   | { action: 'update-group', data: UpdateSandboxGroupInput }
+  | { action: 'set-group-card', data: { groupId: string, targetId: string, card: string } }
   | { action: 'delete-group', data: DeleteSandboxGroupInput }
 
 export interface SandboxDirectConversation {

@@ -40,10 +40,10 @@ vi.mock('../client/environment/create-popover', () => ({ CreateEntityPopover: ()
 
 beforeEach(() => { menuItems.length = 0 })
 
-function renderInWorkspace(element: ReactElement) {
+function renderInWorkspace(element: ReactElement, workspace = workspaceFor(), conversationId = 'group:30001') {
   const store = new WorkspaceStore(undefined)
-  store.seed(workspaceFor())
-  store.selectConversation('group:30001')
+  store.seed(workspace)
+  store.selectConversation(conversationId)
   const dialogs: SandboxDialogs = {
     openEntity: vi.fn(), openProfile: vi.fn(), openGroupProfile: vi.fn(), openRemark: vi.fn(),
     openGroupAction: vi.fn(), openConversationRename: vi.fn(),
@@ -92,6 +92,29 @@ describe('聊天头像菜单入口', () => {
     expect(items('sandbox.menu.profile')).toHaveLength(3)
   })
 
+  it('群消息头像提供带 Sandbox 标记的名片编辑，普通成员也能修改自己、他人和机器人', () => {
+    const workspace = workspaceFor()
+    workspace.snapshot.groups[0]!.members[0]!.role = 'member'
+    workspace.snapshot.groups[0]!.members[1]!.role = 'owner'
+    const { store, dialogs } = renderInWorkspace(createElement(MessageList, messageProps()), workspace)
+    const edits = items('sandbox.member.setCard').filter(({ children }) =>
+      renderToStaticMarkup(createElement(Fragment, null, children)).includes('sandbox.extension.description'))
+    expect(edits).toHaveLength(3)
+    for (const item of edits) item.onClick?.()
+    expect(dialogs.openGroupAction).toHaveBeenNthCalledWith(1, 'sandbox-card', '10001', '30001')
+    expect(dialogs.openGroupAction).toHaveBeenNthCalledWith(2, 'sandbox-card', '10003', '30001')
+    expect(dialogs.openGroupAction).toHaveBeenNthCalledWith(3, 'sandbox-card', '20001', '30001')
+    expect(store.getView().currentOperatorId).toBe('10001')
+  })
+
+  it('私聊和已经不在群内的作者不提供群名片编辑', () => {
+    renderInWorkspace(createElement(MessageList, messageProps()), workspaceFor(), 'private:10001:20001')
+    expect(items('sandbox.member.setCard')).toHaveLength(0)
+    menuItems.length = 0
+    renderInWorkspace(createElement(MessageList, messageProps(['20002', 'missing'])))
+    expect(items('sandbox.member.setCard')).toHaveLength(0)
+  })
+
   it('不存在的作者不提供编辑入口，多选模式不打开头像菜单', () => {
     renderInWorkspace(createElement(MessageList, messageProps(['missing'])))
     expect(items('sandbox.menu.editEntity')).toHaveLength(0)
@@ -99,5 +122,6 @@ describe('聊天头像菜单入口', () => {
     renderInWorkspace(createElement(MessageList, { ...messageProps(), selectionMode: true }))
     expect(items('sandbox.menu.editEntity')).toHaveLength(0)
     expect(items('sandbox.menu.profile')).toHaveLength(0)
+    expect(items('sandbox.member.setCard')).toHaveLength(0)
   })
 })
