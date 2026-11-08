@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { App } from './helpers/app'
 import { h, Universal } from '@satorijs/core'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SandboxControlService } from '../src/control-service'
 import { MAX_MEDIA_SIZE } from '../src/media-storage'
 import { getOneBotMessageSequence } from '../src/onebot-profiles'
@@ -29,6 +29,12 @@ async function createMediaServer(): Promise<string> {
         'content-length': String(content.length),
       })
       response.end(content)
+      return
+    }
+    if (request.url === '/audio') {
+      response.writeHead(200, { 'content-type': 'audio/mpeg' })
+      response.write('remote-')
+      setImmediate(() => response.end('audio'))
       return
     }
     if (request.url === '/text') {
@@ -500,6 +506,24 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
         message: [{ type: 'image', data: { file: `${mediaServer}${path}` } }],
       })).rejects.toThrow(error)
       expect(control.getSnapshot().messages).toHaveLength(beforeFailure)
+    }
+  })
+
+  it('远程音频下载默认使用 120 秒超时并读取完整正文', async () => {
+    const { control } = await createControl()
+    const mediaServer = await createMediaServer()
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    try {
+      const messageIds = await control.bot.sendMessage('30001', h.audio(`${mediaServer}/audio`))
+      expect(messageIds).toHaveLength(1)
+      expect(timeout).toHaveBeenCalledWith(120_000)
+      const media = control.getSnapshot().messages.at(-1)?.media?.[0]
+      if (!media) throw new Error('远程音频未写入媒体')
+      expect(media).toMatchObject({ type: 'audio', mimeType: 'audio/mpeg', size: 12 })
+      const content = control.getMediaContent({ operatorId: '20001', mediaId: media.id })
+      expect(Buffer.from(content.dataBase64, 'base64').toString()).toBe('remote-audio')
+    } finally {
+      timeout.mockRestore()
     }
   })
 

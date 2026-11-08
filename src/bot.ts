@@ -1051,7 +1051,7 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
   private async downloadOutboundMedia(media: SandboxOutboundMediaSource, source: string) {
     let response: Response
     try {
-      response = await fetch(source, { signal: AbortSignal.timeout(10_000) })
+      response = await fetch(source, { signal: AbortSignal.timeout(120_000) })
     } catch (error) {
       throw new Error(`下载远程媒体失败：${source}（${error instanceof Error ? error.message : String(error)}）`)
     }
