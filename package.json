@@ -61,6 +61,7 @@
     "@chatluna/server": ">=2.0.0-alpha.0",
     "@chatluna/session": ">=2.0.0-alpha.0",
     "@chatluna/tool": ">=2.0.0-alpha.0",
+    "@chatluna/transform": ">=2.0.0-alpha.0",
     "@chatluna/ui-server": ">=2.0.0-alpha.0",
     "cordis": "^4.0.0-rc.12"
   },
@@ -74,6 +75,7 @@
     "@chatluna/server": "workspace:*",
     "@chatluna/session": "workspace:*",
     "@chatluna/tool": "workspace:*",
+    "@chatluna/transform": "workspace:*",
     "@chatluna/ui-client": "workspace:*",
     "@chatluna/ui-kit": "workspace:*",
     "@chatluna/ui-schema-form": "workspace:*",
@@ -93,6 +95,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0",
+    "silk-wasm": "^3.7.1",
     "vitest": "^3.2.4"
   },
   "cordis": {

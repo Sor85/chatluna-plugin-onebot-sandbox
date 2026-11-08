@@ -386,7 +386,8 @@ export class WorkspaceStore {
       this.mediaLoading.add(mediaId)
       try {
         const content = await invoke('onebot-sandbox.media-content', this.scoped({ operatorId, mediaId }))
-        const url = `data:${content.mimeType};base64,${content.dataBase64}`
+        const playable = content.preview ?? content
+        const url = `data:${playable.mimeType};base64,${playable.dataBase64}`
         rememberMedia(mediaId, url, avatarIds.has(mediaId))
         const { [mediaId]: _, ...failures } = this.view.mediaFailures
         this.set({ media: { ...this.view.media, [mediaId]: url }, mediaFailures: failures })

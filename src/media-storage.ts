@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { isVoiceIn } from '@chatluna/transform'
 import { basename, resolve } from 'node:path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import type { SandboxMedia, SandboxMediaContent, SandboxMediaType } from './types'
@@ -32,6 +33,8 @@ const MEDIA_TYPES = new Map<string, SandboxMediaType>([
   ['audio/mpeg', 'audio'],
   ['audio/mp4', 'audio'],
   ['audio/ogg', 'audio'],
+  ['audio/silk', 'audio'],
+  ['audio/x-silk', 'audio'],
   ['audio/wav', 'audio'],
   ['audio/webm', 'audio'],
   ['video/mp4', 'video'],
@@ -119,7 +122,7 @@ export class SandboxMediaStorage {
       id,
       type,
       name,
-      mimeType,
+      mimeType: type === 'audio' && isVoiceIn('silk', content, mimeType) ? 'audio/silk' : mimeType,
       size: content.length,
       reference: `sandbox-media://${id}`,
     }

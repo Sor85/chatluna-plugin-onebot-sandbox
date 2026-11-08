@@ -1,4 +1,5 @@
 import { listConversationIds } from './conversation-resolution'
+import { withAudioPreview } from './media-preview'
 import { SandboxChatLunaError } from './chatluna/runtime'
 import type { SandboxPresetEditor } from './chatluna/presets'
 import type {
@@ -291,7 +292,10 @@ export function registerConsole(
     await (await resolveReadyControl(input, true)).setMessageReaction(assertInteractionInput(withoutSpaceId(input)) as SetMessageReactionInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
   }, { authority: 4 })
-  registerListener('onebot-sandbox.media-content', async (input) => (await resolveReadyControl(input, false)).getMediaContent(assertInteractionInput(withoutSpaceId(input)) as GetMediaContentInput), { authority: 4 })
+  registerListener('onebot-sandbox.media-content', async (input) => {
+    const content = (await resolveReadyControl(input, false)).getMediaContent(assertInteractionInput(withoutSpaceId(input)) as GetMediaContentInput)
+    return withAudioPreview(content)
+  }, { authority: 4 })
   registerListener('onebot-sandbox.set-group-announcement', async (input) => {
     (await resolveReadyControl(input, true)).setGroupAnnouncement(assertInteractionInput(withoutSpaceId(input)) as SetGroupAnnouncementInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })

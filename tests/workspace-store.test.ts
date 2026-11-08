@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GetSandboxWorkspaceInput } from '../src/types'
+import type { GetSandboxWorkspaceInput, SandboxMedia } from '../src/types'
 import { visibleConversationsOf, WorkspaceStore } from '../client/workspace/store'
 import { deferred } from './helpers/deferred'
 import { workspaceFor } from './helpers/workspace'
@@ -31,6 +31,22 @@ beforeEach(() => {
 })
 
 describe('WebQQ 工作区异步加载', () => {
+  it('SILK 消息缓存独立 WAV 预览，快照保持原始媒体元数据', async () => {
+    const workspace = workspaceFor('10003')
+    const media: SandboxMedia = { id: 'silk-preview-test', type: 'audio', name: 'voice.silk', mimeType: 'audio/silk', size: 10, reference: 'sandbox-media://silk-preview-test' }
+    workspace.snapshot.messages.push({
+      id: 'silk-message', authorId: '20001', conversationId: 'group:30001', content: '[语音]',
+      createdAt: '2026-01-01T00:00:00.000Z', media: [media],
+    })
+    callAction.mockImplementation((name: string) => Promise.resolve(name === 'onebot-sandbox.media-content'
+      ? { ...media, dataBase64: 'U0lMSw==', preview: { mimeType: 'audio/wav', dataBase64: 'UklGRg==' } }
+      : workspace))
+    const store = new WorkspaceStore(undefined)
+    await store.load()
+    await vi.waitFor(() => expect(store.getView().media[media.id]).toBe('data:audio/wav;base64,UklGRg=='))
+    expect(store.snapshot?.messages[0].media?.[0]).toEqual(media)
+    store.dispose()
+  })
   it('Sandbox 群名片编辑只提交单字段及空间 ID，保存后保持原操作者视角', async () => {
     storage.set('chatluna.onebot-sandbox.selection.test-space', storedSelection)
     callAction.mockImplementation((_name: string, input: GetSandboxWorkspaceInput) => Promise.resolve(workspaceFor(input.operatorId)))

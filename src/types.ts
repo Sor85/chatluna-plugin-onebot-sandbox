@@ -803,6 +803,8 @@ export interface GetMediaContentInput {
 
 export interface SandboxMediaContent extends SandboxMedia {
   dataBase64: string
+  /** 浏览器可播放的派生内容；不替换原始媒体或改变其内容寻址 ID。 */
+  preview?: { mimeType: string; dataBase64: string }
 }
 
 export interface SetGroupAnnouncementInput {
