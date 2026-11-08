@@ -340,6 +340,7 @@ export function createInboundDelivery({
       ? sourceSegments.map((segment) => segment.type === 'reply' ? { ...segment, data: { ...segment.data, id: String(replyId) } } : segment)
       : sourceSegments
     const rawMessage = localized ? toOneBotRawMessage(segments) : sourceRawMessage
+    const groupMember = context.group?.members.find(({ participantId }) => participantId === context.operator.id)
     // 载荷先于运行时机器人构造：它只依赖已落库的消息与收件机器人，因此「取不到运行时」这类派发前
     // 失败也能带着完整载荷进调试记录，而不是只留一句话，看记录的人照样知道那条消息是什么。
     const payload = {
@@ -353,7 +354,11 @@ export function createInboundDelivery({
       group_id: context.group ? Number(context.group.id) : undefined,
       message: segments,
       raw_message: rawMessage,
-      sender: { user_id: Number(context.operator.id), nickname: context.operator.name },
+      sender: {
+        user_id: Number(context.operator.id),
+        nickname: context.operator.name,
+        ...(groupMember ? { card: groupMember.card ?? '', role: groupMember.role } : {}),
+      },
     }
     // 派发已经发生过时不再补记：`dispatchEvent` 记过它那一段的失败，两处都记会让同一次失败出现两条。
     let dispatched = false
@@ -366,10 +371,12 @@ export function createInboundDelivery({
       await alignInboundChannel(recipientBot.id, context)
       // ChatLuna allowQuoteReply / character 只认 session.quote.user.id === bot.userId|selfId，
       // 不依赖 @。quote 必须带齐 user 与 timestamp，character 才能拼出和真 QQ 一样的引用 XML。
+      const user = { id: context.operator.id, name: context.operator.name }
       const session = runtimeBot.session({
         type: 'message',
         timestamp: Date.now(),
-        user: { id: context.operator.id, name: context.operator.name },
+        user,
+        member: groupMember ? { user, nick: groupMember.card ?? '', roles: [{ id: groupMember.role }] } : undefined,
         channel: {
           id: toOneBotChannelId(context.conversation, recipientBot.id),
           type: context.conversation.type === 'group' ? 0 : 1,
