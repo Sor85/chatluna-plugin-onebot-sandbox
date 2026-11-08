@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { createLayout, type AutoLayout } from 'animejs'
-import { FileIcon, PaperclipIcon, PencilIcon, PlusIcon, SendIcon, Trash2Icon, XIcon } from 'lucide-react'
+import { FileIcon, IdCardIcon, PaperclipIcon, PencilIcon, PlusIcon, SendIcon, Trash2Icon, XIcon } from 'lucide-react'
 import {
   cn,
   ContextMenu,
@@ -517,6 +517,9 @@ export const Composer = React.forwardRef<ComposerHandle, {
                           <SandboxAvatar kind={sender.kind} name={sender.name} src={sender.avatar} badge={false} className="sandbox-composer-user-avatar" />
                         </ContextMenuTrigger>
                         <ContextMenuContent className="sandbox-glass">
+                          <ContextMenuItem onClick={() => dialogs.openProfile(sender.id)}>
+                            <IdCardIcon />{t('sandbox.menu.profile')}
+                          </ContextMenuItem>
                           <ContextMenuItem onClick={() => dialogs.openEntity('edit', { type: sender.kind, id: sender.id })}>
                             <PencilIcon />{t('sandbox.menu.editEntity', { kind: t(`sandbox.kind.${sender.kind}`) })}<ExtensionMark />
                           </ContextMenuItem>

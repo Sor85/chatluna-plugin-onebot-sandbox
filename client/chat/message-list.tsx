@@ -14,6 +14,7 @@ import {
   IdCardIcon,
   ListChecksIcon,
   PaperclipIcon,
+  PencilIcon,
   ReplyIcon,
   SmilePlusIcon,
   TagIcon,
@@ -357,6 +358,11 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                     </ContextMenuTrigger>
                     <ContextMenuContent className="sandbox-glass">
                       <ContextMenuItem onClick={() => dialogs.openProfile(message.authorId)}><IdCardIcon />{t('sandbox.menu.profile')}</ContextMenuItem>
+                      {participants[message.authorId] && (
+                        <ContextMenuItem onClick={() => dialogs.openEntity('edit', { type: isBot ? 'bot' : 'user', id: message.authorId })}>
+                          <PencilIcon />{t('sandbox.menu.editEntity', { kind: t(isBot ? 'sandbox.kind.bot' : 'sandbox.kind.user') })}<ExtensionMark />
+                        </ContextMenuItem>
+                      )}
                       {!outgoing && (
                         <>
                           {getMessageGroupMemberActions(message.authorId, presentation).includes('mention') && (
