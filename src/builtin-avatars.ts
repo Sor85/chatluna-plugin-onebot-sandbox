@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   BUILTIN_AVATARS,
   BUILTIN_BOT_AVATARS,
@@ -6,7 +5,7 @@ import {
   BUILTIN_USER_AVATARS,
   type BuiltinAvatar,
   type BuiltinAvatarKind,
-} from './builtin-avatar-options'
+} from './builtin-avatar-png'
 
 export {
   BUILTIN_AVATARS,
@@ -18,13 +17,12 @@ export {
 }
 
 export function getBuiltinAvatarReference(avatar: BuiltinAvatar): string {
-  const id = createHash('sha256').update(Buffer.from(avatar.svg)).digest('hex').slice(0, 32)
-  return `sandbox-media://${id}`
+  return avatar.reference
 }
 
 export function findBuiltinAvatarByReference(reference: string): BuiltinAvatar | undefined {
   for (const pool of Object.values(BUILTIN_AVATARS)) {
-    const avatar = pool.find((candidate) => getBuiltinAvatarReference(candidate) === reference)
+    const avatar = pool.find((candidate) => candidate.reference === reference || candidate.legacyReferences.includes(reference))
     if (avatar) return avatar
   }
 }

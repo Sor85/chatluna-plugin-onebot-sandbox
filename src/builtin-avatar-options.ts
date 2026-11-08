@@ -1,3 +1,4 @@
+// 内置头像的 SVG 源；修改后运行 node scripts/generate-builtin-avatars.mjs，运行时使用 builtin-avatar-png。
 export type BuiltinAvatarKind = 'user' | 'bot' | 'group'
 
 export interface BuiltinAvatar {

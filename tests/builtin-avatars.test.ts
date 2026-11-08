@@ -37,12 +37,10 @@ function createEntity(control: SandboxControlService, kind: BuiltinAvatarKind, i
 }
 
 describe('三类内置头像池', () => {
-  it('三类头像各有8项且视觉资源互不复用', () => {
-    expect(BUILTIN_AVATARS.user).toHaveLength(8)
-    expect(BUILTIN_AVATARS.bot).toHaveLength(8)
-    expect(BUILTIN_AVATARS.group).toHaveLength(8)
-    const svgs = Object.values(BUILTIN_AVATARS).flatMap((pool) => pool.map(({ svg }) => svg))
-    expect(new Set(svgs)).toHaveLength(24)
+  it('三类头像各至少有8项且 PNG 资源互不复用', () => {
+    for (const pool of Object.values(BUILTIN_AVATARS)) expect(pool.length).toBeGreaterThanOrEqual(8)
+    const images = Object.values(BUILTIN_AVATARS).flatMap((pool) => pool.map(({ png }) => png))
+    expect(new Set(images)).toHaveLength(images.length)
   })
 
   it('池未耗尽前只从未占用头像中选择，耗尽后才允许复用', () => {

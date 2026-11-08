@@ -1,14 +1,11 @@
 import * as React from 'react'
 import { ArrowLeftIcon, ChevronRightIcon, UploadIcon } from 'lucide-react'
 import { Button } from '@chatluna/ui-kit'
-import { BUILTIN_AVATARS, type BuiltinAvatar, type BuiltinAvatarKind } from '../../src/builtin-avatar-options'
+import { BUILTIN_AVATARS, type BuiltinAvatar, type BuiltinAvatarKind } from '../../src/builtin-avatar-png'
 import { useT } from '../i18n'
 
 function avatarDataUrl(avatar: BuiltinAvatar) {
-  const bytes = new TextEncoder().encode(avatar.svg)
-  let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return `data:image/svg+xml;base64,${btoa(binary)}`
+  return `data:image/png;base64,${avatar.png}`
 }
 
 /** 头像选择：内置头像或本地图片，选定后以 Data URL 交回，服务端负责导入成受控媒体。用于浮层内原地切换的二级视图。 */

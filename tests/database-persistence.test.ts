@@ -306,7 +306,7 @@ describe('沙盒场景持久化', () => {
     const { control: second } = await createControl(persistence, mediaDirectory)
 
     expect(second.getSnapshot().participants.find(({ id }) => id === '10001')!.avatar).toBe(reference)
-    expect(second.getMediaContent({ operatorId: '10001', mediaId }).mimeType).toBe('image/svg+xml')
+    expect(second.getMediaContent({ operatorId: '10001', mediaId }).mimeType).toBe('image/png')
   })
 
   it('查询失败时不保存默认场景也不清理共享媒体', async () => {

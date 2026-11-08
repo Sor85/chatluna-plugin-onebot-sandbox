@@ -43,13 +43,13 @@
   "scripts": {
     "sync": "node scripts/sync-to-v2.mjs --once",
     "sync:watch": "node scripts/sync-to-v2.mjs",
+    "generate:avatars": "node scripts/generate-builtin-avatars.mjs",
     "build": "yakumo build",
     "clean": "yakumo clean",
     "test": "vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@resvg/resvg-js": "2.6.2",
     "@satorijs/core": "~4.6.1",
     "cosmokit": "^1.8.1",
     "schemastery": "3.18.0",
@@ -81,6 +81,7 @@
     "@chatluna/ui-storage": "workspace:*",
     "@cordisjs/plugin-database": "4.1.1",
     "@cordisjs/plugin-server": "^1.7.0",
+    "@resvg/resvg-js": "2.6.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "animejs": "4.5.0",

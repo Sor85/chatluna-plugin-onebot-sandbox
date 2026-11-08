@@ -7,7 +7,6 @@ import type { Context } from 'cordis'
 import { Random } from './random'
 import { h } from '@satorijs/core'
 import { resolve } from 'node:path'
-import { Resvg } from '@resvg/resvg-js'
 import { SandboxBot } from './bot'
 import { BUILTIN_AVATARS, findBuiltinAvatarByReference, getBuiltinAvatarReference, pickUnusedBuiltinAvatar } from './builtin-avatars'
 import { SandboxChannelAssignee } from './channel-assignee'
@@ -182,6 +181,7 @@ export class SandboxRuntimeBotRegistry {
  */
 interface SandboxMessageContext extends InboundMessageContext {
   reply?: SandboxMessage
+  quote?: InboundQuotedMessage
 }
 
 const DEFAULT_USER_ID = '10001'
@@ -412,7 +412,6 @@ export class SandboxControlService {
   private initialScene: SandboxSnapshot
   private oneBotDebug: SandboxOneBotDebugStore
   private mediaStorage: SandboxMediaStorage
-  private builtinAvatarSources = new Map<string, string>()
   private mediaDirectory: string
   private ownsMediaDirectory: boolean
   private persistence?: SandboxScenePersistence
@@ -620,17 +619,8 @@ export class SandboxControlService {
     const id = reference?.match(/^sandbox-media:\/\/([a-f0-9]{32})$/)?.[1]
     if (!id) return reference
     const media = this.mediaStorage.readById(id)
-    const builtin = findBuiltinAvatarByReference(`sandbox-media://${id}`)
-    if (builtin) {
-      const cached = this.builtinAvatarSources.get(id)
-      if (cached) return cached
-      // Only trusted built-in SVGs are rendered; user SVGs never gain server-side file access.
-      const png = new Resvg(builtin.svg, { fitTo: { mode: 'width', value: 256 }, font: { loadSystemFonts: false } }).render().asPng()
-      const source = `data:image/png;base64,${png.toString('base64')}`
-      this.builtinAvatarSources.set(id, source)
-      return source
-    }
-    return `data:${media.mimeType};base64,${media.dataBase64}`
+    const builtin = findBuiltinAvatarByReference(media.reference)
+    return builtin ? `data:image/png;base64,${builtin.png}` : `data:${media.mimeType};base64,${media.dataBase64}`
   }
 
   private toSatoriMediaElement(item: SandboxMedia): ReturnType<typeof h> {
@@ -673,7 +663,8 @@ export class SandboxControlService {
 
   private saveAvatar(fileName: string, mimeType: string, dataBase64: string): string {
     if (!mimeType.startsWith('image/')) throw new SandboxDomainError(`头像必须是图片：${mimeType || '未知类型'}`)
-    return this.mediaStorage.save({ fileName, mimeType, dataBase64 }).reference
+    const reference = this.mediaStorage.save({ fileName, mimeType, dataBase64 }).reference
+    return this.rematerializeBuiltinAvatar(reference) ?? reference
   }
 
   private ensureStableAvatars(): void {
@@ -681,30 +672,31 @@ export class SandboxControlService {
       if (!participant.avatar) {
         participant.avatar = this.createDefaultAvatar(participant.kind)
       } else {
-        this.rematerializeBuiltinAvatar(participant.avatar)
+        participant.avatar = this.rematerializeBuiltinAvatar(participant.avatar) ?? participant.avatar
       }
     }
     for (const group of this.scene.groups) {
       if (!group.avatar) {
         group.avatar = this.createDefaultAvatar('group')
       } else {
-        this.rematerializeBuiltinAvatar(group.avatar)
+        group.avatar = this.rematerializeBuiltinAvatar(group.avatar) ?? group.avatar
       }
     }
   }
 
-  private rematerializeBuiltinAvatar(reference: string): boolean {
-    if (this.hasManagedAvatar(reference)) return false
+  private rematerializeBuiltinAvatar(reference: string): string | undefined {
     const avatar = findBuiltinAvatarByReference(reference)
-    if (!avatar) return false
-    const restored = this.saveAvatar(
-      `builtin-${avatar.kind}-${avatar.id}.svg`,
-      'image/svg+xml',
-      Buffer.from(avatar.svg).toString('base64'),
-    )
-    // 内容寻址必须恢复到原引用；不一致说明内置资源或哈希契约被破坏，不能静默换脸。
-    if (restored !== reference) throw new SandboxDomainError(`内置头像引用恢复不一致：${reference}`)
-    return true
+    if (!avatar) return
+    const current = getBuiltinAvatarReference(avatar)
+    if (this.hasManagedAvatar(current)) return current
+    const restored = this.mediaStorage.save({
+      fileName: `builtin-${avatar.kind}-${avatar.id}.png`,
+      mimeType: 'image/png',
+      dataBase64: avatar.png,
+    }).reference
+    // 旧 SVG 引用迁到 PNG 自己的内容哈希，不能在旧 ID 下替换字节，破坏媒体缓存的永久有效性。
+    if (restored !== current) throw new SandboxDomainError(`内置头像引用恢复不一致：${reference}`)
+    return restored
   }
 
   private hasManagedAvatar(reference: string): boolean {
@@ -722,16 +714,18 @@ export class SandboxControlService {
     // 先按内容寻址引用选出未占用项，再只物化被选中的图片，避免未分配池项成为无主媒体。
     const selected = pickUnusedBuiltinAvatar(
       pool,
-      new Set(pool.filter((avatar) => used.has(getBuiltinAvatarReference(avatar)))),
+      new Set(pool.filter((avatar) => [avatar.reference, ...avatar.legacyReferences].some((reference) => used.has(reference)))),
     )
     return this.saveAvatar(
-      `builtin-${kind}-${selected.id}.svg`,
-      'image/svg+xml',
-      Buffer.from(selected.svg).toString('base64'),
+      `builtin-${kind}-${selected.id}.png`,
+      'image/png',
+      selected.png,
     )
   }
 
   private requireManagedAvatar(reference: string): string {
+    const builtin = this.rematerializeBuiltinAvatar(reference)
+    if (builtin) return builtin
     const match = reference.match(/^sandbox-media:\/\/([a-f0-9]{32})$/)
     if (!match || !this.mediaStorage.exists(match[1])) throw new SandboxDomainError(`头像媒体不存在：${reference}`)
     const media = this.mediaStorage.readById(match[1])
@@ -2032,12 +2026,7 @@ export class SandboxControlService {
     return this.mediaStorage.readById(input.mediaId)
   }
 
-  /**
-   * 三条发送路径共同的投递入口：把已落库的这条消息交给投递模块。
-   *
-   * 这里只补一件发送路径知道而投递模块不知道的事——引用回复要按作者标识查参与者，而参与者集合
-   * 归场景所有。接收机器人推导、事件字段构造、上下文跟随、中间件等待与投递记录都在模块里。
-   */
+  /** 三条发送路径共同的投递入口，引用媒体已在校验阶段读好，不再依赖落库后可能被回收的文件。 */
   private dispatchMessageToBots(
     context: SandboxMessageContext,
     message: SandboxMessage,
@@ -2051,7 +2040,7 @@ export class SandboxControlService {
       elements,
       segments: onebotMessage,
       rawMessage,
-      quote: context.reply ? this.resolveInboundQuote(context.reply) : undefined,
+      quote: context.quote,
       replyToMessageId: context.reply?.id,
     })
   }
@@ -2445,8 +2434,11 @@ export class SandboxControlService {
         continue
       }
       if (previous.startsWith('sandbox-media://')) {
-        if (this.rematerializeBuiltinAvatar(previous)) changed = true
-        else if (!this.hasManagedAvatar(previous)) {
+        const restored = this.rematerializeBuiltinAvatar(previous)
+        if (restored) {
+          participant.avatar = restored
+          changed ||= restored !== previous
+        } else if (!this.hasManagedAvatar(previous)) {
           this.ctx.logger('onebot-sandbox').warn(`参与者头像媒体不存在，已保留原引用等待恢复：${participant.id}`)
         }
         continue
@@ -2467,8 +2459,11 @@ export class SandboxControlService {
         continue
       }
       if (previous.startsWith('sandbox-media://')) {
-        if (this.rematerializeBuiltinAvatar(previous)) changed = true
-        else if (!this.hasManagedAvatar(previous)) {
+        const restored = this.rematerializeBuiltinAvatar(previous)
+        if (restored) {
+          group.avatar = restored
+          changed ||= restored !== previous
+        } else if (!this.hasManagedAvatar(previous)) {
           this.ctx.logger('onebot-sandbox').warn(`群头像媒体不存在，已保留原引用等待恢复：${group.id}`)
         }
         continue
@@ -2629,7 +2624,9 @@ export class SandboxControlService {
     const replyDenial = reply
       && denyMessageCapability('reply', this.toMessageCapabilityInput(reply, conversation, input.operatorId))
     if (replyDenial) throw new SandboxDomainError(describeReplyDenial(replyDenial, input.replyToMessageId!))
-    return { operator, peer, conversation, group, reply }
+    // 新消息落库会触发条数/体积回收，可能连同引用目标一起删除图片；先读好，也让缺失媒体在落库前报错。
+    const quote = reply ? this.resolveInboundQuote(reply) : undefined
+    return { operator, peer, conversation, group, reply, quote }
   }
 
   /**
