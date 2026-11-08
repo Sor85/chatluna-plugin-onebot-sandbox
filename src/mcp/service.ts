@@ -86,6 +86,8 @@ export interface SandboxMcpServiceOptions extends Partial<SandboxMcpQuotaConfig>
   presets?: SandboxPresetEditor
   /** 测试预设之外允许修改的预设 ID（插件设置 `presetEditing.editablePresets`）。 */
   editablePresets?: readonly string[]
+  /** 与协议、manage 范围独立的授权，默认仅 WebUI 可分配用户权限。 */
+  allowToolPermissionEditing?: boolean
 }
 
 const READ_RESOURCES = [
@@ -285,9 +287,11 @@ export class SandboxMcpService {
   private wakeup: SandboxWakeupReader
   private modelCalls: SandboxModelCallReader
   private presets: SandboxPresetEditor
+  private allowToolPermissionEditing: boolean
 
   constructor(private ctx: Context, private control: SandboxControlService, options: SandboxMcpServiceOptions) {
     this.testSpaces = options.testSpaces
+    this.allowToolPermissionEditing = options.allowToolPermissionEditing ?? false
     // 默认读本服务所在实例的被测运行时。每次读取都现取，因此被测插件重载或改配置后无需重启端点。
     this.wakeup = options.wakeup ?? new SandboxChatLunaWakeup(() => readSandboxResponderRuntimes(ctx))
     this.modelCalls = options.modelCalls ?? new SandboxChatLunaModelCalls(ctx)
@@ -706,6 +710,7 @@ export class SandboxMcpService {
     return {
       control,
       transport,
+      allowToolPermissionEditing: this.allowToolPermissionEditing,
       credentialId: credential.id,
       spaceId,
       currentCursor: () => this.currentCursor(),

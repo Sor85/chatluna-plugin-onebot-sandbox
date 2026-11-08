@@ -83,8 +83,8 @@ const PAGINATED_TOOLS = [
 
 /** 每种环境变更声明的 `data` 字段集合。`profile` 与 `remarks` 是实现一直在读却没有声明的两处。 */
 const ENVIRONMENT_CHANGE_DATA_FIELDS: Record<string, string[]> = {
-  'create-user': ['id', 'name', 'avatar', 'profile'],
-  'update-user': ['id', 'name', 'avatar', 'profile'],
+  'create-user': ['id', 'name', 'avatar', 'profile', 'authority'],
+  'update-user': ['id', 'name', 'avatar', 'profile', 'authority'],
   'create-bot': ['id', 'name', 'implementation', 'enabled', 'avatar', 'disabledCapabilities', 'profile'],
   'update-bot': ['id', 'name', 'implementation', 'enabled', 'avatar', 'disabledCapabilities', 'profile'],
   'set-capabilities': ['id', 'disabledCapabilities'],

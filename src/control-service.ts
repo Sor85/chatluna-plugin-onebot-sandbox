@@ -11,6 +11,8 @@ import { SandboxBot } from './bot'
 import { BUILTIN_AVATARS, findBuiltinAvatarByReference, getBuiltinAvatarReference, pickUnusedBuiltinAvatar } from './builtin-avatars'
 import { SandboxChannelAssignee } from './channel-assignee'
 import { SandboxChatLunaStateStore } from './chatluna/state'
+import { bindSandboxUserPermissions } from './chatluna/user-permissions'
+import { normalizeSceneUserAuthorities, normalizeUserAuthority } from './user-authority'
 import { SandboxChatConversationLines, findChatConversationHeads, type ChatConversationHeads } from './chatluna/conversation-lines'
 import {
   createInboundDelivery,
@@ -384,6 +386,7 @@ export class SandboxControlService {
   private scene: SandboxSnapshot
   private runtimeBots = new Map<string, SandboxBot>()
   private runtimeBotsActive: boolean
+  private userPermissions: ReturnType<typeof bindSandboxUserPermissions>
   private runtimeBotRegistry: SandboxRuntimeBotRegistry
   private runtimeOwner = {}
   private botDeliveries: SandboxBotDelivery[] = []
@@ -513,6 +516,11 @@ export class SandboxControlService {
       addApprovedGroupMember: ({ group, participantId, operatorId, subType }) => this
         .addApprovedGroupMember(group, participantId, operatorId, subType),
     })
+    this.userPermissions = bindSandboxUserPermissions(ctx, () => ({
+      users: this.getUsers(),
+      botIds: this.getBots().filter(({ id, enabled }) => enabled && this.runtimeBots.has(id)).map(({ id }) => id),
+    }))
+    this.contextDisposers.push(this.userPermissions.dispose)
     this.syncRuntimeBots()
     this.contextDisposers.push(onStart(ctx, async () => {
       try {
@@ -522,6 +530,10 @@ export class SandboxControlService {
       }
     }))
     this.contextDisposers.push(onDispose(ctx, () => this.dispose()))
+  }
+
+  getInitialSnapshot(): SandboxSnapshot {
+    return structuredClone(this.initialScene)
   }
 
   getSnapshot(): SandboxSnapshot {
@@ -996,6 +1008,7 @@ export class SandboxControlService {
       throw new SandboxDomainError(`参与者已存在：${id}`)
     }
 
+    const authority = normalizeUserAuthority(input.authority)
     const profile = normalizeAccountProfile(input.profile)
     const avatar = this.normalizeLocalAvatar('user', id, input.avatar)
     this.scene.participants.push({
@@ -1003,6 +1016,7 @@ export class SandboxControlService {
       id,
       name,
       avatar,
+      ...(authority !== undefined ? { authority } : {}),
       ...(profile ? { profile } : {}),
     })
     // 环境管理属于测试前置配置，可静默建立关系；WebQQ 用户操作仍必须走好友申请审批。
@@ -1013,6 +1027,7 @@ export class SandboxControlService {
   updateUser(input: UpdateSandboxUserInput): void {
     const user = this.getUsers().find(({ id }) => id === input.id)
     if (!user) throw new SandboxDomainError(`用户不存在：${input.id}`)
+    const authority = input.authority === undefined ? user.authority : normalizeUserAuthority(input.authority)
     const name = this.validateName(input.name, '用户昵称')
     const avatar = input.avatar !== undefined
       ? this.normalizeLocalAvatar('user', user.id, input.avatar)
@@ -1022,6 +1037,8 @@ export class SandboxControlService {
     if (input.profile !== undefined) profile = normalizeAccountProfile(input.profile)
     user.name = name
     user.avatar = avatar
+    if (authority === undefined) delete user.authority
+    else user.authority = authority
     if (profile) user.profile = profile
     else delete user.profile
     this.commitSceneMutation()
@@ -1799,6 +1816,7 @@ export class SandboxControlService {
   }
 
   private normalizeSceneForwards(snapshot: SandboxSnapshot): SandboxSnapshot {
+    normalizeSceneUserAuthorities(snapshot)
     snapshot.forwards = Array.isArray(snapshot.forwards) ? snapshot.forwards : []
     // 会话实例集合与 forwards 同样在读取路径补空数组，避免旧快照或半成品导入炸掉解析；
     // 那条不变量归解析模块所有，这里只调用它，不自己动实例集合。
@@ -2534,6 +2552,7 @@ export class SandboxControlService {
   }
 
   private notifySceneMutation(): void {
+    this.userPermissions.sync()
     if (!this.sceneMutationListeners.size) return
     const snapshot = this.getSnapshot()
     for (const listener of this.sceneMutationListeners) listener(snapshot)
@@ -2692,11 +2711,13 @@ export class SandboxControlService {
       runtime.status = profile.enabled ? 1 : 0
       runtime.updateImplementation(profile.implementation, profile.disabledCapabilities)
     }
+    this.userPermissions.sync()
   }
 
   private async disposeRuntimeBots(): Promise<void> {
     const runtimes = [...this.runtimeBots]
     this.runtimeBots.clear()
+    this.userPermissions.sync()
     for (const [botId] of runtimes) this.runtimeBotRegistry.release(botId, this.runtimeOwner)
     await Promise.all(runtimes.map(([, runtime]) => runtime.dispose()))
   }

@@ -33,13 +33,20 @@ export type SandboxEntitySource =
   | { type: 'main', name: string }
   | { type: 'test-space', spaceId: string, name: string }
 
+export type SandboxUserAuthority = 0 | 1 | 2 | 3 | 4 | 5
+
 export interface SandboxUser extends SandboxParticipantBase {
   kind: 'user'
+  /** ChatLuna 权限等级，不是 QQ 等级或群身份；未设置时沿用宿主权限。 */
+  authority?: SandboxUserAuthority
 }
 
 export type CreateSandboxUserInput = Omit<SandboxUser, 'kind'>
 
-export type UpdateSandboxUserInput = CreateSandboxUserInput
+export type UpdateSandboxUserInput = Omit<CreateSandboxUserInput, 'authority'> & {
+  /** 省略时保留，null 清除沙盒覆盖。 */
+  authority?: SandboxUserAuthority | null
+}
 
 export interface DeleteSandboxUserInput {
   id: string

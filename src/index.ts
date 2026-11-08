@@ -82,6 +82,7 @@ export interface Config extends SandboxAppearance {
   testEndpoint: SandboxTestEndpointConfig
   botTools: SandboxBotToolsConfig
   presetEditing: { editablePresets: string[] }
+  allowToolPermissionEditing: boolean
 }
 
 /**
@@ -179,6 +180,12 @@ const botToolFields = {
   }).description('工具调用'),
 }
 
+// 权限分配独立于 manage 范围，不能因允许编辑测试环境就让 AI 自行提权。
+const permissionEditingFields = {
+  allowToolPermissionEditing: Schema.boolean().default(false).extra('label', '允许工具修改权限等级')
+    .description('允许 MCP、HTTP 和机器人工具分配沙盒用户权限等级，包括批量修改、场景导入与重置；开启后 AI 可以提高工具执行权限，关闭时仅 WebUI 可修改'),
+}
+
 // 预设编辑同样服务于测试工具，放进测试端点分区。测试预设（`sandbox-test-`前缀）由工具自己新建，
 // 不必登记；这里只登记用户允许改动的已有预设，写权限的判定在 `src/chatluna/presets.ts`。
 const presetEditingFields = {
@@ -204,7 +211,7 @@ export const Settings = Schema.intersect([
     Schema.object(sceneMessageFields).extra('i18n', 'group.sceneMessages').description('场景消息'),
   ]).extra('i18n', 'group.storage').extra('label', '数据存储')
     .description('模拟环境的保存位置，以及消息的保留上限。上限按主环境与每个 AI 测试空间分别计算'),
-  Schema.object({ ...endpointFields, ...botToolFields, ...presetEditingFields }).extra('i18n', 'group.endpoint').extra('label', '测试端点')
+  Schema.object({ ...endpointFields, ...botToolFields, ...permissionEditingFields, ...presetEditingFields }).extra('i18n', 'group.endpoint').extra('label', '测试端点')
     .description('供 AI 客户端操控沙盒的 MCP 与 HTTP 接口，同一组工具也可以交给 ChatLuna 机器人调用。两个端点共用监听器、访问限制与调用配额，配额按测试凭证分别计数，超出返回 429'),
 ]) as unknown as Schema<Config>
 
@@ -214,7 +221,7 @@ export const Settings = Schema.intersect([
  */
 export const Config = Schema.object(
   Object.fromEntries(
-    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...endpointFields, ...botToolFields, ...presetEditingFields })
+    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...endpointFields, ...botToolFields, ...permissionEditingFields, ...presetEditingFields })
       .map(([key, field]) => [key, (field as Schema).hidden()]),
   ),
 ).description('设置在 OneBot 沙盒工作台的「设置」页编辑') as unknown as Schema<Config>
@@ -302,6 +309,7 @@ export function apply(ctx: Context, config: Config) {
       maxConcurrentUploads: config.testEndpoint.shared.maxConcurrentUploads,
       testSpaces,
       presets,
+      allowToolPermissionEditing: config.allowToolPermissionEditing,
     })
     const server = new SandboxTestEndpointServer(ctx, mcp, {
       host: config.testEndpoint.shared.host,

@@ -43,10 +43,10 @@ describe('插件持久化配置', () => {
    * 根上下文里不存在 `chatluna_usage`。一旦有人把它写回服务声明，插件配置页就会长期显示
    * 「可选服务: chatluna_usage (未加载)」，而功能其实一直正常——纯展示性错误，别的测试不会变红。
    */
-  it('包元数据的服务声明与入口 inject 一致，Database、设置页用的 chatluna_config 与机器人工具用的 tools 只作为可选服务出现', () => {
+  it('包元数据的服务声明与入口 inject 一致，Database、chatluna_config、tools 与 permissions 只作为可选服务出现', () => {
     const manifest = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
     expect(manifest.cordis.service.required).toEqual(inject)
-    expect(manifest.cordis.service.optional).toEqual(['chatluna_config', 'database', 'tools'])
+    expect(manifest.cordis.service.optional).toEqual(['chatluna_config', 'database', 'tools', 'permissions'])
   })
 
   it('场景消息保留上限可配置，且描述说明会丢弃历史消息', () => {

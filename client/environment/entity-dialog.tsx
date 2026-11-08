@@ -29,6 +29,7 @@ import {
   type SandboxAccountSex,
   type SandboxGroupMember,
   type SandboxImplementationProfile,
+  type SandboxUserAuthority,
 } from '../../src/types'
 import { useT } from '../i18n'
 import { SandboxAvatar } from '../shared/avatar'
@@ -51,6 +52,7 @@ interface Draft {
   avatar: string
   personalNote: string
   sex: 'unset' | SandboxAccountSex
+  authority: 'inherit' | SandboxUserAuthority
   implementation: SandboxImplementationProfile
   enabled: boolean
   disabledCapabilities: string[]
@@ -59,6 +61,7 @@ interface Draft {
 
 /** 「跟随路由规则」的选项值；预设 ID 由 v2 按文件名生成，不含冒号，不会与它撞上。 */
 const FOLLOW_ROUTE = 'onebot-sandbox:follow-route'
+const AUTHORITY_LEVELS = [0, 1, 2, 3, 4, 5] as const
 
 /** 机器人的预设选项：未读取、服务未加载、读取失败或读到的目录。 */
 type PresetState =
@@ -67,7 +70,7 @@ type PresetState =
   | { status: 'ready'; catalog: SandboxBotPresetCatalog }
 
 const EMPTY_DRAFT: Draft = {
-  id: '', name: '', avatar: '', personalNote: '', sex: 'unset', implementation: 'napcat', enabled: true, disabledCapabilities: [], members: [],
+  id: '', name: '', avatar: '', personalNote: '', sex: 'unset', authority: 'inherit', implementation: 'napcat', enabled: true, disabledCapabilities: [], members: [],
 }
 
 /** 编辑或删除一个用户、机器人或群组。ID 创建后不可修改；删除会连带清理相关会话与关系。 */
@@ -131,6 +134,7 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
       avatar: participant.avatar ?? '',
       personalNote: participant.profile?.personalNote ?? '',
       sex: participant.profile?.sex ?? 'unset',
+      authority: participant.kind === 'user' ? participant.authority ?? 'inherit' : 'inherit',
       ...(participant.kind === 'bot' ? {
         implementation: participant.implementation,
         enabled: participant.enabled,
@@ -187,7 +191,13 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
   const submitEdit = (event: React.FormEvent) => {
     event.preventDefault()
     if (target?.type === 'user') {
-      void runAction({ action: 'update-user', data: { id: draft.id, name: draft.name, avatar: draft.avatar, profile: accountProfile() } })
+      void runAction({
+        action: 'update-user',
+        data: {
+          id: draft.id, name: draft.name, avatar: draft.avatar, profile: accountProfile(),
+          authority: draft.authority === 'inherit' ? null : draft.authority,
+        },
+      })
     } else if (target?.type === 'bot') {
       void runAction({
         action: 'update-bot',
@@ -266,6 +276,13 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
     : presetState.status === 'failed'
       ? t('sandbox.entity.presetFailed', { error: presetState.error })
       : presetState.catalog.available ? t('sandbox.entity.presetHint') : t('sandbox.entity.presetUnavailable')
+  const authorityItems = [
+    { value: 'inherit', label: t('sandbox.entity.authorityInherit') },
+    ...AUTHORITY_LEVELS.map((level) => ({
+      value: String(level),
+      label: level === 0 ? t('sandbox.entity.authorityDisabled') : t('sandbox.entity.authorityLevel', { level }),
+    })),
+  ]
   const roleItems = [
     { value: 'owner', label: t('sandbox.role.owner') },
     { value: 'admin', label: t('sandbox.role.admin') },
@@ -274,7 +291,7 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
 
   return (
     <Dialog open={open} onOpenChange={(next) => next ? onOpenChange(true) : requestClose()}>
-      <DialogContent className={cn('flex flex-col overflow-hidden', mode === 'edit' && 'sm:max-w-lg')}>
+      <DialogContent className={cn('sandbox-entity-dialog flex flex-col overflow-hidden', mode === 'edit' && 'sm:max-w-lg')}>
         <DialogHeader>
           <DialogTitle>{t(mode === 'edit' ? 'sandbox.entity.editTitle' : 'sandbox.entity.deleteTitle', { kind: entityLabel })}</DialogTitle>
           <DialogDescription>{t(mode === 'edit' ? 'sandbox.entity.editHint' : 'sandbox.entity.deleteHint')}</DialogDescription>
@@ -342,6 +359,27 @@ export function EntityDialog({ open, mode, target, onOpenChange }: {
                     )}
                   </div>
                 </section>
+                {type === 'user' && (
+                  <section className="sandbox-entity-section">
+                    <h3 className="sandbox-entity-section-title">{t('sandbox.entity.section.runtime')}</h3>
+                    <div className="sandbox-entity-field">
+                      <Label htmlFor="sandbox-entity-authority">{t('sandbox.entity.authority')}</Label>
+                      <Select
+                        value={String(draft.authority)}
+                        items={authorityItems}
+                        onValueChange={(value) => value && setDraft((current) => ({
+                          ...current, authority: AUTHORITY_LEVELS.find((level) => String(level) === value) ?? 'inherit',
+                        }))}
+                      >
+                        <SelectTrigger id="sandbox-entity-authority" className="w-full" aria-describedby="sandbox-entity-authority-hint"><SelectValue /></SelectTrigger>
+                        <SelectContent className="sandbox-glass">
+                          {authorityItems.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <p id="sandbox-entity-authority-hint" className="sandbox-entity-hint">{t('sandbox.entity.authorityHint')}</p>
+                    </div>
+                  </section>
+                )}
                 {type === 'bot' && (
                   <section className="sandbox-entity-section">
                     <h3 className="sandbox-entity-section-title">{t('sandbox.entity.section.runtime')}</h3>

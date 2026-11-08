@@ -67,6 +67,7 @@
   "devDependencies": {
     "@chatluna/chat": "workspace:*",
     "@chatluna/core": "workspace:*",
+    "@chatluna/permission": "workspace:*",
     "@chatluna/preset": "workspace:*",
     "@chatluna/runtime-config": "workspace:*",
     "@chatluna/schema": "workspace:*",
@@ -110,7 +111,8 @@
       "optional": [
         "chatluna_config",
         "database",
-        "tools"
+        "tools",
+        "permissions"
       ]
     }
   }

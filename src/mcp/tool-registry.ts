@@ -32,6 +32,7 @@ import type {
   SandboxSnapshot,
 } from '../types'
 import { SandboxOneBotDebugCursorExpiredError } from '../types'
+import { normalizeUserAuthority } from '../user-authority'
 import { argumentsFingerprint, asRecord, optionalBoolean, optionalEnum, optionalNumber, requireNumber, requireString } from './arguments'
 import {
   DEFAULT_TEST_CALL_PAGE_SIZE,
@@ -102,6 +103,7 @@ export interface SandboxMcpConfirmation {
 export interface SandboxMcpToolRuntime {
   /** 本次调用的控制服务：按条目的 `spaceResolution` 解析；`none` 时是主场景控制服务。 */
   readonly control: SandboxControlService
+  readonly allowToolPermissionEditing: boolean
   /** 承载本次调用的协议表述，只用于服务自述与调用记录标注。 */
   readonly transport: SandboxTestCallTransport
   /** 发起本次调用的测试凭证标识，用于登记一次性确认令牌。 */
@@ -312,6 +314,12 @@ const GROUP_MEMBERS = {
   },
 }
 
+const USER_AUTHORITY = {
+  type: ['number', 'null'],
+  enum: [0, 1, 2, 3, 4, 5, null],
+  description: 'ChatLuna 用户权限等级 0–5，0 禁用；只作用于所在场景的活动沙盒机器人，不是 QQ 等级或群身份。省略时保留现值，null 恢复宿主权限；须由用户在 WebUI 开启“允许工具修改权限等级”，默认关闭；工具的显式拒绝与审批规则仍生效',
+}
+
 // 判别联合：每种环境变更各自声明必填字段，MCP 客户端不必从一段散文描述里猜参数。
 const ENVIRONMENT_CHANGE_SCHEMAS = [
   {
@@ -321,7 +329,7 @@ const ENVIRONMENT_CHANGE_SCHEMAS = [
       action: { const: 'create-user' },
       data: {
         type: 'object',
-        properties: { id: PARTICIPANT_ID, name: { type: 'string' }, avatar: { type: 'string' }, profile: PROFILE },
+        properties: { id: PARTICIPANT_ID, name: { type: 'string' }, avatar: { type: 'string' }, profile: PROFILE, authority: USER_AUTHORITY },
         required: ['id', 'name'],
       },
     },
@@ -333,7 +341,7 @@ const ENVIRONMENT_CHANGE_SCHEMAS = [
       action: { const: 'update-user' },
       data: {
         type: 'object',
-        properties: { id: PARTICIPANT_ID, name: { type: 'string' }, avatar: { type: 'string' }, profile: PROFILE_PATCH },
+        properties: { id: PARTICIPANT_ID, name: { type: 'string' }, avatar: { type: 'string' }, profile: PROFILE_PATCH, authority: USER_AUTHORITY },
         required: ['id', 'name'],
       },
     },
@@ -1251,6 +1259,24 @@ async function waitForChatLunaState(runtime: SandboxMcpToolRuntime, args: Record
 
 // —— 执行体：环境变更 ——
 
+function requirePermissionEditing(runtime: SandboxMcpToolRuntime): void {
+  if (!runtime.allowToolPermissionEditing) {
+    throw new SandboxMcpError('permission_denied', '测试工具修改权限等级的开关未开启，仅允许通过 WebUI 分配权限。')
+  }
+}
+
+/** 整块快照也不能暗中授予或清除覆盖；未改变等级的导入、正常删除实体仍可执行。 */
+function checkScenePermissionChanges(runtime: SandboxMcpToolRuntime, next: SandboxSnapshot): void {
+  if (runtime.allowToolPermissionEditing) return
+  const previous = new Map(runtime.control.getSnapshot().participants
+    .filter((participant) => participant.kind === 'user')
+    .map(({ id, authority }) => [id, authority]))
+  for (const participant of next.participants) {
+    if (participant.kind !== 'user') continue
+    if (normalizeUserAuthority(participant.authority) !== previous.get(participant.id)) requirePermissionEditing(runtime)
+  }
+}
+
 async function applyEnvironmentChanges(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>) {
   const control = runtime.control
   assertRevision(control, args.expectedRevision)
@@ -1260,12 +1286,17 @@ async function applyEnvironmentChanges(runtime: SandboxMcpToolRuntime, args: Rec
     const change = asRecord(raw)
     const action = requireString(change.action, 'change.action')
     const data = asRecord(change.data)
+    if ((action === 'create-user' || action === 'update-user') && data.authority !== undefined) {
+      requirePermissionEditing(runtime)
+    }
     if (action === 'create-user') {
+      const authority = normalizeUserAuthority(data.authority)
       const profile = parseAccountProfileFromUnknown(data.profile)
       const id = requireString(data.id, 'id')
       snapshot.participants.push({
         kind: 'user',
         id,
+        ...(authority !== undefined ? { authority } : {}),
         name: requireString(data.name, 'name'),
         avatar: await control.importAvatar('user', id, typeof data.avatar === 'string' ? data.avatar : undefined),
         ...(profile ? { profile } : {}),
@@ -1306,7 +1337,12 @@ async function applyEnvironmentChanges(runtime: SandboxMcpToolRuntime, args: Rec
     }
     else if (action === 'update-user') {
       const participant = snapshot.participants.find(({ id, kind }) => id === data.id && kind === 'user')
-      if (!participant) throw new SandboxMcpError('participant_not_found', `用户不存在：${String(data.id)}`)
+      if (!participant || participant.kind !== 'user') throw new SandboxMcpError('participant_not_found', `用户不存在：${String(data.id)}`)
+      if (data.authority !== undefined) {
+        const authority = normalizeUserAuthority(data.authority)
+        if (authority === undefined) delete participant.authority
+        else participant.authority = authority
+      }
       participant.name = requireString(data.name, 'name')
       participant.avatar = await control.importAvatar('user', participant.id, typeof data.avatar === 'string' ? data.avatar : undefined)
       if (data.profile !== undefined) {
@@ -1407,7 +1443,9 @@ function clearScene(runtime: SandboxMcpToolRuntime): void {
 function importScene(runtime: SandboxMcpToolRuntime, args: Record<string, unknown>): void {
   const document = asRecord(args.document)
   if (document.testApiVersion !== 1) throw new SandboxMcpError('unsupported_scene_version', '仅支持 testApiVersion 1')
-  runtime.control.replaceScene(asRecord(document.scene) as unknown as SandboxSnapshot)
+  const snapshot = asRecord(document.scene) as unknown as SandboxSnapshot
+  checkScenePermissionChanges(runtime, snapshot)
+  runtime.control.replaceScene(snapshot)
 }
 
 // —— 执行体：OneBot 调试记录 ——
@@ -2034,7 +2072,10 @@ const TOOL_ENTRIES: SandboxMcpToolEntry[] = [
     inputSchema: { type: 'object', properties: { spaceId: SPACE_REQUIRED, confirmationToken: { type: 'string' } }, required: ['spaceId', 'confirmationToken'] },
     outputSchema: DESTRUCTIVE_OUTPUT,
     quota: 'mutation', spaceResolution: 'mutation', idempotent: false, requiresConfirmation: true,
-    run: (runtime) => runtime.control.resetScene(),
+    run: (runtime) => {
+      checkScenePermissionChanges(runtime, runtime.control.getInitialSnapshot())
+      runtime.control.resetScene()
+    },
   },
   {
     name: 'clear_scene',

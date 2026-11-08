@@ -65,6 +65,20 @@ async function createControl(
 }
 
 describe('沙盒场景持久化', () => {
+  it('用户权限覆盖经持久化恢复，未设置和 0 级不混淆', async () => {
+    const persistence = new TestScenePersistence()
+    const { app, control } = await createControl(persistence)
+    control.updateUser({ id: '10001', name: '高权用户', authority: 4 })
+    control.updateUser({ id: '10002', name: '禁用用户', authority: 0 })
+    await control.waitForPersistence()
+    await app.stop()
+    const { control: restored } = await createControl(persistence)
+    const users = restored.getSnapshot().participants
+    expect(users.find(({ id }) => id === '10001')).toMatchObject({ authority: 4 })
+    expect(users.find(({ id }) => id === '10002')).toMatchObject({ authority: 0 })
+    expect(users.find(({ id }) => id === '10003')).not.toHaveProperty('authority')
+  })
+
   it('默认使用服务端内存且重启后恢复默认场景', async () => {
     const mediaDirectory = await mkdtemp(join(tmpdir(), 'chatluna-sandbox-memory-media-'))
     temporaryDirectories.push(mediaDirectory)

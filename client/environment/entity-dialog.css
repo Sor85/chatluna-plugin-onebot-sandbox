@@ -3,6 +3,11 @@
  * 本文件不分层，压过 ui-kit 在宿主 utilities 层里的工具类。
  */
 
+.sandbox-entity-dialog {
+  font-size: 13px;
+  line-height: 20px;
+}
+
 /* 正文：外层负边距贴到弹窗两侧，自绘滚动条画在弹窗内缘；上下留 2px，输入框的焦点环不被裁掉。 */
 .sandbox-entity-body {
   position: relative;
