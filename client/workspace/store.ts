@@ -85,6 +85,7 @@ export interface WorkspaceView {
 export class WorkspaceStore {
   private view: WorkspaceView = { media: {}, mediaFailures: {} }
   private listeners = new Set<() => void>()
+  private loadTask: Promise<void> | undefined
   private refreshTask: Promise<void> | undefined
   private pendingRefresh = false
   private mediaLoading = new Set<string>()
@@ -137,6 +138,7 @@ export class WorkspaceStore {
   }
 
   private replaceWorkspace(workspace: SandboxWorkspaceState, preferred: SandboxWorkspaceSelection = {}, persist = true) {
+    if (this.disposed) return
     const selection = resolveWorkspaceSelection(workspace.snapshot, {
       currentOperatorId: preferred.currentOperatorId ?? this.view.currentOperatorId,
       activeConversationId: preferred.activeConversationId ?? this.view.activeConversationId,
@@ -166,20 +168,28 @@ export class WorkspaceStore {
     this.replaceWorkspace(workspace, readSelection(this.spaceId), false)
   }
 
-  async load() {
+  load() {
+    if (this.loadTask) return this.loadTask
     const stored = readSelection(this.spaceId)
-    try {
-      let workspace: SandboxWorkspaceState
+    const operatorId = this.view.currentOperatorId
+    this.loadTask = (async () => {
       try {
-        workspace = await invoke('onebot-sandbox.workspace', this.scoped(stored.currentOperatorId ? { operatorId: stored.currentOperatorId } : {}))
-      } catch {
-        // 本地记住的操作者可能已被删除；退回默认视角再解析一次选择。
-        workspace = await invoke('onebot-sandbox.workspace', this.scoped({}))
+        let workspace: SandboxWorkspaceState
+        try {
+          workspace = await invoke('onebot-sandbox.workspace', this.scoped(stored.currentOperatorId ? { operatorId: stored.currentOperatorId } : {}))
+        } catch {
+          // 本地记住的操作者可能已被删除；退回默认视角再解析一次选择。
+          workspace = await invoke('onebot-sandbox.workspace', this.scoped({}))
+        }
+        if (operatorId !== this.view.currentOperatorId) return
+        this.replaceWorkspace(workspace, stored)
+      } catch (error) {
+        this.set({ loadError: errorText(error, translate('sandbox.error.loadWorkspace')) })
+      } finally {
+        this.loadTask = undefined
       }
-      this.replaceWorkspace(workspace, stored)
-    } catch (error) {
-      this.set({ loadError: errorText(error, translate('sandbox.error.loadWorkspace')) })
-    }
+    })()
+    return this.loadTask
   }
 
   /** 场景变更广播只是失效信号；多次信号合并成串行的若干次读取，不会并发打满。 */
@@ -189,10 +199,18 @@ export class WorkspaceStore {
     this.refreshTask = (async () => {
       try {
         while (this.pendingRefresh && !this.disposed) {
+          // 初次加载会恢复本地操作者；提前请求会按默认用户裁剪，随后覆盖掉当前用户的私聊。
+          await this.loadTask
+          if (this.disposed) break
           this.pendingRefresh = false
+          if (!this.view.workspace) continue
           const operatorId = this.view.currentOperatorId
           try {
             const workspace = await invoke('onebot-sandbox.workspace', this.scoped(operatorId ? { operatorId } : {}))
+            if (operatorId !== this.view.currentOperatorId) {
+              this.pendingRefresh = true
+              continue
+            }
             if (workspace.snapshot.revision >= (this.snapshot?.revision ?? 0)) this.replaceWorkspace(workspace)
           } catch {
             // 刷新失败保留当前画面，下一次信号会再试。
@@ -211,7 +229,6 @@ export class WorkspaceStore {
 
   async selectOperator(participantId: string) {
     const workspace = await invoke('onebot-sandbox.workspace', this.scoped({ operatorId: participantId }))
-    this.set({ currentOperatorId: participantId })
     this.replaceWorkspace(workspace, { currentOperatorId: participantId })
   }
 
