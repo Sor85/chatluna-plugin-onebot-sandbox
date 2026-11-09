@@ -95,9 +95,11 @@ describe('真实 ChatLuna 工具权限门禁', () => {
 
   it.each([0, 1, 2, 3, 4, 5] as const)('%i 级精确生效，不被宿主默认等级抬高', async (authority) => {
     const { control, permissions } = await createControl()
+    // 自定义档位而不用 v2 内置的 `exec`：内置权限的默认档位随宿主版本调整，这里只验证等级逐档落到 allow/ask/deny。
+    permissions.define('sandbox-test:tiered', { allow: 4, ask: 3 })
     control.updateUser({ id: '10001', name: '权限用户', authority })
     expect(await permissions.levelOf(subject)).toBe(authority)
-    expect(await permissions.evaluate('exec', { subject })).toMatchObject({ level: authority, effect: authority >= 4 ? 'allow' : authority === 3 ? 'ask' : 'deny' })
+    expect(await permissions.evaluate('sandbox-test:tiered', { subject })).toMatchObject({ level: authority, effect: authority >= 4 ? 'allow' : authority === 3 ? 'ask' : 'deny' })
   })
 
   it('不改全局用户等级，其他机器人、平台与用户不借用授权', async () => {
