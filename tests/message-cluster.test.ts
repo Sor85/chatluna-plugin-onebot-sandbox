@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { SandboxMessage } from '../src/types'
 import {
   getMessageClusterClass,
-  isImageOnlyMessage,
   isMergedMessage,
 } from '../client/webqq/message-cluster'
 
@@ -34,23 +33,24 @@ describe('TIM 消息簇', () => {
     expect(getMessageClusterClass([message('1', '10001'), message('2', '10001')], 0, '10001')).toBe('is-cluster-first')
   })
 
-  it('纯图片消息不打断前后文本气泡的连续圆角', () => {
-    const image = {
-      ...message('image', '20001', '[图片] example.png'),
-      media: [{
-        id: 'media:image',
-        type: 'image' as const,
-        name: 'example.png',
-        mimeType: 'image/png',
-        size: 1,
-        reference: 'image.bin',
-      }],
-    }
-    const messages = [message('1', '20001'), image, message('2', '20001')]
+  describe.each(['10001', '20001'])('发送者 %s 的图片气泡', (authorId) => {
+    it.each([
+      { name: '文字接图片', kinds: ['text', 'image'], clusters: ['is-cluster-first', 'is-cluster-last'] },
+      { name: '图片接文字', kinds: ['image', 'text'], clusters: ['is-cluster-first', 'is-cluster-last'] },
+      { name: '两条文字接图片', kinds: ['text', 'text', 'image'], clusters: ['is-cluster-first', 'is-cluster-middle', 'is-cluster-last'] },
+      { name: '文字之间的图片', kinds: ['text', 'image', 'text'], clusters: ['is-cluster-first', 'is-cluster-middle', 'is-cluster-last'] },
+      { name: '图片之间的文字', kinds: ['image', 'text', 'image'], clusters: ['is-cluster-first', 'is-cluster-middle', 'is-cluster-last'] },
+      { name: '两张连续图片', kinds: ['image', 'image'], clusters: ['is-cluster-first', 'is-cluster-last'] },
+      { name: '三张连续图片', kinds: ['image', 'image', 'image'], clusters: ['is-cluster-first', 'is-cluster-middle', 'is-cluster-last'] },
+    ])('$name 与普通文字气泡使用相同的首中尾圆角', ({ kinds, clusters }) => {
+      const messages: SandboxMessage[] = kinds.map((kind, index) => kind === 'image' ? {
+        ...message(`image-${index}`, authorId, '[图片] example.png'),
+        media: [{ id: `media:${index}`, type: 'image', name: 'example.png', mimeType: 'image/png', size: 1, reference: 'image.bin' }],
+      } : message(`text-${index}`, authorId))
 
-    expect(isImageOnlyMessage(image)).toBe(true)
-    expect(getMessageClusterClass(messages, 0, '10001')).toBe('is-cluster-first')
-    expect(getMessageClusterClass(messages, 2, '10001')).toBe('is-cluster-last')
+      expect(messages.map((_, index) => getMessageClusterClass(messages, index, '10001'))).toEqual(clusters)
+      expect(messages.map((_, index) => isMergedMessage(messages, index, '10001'))).toEqual(kinds.map((_, index) => index > 0))
+    })
   })
 
   it('戳一戳事件会中断连续消息合并', () => {

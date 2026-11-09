@@ -95,6 +95,20 @@ describe('等待气泡接续消息簇', () => {
     expect(rows[3].body).not.toContain('sandbox-message-sender-line')
   })
 
+  it.each(['10001', '20001'])('发送者 %s 的文字接图片按首中尾连续收角', (authorId) => {
+    const image: SandboxMessage = {
+      ...message('图片', authorId), content: '[图片] example.png',
+      media: [{ id: 'image', type: 'image', name: 'example.png', mimeType: 'image/png', size: 1, reference: 'image.bin' }],
+    }
+    const rows = renderMessages([message('首条文字', authorId), message('第二条文字', authorId), image], [])
+    expect(rows).toHaveLength(3)
+    expect(rows[0].attributes).toContain('is-cluster-first')
+    expect(rows[1].attributes).toContain('is-cluster-middle')
+    expect(rows[2].attributes).toContain('is-cluster-last')
+    expect(rows[2].attributes).toContain('is-merged')
+    expect(rows[2].body).not.toContain('sandbox-message-sender-line')
+  })
+
   it.each(['10001', '20002'])('不跨过其他发送者 %s 的消息合并', (authorId) => {
     const rows = renderMessages([message('机器人回复'), message('插话', authorId)])
     expect(rows[0].attributes).not.toContain('is-cluster')

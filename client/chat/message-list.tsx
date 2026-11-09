@@ -237,7 +237,6 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
   const clusterMessages = [...props.messages, ...thinkingStates.map((state) => ({
     authorId: state.botParticipantId,
     conversationId: state.conversationId,
-    content: '',
   }))]
   const empty = !props.messages.length && !thinkingStates.length
   const peerKind = group ? 'group' : participants[conversation?.participantIds?.find((id) => id !== operatorId) ?? '']?.isBot ? 'bot' : 'user'

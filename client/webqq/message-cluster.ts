@@ -1,15 +1,7 @@
 import type { SandboxMessage } from '../../src/types'
 
 // 分组只读取呈现字段，等待气泡无需伪造消息 ID 或写入历史。
-type MessageClusterItem = Pick<SandboxMessage, 'authorId' | 'conversationId' | 'content' | 'media' | 'event'>
-
-export function isImageOnlyMessage(message: MessageClusterItem | undefined) {
-  const media = message?.media
-  return !!message
-    && media?.length === 1
-    && media[0].type === 'image'
-    && message.content === `[图片] ${media[0].name}`
-}
+type MessageClusterItem = Pick<SandboxMessage, 'authorId' | 'conversationId' | 'event'>
 
 function getDirection(message: MessageClusterItem | undefined, currentOperatorId: string | undefined) {
   if (!message) return
@@ -33,21 +25,6 @@ function isSameClusterSender(
     && getDirection(left, currentOperatorId) === getDirection(right, currentOperatorId)
 }
 
-function getClusterBubbleMessage(
-  messages: MessageClusterItem[],
-  index: number,
-  step: 1 | -1,
-  currentOperatorId: string | undefined,
-) {
-  const message = messages[index]
-  if (!message) return
-  for (let cursor = index + step; cursor >= 0 && cursor < messages.length; cursor += step) {
-    const candidate = messages[cursor]
-    if (!isSameClusterSender(message, candidate, currentOperatorId)) return
-    if (!isImageOnlyMessage(candidate)) return candidate
-  }
-}
-
 export function isMergedMessage(
   messages: MessageClusterItem[],
   index: number,
@@ -62,8 +39,8 @@ export function getMessageClusterClass(
   currentOperatorId: string | undefined,
 ) {
   if (!messages[index]) return ''
-  const hasPrevious = !!getClusterBubbleMessage(messages, index, -1, currentOperatorId)
-  const hasNext = !!getClusterBubbleMessage(messages, index, 1, currentOperatorId)
+  const hasPrevious = isMergedMessage(messages, index, currentOperatorId)
+  const hasNext = isMergedMessage(messages, index + 1, currentOperatorId)
   if (hasPrevious && hasNext) return 'is-cluster-middle'
   if (hasNext) return 'is-cluster-first'
   if (hasPrevious) return 'is-cluster-last'
