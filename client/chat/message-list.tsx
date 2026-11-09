@@ -233,6 +233,12 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
   React.useEffect(() => () => clearTimeout(highlightTimer.current), [])
 
   const thinkingStates = props.chatLunaStates.filter(({ thinking }) => thinking)
+  // 等待气泡按实际显示顺序参与分组，复用连续消息的头像、间距与圆角规则。
+  const clusterMessages = [...props.messages, ...thinkingStates.map((state) => ({
+    authorId: state.botParticipantId,
+    conversationId: state.conversationId,
+    content: '',
+  }))]
   const empty = !props.messages.length && !thinkingStates.length
   const peerKind = group ? 'group' : participants[conversation?.participantIds?.find((id) => id !== operatorId) ?? '']?.isBot ? 'bot' : 'user'
 
@@ -308,8 +314,8 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                 const outgoing = message.authorId === operatorId
                 const direction = outgoing ? 'is-outgoing' : 'is-incoming'
                 const capabilities = readMessageCapabilities(message, presentation)
-                const merged = isMergedMessage(props.messages, index, operatorId)
-                const cluster = getMessageClusterClass(props.messages, index, operatorId)
+                const merged = isMergedMessage(clusterMessages, index, operatorId)
+                const cluster = getMessageClusterClass(clusterMessages, index, operatorId)
                 const recalled = isRecalledMessage(message)
                 const inherited = isInheritedMessage(message, presentation)
                 const selected = props.selectedIds.includes(message.id)
@@ -570,30 +576,40 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                   </React.Fragment>
                 )
               })}
-              {thinkingStates.map((state) => (
-                <li
-                  key={`${state.botParticipantId}:${state.conversationId}`}
-                  className={cn('sandbox-message-row', state.botParticipantId === operatorId ? 'is-outgoing' : 'is-incoming')}
-                >
-                  <span className="sandbox-message-avatar-wrap">
-                    <SandboxAvatar kind="bot" name={participants[state.botParticipantId]?.name} src={participants[state.botParticipantId]?.avatar} className="size-8" />
-                  </span>
-                  <div className="sandbox-message-content">
-                    {/* 等待气泡复用普通消息的 sender-line + body 结构：少了包裹层会丢掉两者之间的 6px 间距，
-                        被替换成真实消息时会整体下跳。 */}
-                    <div className="sandbox-message-sender-line">
-                      <span>{participants[state.botParticipantId]?.name ?? state.botParticipantId}</span>
-                    </div>
-                    <div className="sandbox-message-body">
-                      <div className="sandbox-message-bubble" aria-label={t('sandbox.chat.thinking')}>
-                        <span className="sandbox-message-thinking-dots">
-                          {[0, 1, 2].map((dot) => <span key={dot} className="sandbox-message-thinking-dot" />)}
-                        </span>
+              {thinkingStates.map((state, index) => {
+                const clusterIndex = props.messages.length + index
+                const merged = isMergedMessage(clusterMessages, clusterIndex, operatorId)
+                return (
+                  <li
+                    key={`${state.botParticipantId}:${state.conversationId}`}
+                    className={cn(
+                      'sandbox-message-row',
+                      state.botParticipantId === operatorId ? 'is-outgoing' : 'is-incoming',
+                      getMessageClusterClass(clusterMessages, clusterIndex, operatorId),
+                      merged && 'is-merged',
+                    )}
+                  >
+                    <span className="sandbox-message-avatar-wrap">
+                      <SandboxAvatar kind="bot" name={participants[state.botParticipantId]?.name} src={participants[state.botParticipantId]?.avatar} className="size-8" />
+                    </span>
+                    <div className="sandbox-message-content">
+                      {/* 等待气泡复用普通消息的 sender-line + body 结构；合并时省略昵称，头像由 is-merged 隐藏并保留占位。 */}
+                      {!merged && (
+                        <div className="sandbox-message-sender-line">
+                          <span>{participants[state.botParticipantId]?.name ?? state.botParticipantId}</span>
+                        </div>
+                      )}
+                      <div className="sandbox-message-body">
+                        <div className="sandbox-message-bubble" aria-label={t('sandbox.chat.thinking')}>
+                          <span className="sandbox-message-thinking-dots">
+                            {[0, 1, 2].map((dot) => <span key={dot} className="sandbox-message-thinking-dot" />)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ol>
           )}
         </ContextMenuTrigger>

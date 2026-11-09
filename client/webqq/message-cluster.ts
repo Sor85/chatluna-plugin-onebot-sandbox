@@ -1,6 +1,9 @@
 import type { SandboxMessage } from '../../src/types'
 
-export function isImageOnlyMessage(message: SandboxMessage | undefined) {
+// 分组只读取呈现字段，等待气泡无需伪造消息 ID 或写入历史。
+type MessageClusterItem = Pick<SandboxMessage, 'authorId' | 'conversationId' | 'content' | 'media' | 'event'>
+
+export function isImageOnlyMessage(message: MessageClusterItem | undefined) {
   const media = message?.media
   return !!message
     && media?.length === 1
@@ -8,14 +11,14 @@ export function isImageOnlyMessage(message: SandboxMessage | undefined) {
     && message.content === `[图片] ${media[0].name}`
 }
 
-function getDirection(message: SandboxMessage | undefined, currentOperatorId: string | undefined) {
+function getDirection(message: MessageClusterItem | undefined, currentOperatorId: string | undefined) {
   if (!message) return
   return message.authorId === currentOperatorId ? 'outgoing' : 'incoming'
 }
 
 function isSameClusterSender(
-  left: SandboxMessage | undefined,
-  right: SandboxMessage | undefined,
+  left: MessageClusterItem | undefined,
+  right: MessageClusterItem | undefined,
   currentOperatorId: string | undefined,
 ) {
   return !!left
@@ -31,7 +34,7 @@ function isSameClusterSender(
 }
 
 function getClusterBubbleMessage(
-  messages: SandboxMessage[],
+  messages: MessageClusterItem[],
   index: number,
   step: 1 | -1,
   currentOperatorId: string | undefined,
@@ -46,7 +49,7 @@ function getClusterBubbleMessage(
 }
 
 export function isMergedMessage(
-  messages: SandboxMessage[],
+  messages: MessageClusterItem[],
   index: number,
   currentOperatorId: string | undefined,
 ) {
@@ -54,7 +57,7 @@ export function isMergedMessage(
 }
 
 export function getMessageClusterClass(
-  messages: SandboxMessage[],
+  messages: MessageClusterItem[],
   index: number,
   currentOperatorId: string | undefined,
 ) {
