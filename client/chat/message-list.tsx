@@ -13,7 +13,6 @@ import {
   HandIcon,
   IdCardIcon,
   ListChecksIcon,
-  PaperclipIcon,
   PencilIcon,
   ReplyIcon,
   SmilePlusIcon,
@@ -43,7 +42,6 @@ import { formatSandboxTimeOfDay } from '../shared/format-time'
 import { OverlayScrollbar } from '../shared/overlay-scrollbar'
 import { getMessageClusterClass, isMergedMessage } from '../webqq/message-cluster'
 import {
-  formatMediaSize,
   getEventMessageText,
   getForwardPreview,
   getMessageText,
@@ -74,6 +72,7 @@ import type { SandboxChatLunaState, SandboxForwardPreview } from '../../src/type
 import type { FriendMenuState } from '../webqq/friend-menu'
 import { useSandbox, useWorkspace } from '../workspace/context'
 import { ExtensionMark } from './extension-mark'
+import { FileMessage, VoiceMessage } from './media-attachments'
 import { GroupMemberMenuItems } from './member-menu'
 import { MessageReactions } from './reactions'
 import './messages.css'
@@ -245,10 +244,15 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
 
   const renderMedia = (message: SandboxMessage) => message.media?.map((item) => {
     const source = media[item.id]
+    const failed = !source && !!mediaFailures[item.id]
     return (
       <div key={item.id} className="sandbox-message-media">
-        {!source ? (
-          <span className="sandbox-message-media-loading">{mediaFailures[item.id] ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
+        {item.type === 'audio' ? (
+          <VoiceMessage media={item} source={source} failed={failed} disabled={props.selectionMode} />
+        ) : item.type === 'file' ? (
+          <FileMessage media={item} source={source} failed={failed} />
+        ) : !source ? (
+          <span className="sandbox-message-media-loading">{failed ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
         ) : item.type === 'image' ? (
           <button type="button" className="sandbox-message-image" aria-label={t('sandbox.media.viewImage')} onClick={(event) => {
             if (props.selectionMode) return
@@ -257,15 +261,8 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
           }}>
             <img src={source} alt={item.name} />
           </button>
-        ) : item.type === 'audio' ? (
-          <audio src={source} controls preload="metadata" />
-        ) : item.type === 'video' ? (
-          <video src={source} controls preload="metadata" />
         ) : (
-          <a href={source} download={item.name} className="sandbox-message-file">
-            <PaperclipIcon className="size-[18px]" />
-            <span><strong>{item.name}</strong><small>{formatMediaSize(item.size)}</small></span>
-          </a>
+          <video src={source} controls preload="metadata" />
         )}
       </div>
     )
@@ -502,7 +499,7 @@ export const MessageList = React.forwardRef<MessageListHandle, MessageListProps>
                         if (!selectable) return
                         // 右键菜单经 Portal 渲染，React 事件仍沿组件树冒泡到这里：点「多选」进入多选后，同一次点击会把刚选中的这条切回未选。
                         if (!event.currentTarget.contains(event.target as Node)) return
-                        if ((event.target as HTMLElement).closest('a,button,audio,video')) return
+                        if ((event.target as HTMLElement).closest('a,button,audio,video,[role="slider"]')) return
                         props.onToggleSelection(message.id)
                       }}
                     >

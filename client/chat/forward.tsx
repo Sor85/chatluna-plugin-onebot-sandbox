@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { ChevronRightIcon, PaperclipIcon, SearchIcon } from 'lucide-react'
+import { ChevronRightIcon, SearchIcon } from 'lucide-react'
 import {
   Button,
   cn,
@@ -21,9 +21,10 @@ import { useRetained } from '../shared/use-retained'
 import type { ForwardDialogFrame } from '../webqq/forward-dialog-stack'
 import { getForwardNodeClusterClass, isMergedForwardNode } from '../webqq/forward-cluster'
 import { buildForwardPreview } from '../webqq/forward-preview'
-import { formatMediaSize, getMediaLabel } from '../webqq/message-presentation'
+import { getMediaLabel } from '../webqq/message-presentation'
 import { useWorkspace } from '../workspace/context'
 import { errorText } from '../workspace/store'
+import { FileMessage, VoiceMessage } from './media-attachments'
 import './messages.css'
 
 export interface ForwardTargetOption {
@@ -217,23 +218,21 @@ function ForwardFrameDialog({ stack, depth, imageOpen, onCloseFrom, onOpenForwar
                             )}
                             {item.media?.map((entry) => {
                               const source = media[entry.id]
+                              const failed = !source && !!mediaFailures[entry.id]
                               return (
                                 <div key={entry.id} className="sandbox-message-media">
-                                  {!source ? (
-                                    <span className="sandbox-message-media-loading">{mediaFailures[entry.id] ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
+                                  {entry.type === 'audio' ? (
+                                    <VoiceMessage media={entry} source={source} failed={failed} />
+                                  ) : entry.type === 'file' ? (
+                                    <FileMessage media={entry} source={source} failed={failed} />
+                                  ) : !source ? (
+                                    <span className="sandbox-message-media-loading">{failed ? t('sandbox.media.unavailable') : t('sandbox.media.loading')}</span>
                                   ) : entry.type === 'image' ? (
                                     <button type="button" className="sandbox-message-image" aria-label={t('sandbox.media.viewImage')} onClick={() => onOpenImage(source)}>
                                       <img src={source} alt={entry.name} />
                                     </button>
-                                  ) : entry.type === 'audio' ? (
-                                    <audio src={source} controls preload="metadata" />
-                                  ) : entry.type === 'video' ? (
-                                    <video src={source} controls preload="metadata" />
                                   ) : (
-                                    <a href={source} download={entry.name} className="sandbox-message-file">
-                                      <PaperclipIcon className="size-[18px]" />
-                                      <span><strong>{entry.name}</strong><small>{formatMediaSize(entry.size)}</small></span>
-                                    </a>
+                                    <video src={source} controls preload="metadata" />
                                   )}
                                 </div>
                               )

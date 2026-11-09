@@ -115,8 +115,8 @@
 }
 
 .sandbox-message-row.is-recalled .sandbox-message-media img,
-.sandbox-message-row.is-recalled .sandbox-message-media audio,
 .sandbox-message-row.is-recalled .sandbox-message-media video,
+.sandbox-message-row.is-recalled .sandbox-message-voice,
 .sandbox-message-row.is-recalled .sandbox-message-file {
   opacity: 0.72;
   filter: grayscale(0.15);
@@ -535,54 +535,238 @@
   object-fit: contain;
 }
 
-.sandbox-message-media audio {
-  width: min(260px, 100%);
-  height: 36px;
-}
-
-.sandbox-message-file {
+/* 语音条：圆形播放键 + 波形 + 时长。波形是两层同样的竖条，上层按播放进度裁剪成强调色。 */
+.sandbox-message-voice {
   display: flex;
-  min-width: 210px;
+  width: 232px;
   max-width: 100%;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  color: inherit;
-  background: rgb(148 163 184 / 14%);
-  text-decoration: none;
+  padding: 1px 0;
+  white-space: normal;
 }
 
-.sandbox-message-row.is-outgoing .sandbox-message-file {
-  background: rgb(255 255 255 / 14%);
+.sandbox-message-voice audio {
+  display: none;
 }
 
-.sandbox-message-file > svg {
+.sandbox-message-voice-toggle {
+  display: inline-flex;
   flex: none;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--sandbox-accent);
+  transition: transform 160ms ease, opacity 160ms ease;
 }
 
-.sandbox-message-file span {
-  display: flex;
+.sandbox-message-voice-toggle:not(:disabled):active {
+  transform: scale(0.92);
+}
+
+.sandbox-message-voice-toggle:disabled {
+  opacity: 0.45;
+}
+
+.sandbox-message-voice-toggle:focus-visible,
+.sandbox-message-voice-wave:focus-visible {
+  outline: 2px solid var(--sandbox-accent);
+  outline-offset: 2px;
+}
+
+.sandbox-message-voice-wave {
+  position: relative;
   min-width: 0;
-  flex-direction: column;
+  height: 26px;
+  flex: 1;
+  border-radius: 4px;
+  touch-action: none;
 }
 
-.sandbox-message-file strong,
-.sandbox-message-file small {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.sandbox-message-voice-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.sandbox-message-voice-bars > span {
+  width: 3px;
+  min-height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sandbox-text) 22%, transparent);
+}
+
+.sandbox-message-voice-bars.is-played > span {
+  background: var(--sandbox-accent);
+}
+
+.sandbox-message-voice-time {
+  flex: none;
+  min-width: 34px;
+  color: var(--sandbox-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
   white-space: nowrap;
 }
 
-.sandbox-message-file small,
+.sandbox-message-row.is-outgoing .sandbox-message-voice-toggle {
+  color: var(--sandbox-accent);
+  background: #fff;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-voice-toggle:focus-visible,
+.sandbox-message-row.is-outgoing .sandbox-message-voice-wave:focus-visible {
+  outline-color: #fff;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-voice-bars > span {
+  background: rgb(255 255 255 / 38%);
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-voice-bars.is-played > span {
+  background: #fff;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-voice-time {
+  color: rgb(255 255 255 / 78%);
+}
+
+/* 文件卡片：类型色块 + 两行文件名 + 大小与类型，右侧是下载提示。卡片直接占满气泡，不再套一层底色。 */
+.sandbox-message-file {
+  display: flex;
+  width: 248px;
+  max-width: 100%;
+  align-items: center;
+  gap: 11px;
+  margin: -2px -3px;
+  padding: 4px 3px;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  white-space: normal;
+  transition: background-color 160ms ease;
+}
+
+a.sandbox-message-file:hover {
+  background: color-mix(in srgb, var(--sandbox-text) 5%, transparent);
+}
+
+a.sandbox-message-file:focus-visible {
+  outline: 2px solid var(--sandbox-accent);
+  outline-offset: 1px;
+}
+
+.sandbox-message-file-icon {
+  --sandbox-file-color: #64748b;
+
+  display: inline-flex;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #fff;
+  background: var(--sandbox-file-color);
+}
+
+.sandbox-message-file-icon[data-kind="archive"] { --sandbox-file-color: #d97706; }
+.sandbox-message-file-icon[data-kind="audio"] { --sandbox-file-color: #8b5cf6; }
+.sandbox-message-file-icon[data-kind="code"] { --sandbox-file-color: #0f766e; }
+.sandbox-message-file-icon[data-kind="document"] { --sandbox-file-color: #2563eb; }
+.sandbox-message-file-icon[data-kind="image"] { --sandbox-file-color: #16a34a; }
+.sandbox-message-file-icon[data-kind="sheet"] { --sandbox-file-color: #059669; }
+.sandbox-message-file-icon[data-kind="video"] { --sandbox-file-color: #e11d48; }
+
+.sandbox-message-file.is-pending .sandbox-message-file-icon {
+  opacity: 0.55;
+}
+
+.sandbox-message-file-info {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sandbox-message-file-info strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.sandbox-message-file-info small,
 .sandbox-message-media-loading {
   color: var(--sandbox-muted);
   font-size: 11px;
 }
 
-.sandbox-message-row.is-outgoing .sandbox-message-file small,
+.sandbox-message-file-info small {
+  overflow: hidden;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-message-file-download {
+  display: inline-flex;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--sandbox-muted);
+  background: color-mix(in srgb, var(--sandbox-text) 6%, transparent);
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+a.sandbox-message-file:hover .sandbox-message-file-download {
+  color: #fff;
+  background: var(--sandbox-accent);
+}
+
+.sandbox-message-row.is-outgoing a.sandbox-message-file:hover {
+  background: rgb(255 255 255 / 12%);
+}
+
+.sandbox-message-row.is-outgoing a.sandbox-message-file:focus-visible {
+  outline-color: #fff;
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-file-icon {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 28%);
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-file-info small,
 .sandbox-message-row.is-outgoing .sandbox-message-media-loading {
   color: rgb(255 255 255 / 72%);
+}
+
+.sandbox-message-row.is-outgoing .sandbox-message-file-download {
+  color: #fff;
+  background: rgb(255 255 255 / 18%);
+}
+
+.sandbox-message-row.is-outgoing a.sandbox-message-file:hover .sandbox-message-file-download {
+  color: var(--sandbox-accent);
+  background: #fff;
 }
 
 .sandbox-message-row.is-quote-target .sandbox-message-bubble::after {
