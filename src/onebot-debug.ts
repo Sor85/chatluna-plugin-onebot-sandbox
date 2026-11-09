@@ -1,5 +1,6 @@
 import { Random } from './random'
 import { createHash } from 'node:crypto'
+import { isBase64 } from './base64'
 import type {
   GetSandboxOneBotDebugRecordsInput,
   SandboxImplementationProfile,
@@ -28,7 +29,6 @@ export const MAX_DEBUG_PAGE_SIZE = 200
 export const LARGE_BASE64_CHAR_THRESHOLD = 8 * 1024
 
 const SENSITIVE_KEY_PATTERN = /authorization|access[_-]?token|secret|password|cookie|private[_-]?key/i
-const BASE64_BODY_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
 /**
  * 只脱敏凭证类键。消息正文（content/message/raw_message/text）原样保留：调试页面要能逐字
@@ -46,8 +46,7 @@ function redactSensitive(value: unknown, key = ''): unknown {
 }
 
 function isBase64Body(value: string): boolean {
-  if (value.length < 16 || value.length % 4 !== 0) return false
-  return BASE64_BODY_PATTERN.test(value)
+  return value.length >= 16 && isBase64(value)
 }
 
 function inferMimeFromBase64(body: string): string | undefined {

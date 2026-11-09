@@ -4,6 +4,7 @@ import { basename, resolve } from 'node:path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import type { SandboxMedia, SandboxMediaContent, SandboxMediaType } from './types'
 import { SandboxDomainError } from './types'
+import { isBase64 } from './base64'
 
 export const MAX_MEDIA_SIZE = 10 * 1024 * 1024
 
@@ -99,13 +100,13 @@ export class SandboxMediaStorage {
     if (!type) throw new SandboxDomainError(`不支持的媒体类型：${input.mimeType || '未知'}`)
     const name = basename(input.fileName.replaceAll('\\', '/')).trim()
     if (!name) throw new SandboxDomainError('媒体文件名不能为空')
-    // 先按 Base64 理论长度拒绝超限输入，避免巨型字符串进入正则后耗尽调用栈或 CPU。
+    // 先按 Base64 理论长度拒绝超限输入，避免扫描和解码巨型字符串。
     const dataBase64 = input.dataBase64.trim()
     const paddingSize = dataBase64.endsWith('==') ? 2 : dataBase64.endsWith('=') ? 1 : 0
     if (Math.floor(dataBase64.length * 3 / 4) - paddingSize > MAX_MEDIA_SIZE) {
       throw new SandboxDomainError('媒体大小不能超过 10 MB')
     }
-    if (!dataBase64 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(dataBase64)) {
+    if (!isBase64(dataBase64)) {
       throw new SandboxDomainError('媒体内容不是有效的 Base64')
     }
     const content = Buffer.from(dataBase64, 'base64')

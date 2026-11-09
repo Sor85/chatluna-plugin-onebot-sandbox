@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
+import { isBase64 } from '../base64'
 import { LARGE_BASE64_CHAR_THRESHOLD } from '../onebot-debug'
 import type { SandboxTestCallRecord, SandboxTestCallRecordListItem, SandboxTestCallTransport, SandboxMcpError } from './types'
 
 const SENSITIVE_KEY_PATTERN = /authorization|access[_-]?token|(?:^|_)token$|secret|password|cookie|private[_-]?key|confirmation[_-]?token|data[_-]?base64/i
-const BASE64_BODY_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
 /**
  * 测试调用记录的每页条数，与另外三个 list 工具取同一组数值。
@@ -131,6 +131,5 @@ function summarizeLargeValue(encoding: 'base64' | 'data-url', body: string, mime
 }
 
 function isBase64Body(value: string): boolean {
-  if (value.length < 16 || value.length % 4 !== 0) return false
-  return BASE64_BODY_PATTERN.test(value)
+  return value.length >= 16 && isBase64(value)
 }
