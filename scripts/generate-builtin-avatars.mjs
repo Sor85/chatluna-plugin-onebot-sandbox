@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { BUILTIN_AVATARS } from '../src/builtin-avatar-options.ts'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -15,7 +15,6 @@ const v2Root = path.resolve(process.env.CHATLUNA_V2_ROOT ?? path.join(root, '..'
 const require = createRequire(path.join(v2Root, 'external/onebot-sandbox/package.json'))
 const { Resvg } = require('@resvg/resvg-js')
 const output = path.join(root, 'src/builtin-avatar-png.ts')
-const previous = existsSync(output) ? (await import(pathToFileURL(output).href)).BUILTIN_AVATARS : {}
 const referenceOf = (bytes) => `sandbox-media://${createHash('sha256').update(bytes).digest('hex').slice(0, 32)}`
 const lines = [
   '// 由 scripts/generate-builtin-avatars.mjs 生成；修改 builtin-avatar-options.ts 后重新生成，不手工编辑 PNG。',
@@ -29,7 +28,6 @@ const lines = [
   '  kind: BuiltinAvatarKind',
   '  png: string',
   '  reference: string',
-  '  legacyReferences: readonly string[]',
   '}',
   '',
 ]
@@ -42,16 +40,9 @@ for (const [kind, pool] of Object.entries(BUILTIN_AVATARS)) {
     ids.add(avatar.id)
     const png = new Resvg(avatar.svg, { fitTo: { mode: 'width', value: 512 }, font: { loadSystemFonts: false } }).render().asPng()
     const reference = referenceOf(png)
-    const old = previous[kind]?.find(({ id }) => id === avatar.id)
-    // 留住历史内容引用；以后改同一张 SVG 时，旧快照仍能恢复到同名头像，而不是随机换脸。
-    const legacyReferences = [...new Set([
-      ...(old?.legacyReferences ?? []),
-      ...(old ? [old.reference] : []),
-      referenceOf(Buffer.from(avatar.svg)),
-    ])].filter((value) => value !== reference)
     count++
     bytes += png.length
-    return { id: avatar.id, kind, png: png.toString('base64'), reference, legacyReferences }
+    return { id: avatar.id, kind, png: png.toString('base64'), reference }
   })
   lines.push(`export const BUILTIN_${kind.toUpperCase()}_AVATARS: readonly BuiltinAvatar[] = ${JSON.stringify(avatars, null, 2)}`, '')
 }

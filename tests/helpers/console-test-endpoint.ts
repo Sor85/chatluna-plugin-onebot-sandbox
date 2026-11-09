@@ -14,6 +14,7 @@ export function consoleTestEndpoint(
 ): SandboxConsoleTestEndpoint {
   return {
     mcp,
+    mcpEndpoint: { enabled: true, url: `${overrides.tls ? 'https' : 'http'}://${overrides.host ?? '127.0.0.1'}:${overrides.port ?? 61901}/mcp` },
     httpApi: describeHttpApiCapabilities({
       enabled: true,
       path: '/api',

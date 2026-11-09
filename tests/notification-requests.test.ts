@@ -17,6 +17,7 @@ const snapshot = {
     announcements: [],
   }],
   conversations: [],
+  conversationInstances: [],
   messages: [],
   forwards: [],
   friendships: [],

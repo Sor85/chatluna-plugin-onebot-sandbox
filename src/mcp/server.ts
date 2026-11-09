@@ -7,10 +7,13 @@ import { createServer as createHttpsServer } from 'node:https'
 import { BlockList, isIP } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import type { Context } from 'cordis'
 import { SandboxMcpError } from './types'
 import { SandboxMcpService } from './service'
 import { HTTP_API_MAX_BODY_BYTES, handleHttpApiRequest, isHttpApiPath, toHttpApiErrorResponse } from './http-api'
+
+const packageInfo = createRequire(import.meta.url)('chatluna-plugin-onebot-sandbox/package.json') as { name: string; version: string }
 
 /** 一种协议表述在端点上的启用开关与路径。两种表述共用同一个监听器与同一套门禁。 */
 export interface SandboxTestEndpointProtocolConfig {
@@ -271,7 +274,7 @@ export class SandboxTestEndpointServer {
   // 得知参数契约）。参数校验本就在工具执行体内部完成，这里只需把工具注册表条目
   // 携带的 JSON Schema 原样暴露。
   private createMcpServer(token: string, sourceIp: string): Server {
-    const server = new Server({ name: 'chatluna-plugin-onebot-sandbox', version: '0.0.1' }, { capabilities: { tools: {}, resources: {} } })
+    const server = new Server({ name: packageInfo.name, version: packageInfo.version }, { capabilities: { tools: {}, resources: {} } })
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       // outputSchema 只在条目声明了它时映射出去：给未覆盖的工具补一个空对象等于向客户端承诺一份
       // 它兑现不了的 structuredContent 契约。

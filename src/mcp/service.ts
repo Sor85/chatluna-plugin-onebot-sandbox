@@ -40,7 +40,7 @@ import {
   SANDBOX_MCP_EVENT_TYPES,
   type SandboxTestCallRecord,
   type SandboxTestCallTransport,
-  type SandboxTestCreatedCredential,
+  type SandboxTestPublicCredential,
   type SandboxTestCredential,
   type SandboxMcpCapabilityCatalog,
   type SandboxMcpEvent,
@@ -183,14 +183,9 @@ function normalizeScopes(scopes: unknown, fallback?: SandboxMcpScope[]): Sandbox
   throw new SandboxMcpError('invalid_arguments', '至少选择一项有效权限')
 }
 
-function toPublicCredential(credential: SandboxTestCredential): Omit<SandboxTestCredential, 'tokenDigest'> {
+function toPublicCredential(credential: SandboxTestCredential): SandboxTestPublicCredential {
   const { tokenDigest: _tokenDigest, ...publicCredential } = credential
   return structuredClone(publicCredential)
-}
-
-function toCreatedCredential(credential: SandboxTestCredential): SandboxTestCreatedCredential {
-  if (!credential.token) throw new SandboxMcpError('internal_error', '凭证缺少明文 Token')
-  return { ...toPublicCredential(credential), token: credential.token }
 }
 
 // sha256 摘要的唯一合法形状。长度不合规的摘要会让 timingSafeEqual 抛
@@ -205,14 +200,13 @@ function normalizeStoredCredential(value: unknown): SandboxTestCredential | unde
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const record = value as Record<string, unknown>
   if (typeof record.id !== 'string' || typeof record.name !== 'string' || !isTokenDigest(record.tokenDigest) || typeof record.createdAt !== 'string') return undefined
-  if (!Array.isArray(record.scopes)) return undefined
+  if (typeof record.token !== 'string' || !record.token || !Array.isArray(record.scopes)) return undefined
   return {
     id: record.id,
     name: record.name,
     scopes: normalizeScopes(record.scopes, ['read']),
     enabled: record.enabled !== false,
-    // 旧记录只有摘要，明文无法恢复；新记录必须带 token，供控制台再次查看。
-    ...(typeof record.token === 'string' && record.token ? { token: record.token } : {}),
+    token: record.token,
     tokenDigest: record.tokenDigest,
     createdAt: record.createdAt,
   }
@@ -235,6 +229,8 @@ export interface SandboxInternalCaller {
   /** 失败时抛出带 traceId 的 `SandboxMcpError`，与网络表述的错误信封同源。 */
   callTool(tool: string, args: unknown): Promise<unknown>
 }
+
+type SandboxCaller = Pick<SandboxTestCredential, 'id' | 'name' | 'scopes'>
 
 interface IdempotencyEntry {
   argumentsHash: string
@@ -369,7 +365,7 @@ export class SandboxMcpService {
     control.onOneBotDebugRecord((record) => this.appendEvent(`onebot.${record.direction}`, record, spaceId))
   }
 
-  createCredential(name: string, scopes: SandboxMcpScope[] = ['read']): SandboxTestCreatedCredential {
+  createCredential(name: string, scopes: SandboxMcpScope[] = ['read']): SandboxTestPublicCredential {
     const normalizedName = requireString(name, '凭证名称')
     const token = randomBytes(32).toString('base64url')
     const credential: SandboxTestCredential = {
@@ -383,18 +379,18 @@ export class SandboxMcpService {
     }
     this.credentials.push(credential)
     this.saveCredentials()
-    return toCreatedCredential(credential)
+    return toPublicCredential(credential)
   }
 
-  listCredentials(): Array<Omit<SandboxTestCredential, 'tokenDigest'>> {
+  listCredentials(): Array<SandboxTestPublicCredential> {
     return this.credentials.map((credential) => toPublicCredential(credential))
   }
 
-  getCredential(id: string): Omit<SandboxTestCredential, 'tokenDigest'> {
+  getCredential(id: string): SandboxTestPublicCredential {
     return toPublicCredential(this.requireStoredCredential(id))
   }
 
-  updateCredential(id: string, input: { name?: string; scopes?: SandboxMcpScope[] }): Omit<SandboxTestCredential, 'tokenDigest'> {
+  updateCredential(id: string, input: { name?: string; scopes?: SandboxMcpScope[] }): SandboxTestPublicCredential {
     const credential = this.requireStoredCredential(id)
     if (input.name !== undefined) credential.name = requireString(input.name, '凭证名称')
     if (input.scopes !== undefined) credential.scopes = normalizeScopes(input.scopes)
@@ -402,13 +398,13 @@ export class SandboxMcpService {
     return toPublicCredential(credential)
   }
 
-  rotateCredentialToken(id: string): SandboxTestCreatedCredential {
+  rotateCredentialToken(id: string): SandboxTestPublicCredential {
     const credential = this.requireStoredCredential(id)
     const token = randomBytes(32).toString('base64url')
     credential.token = token
     credential.tokenDigest = digestToken(token)
     this.saveCredentials()
-    return toCreatedCredential(credential)
+    return toPublicCredential(credential)
   }
 
   setCredentialEnabled(id: string, enabled: boolean): void {
@@ -472,17 +468,14 @@ export class SandboxMcpService {
    * 进程内的调用方（ChatLuna 机器人工具）：没有 Bearer 凭证，但权限范围、配额、并发、幂等、确认令牌
    * 与测试调用记录照样经 `invokeTool` 这一条路径，与两种网络表述没有第二份实现。
    *
-   * 它的凭证不进凭证列表也不落盘：摘要为空，`authenticate` 永远匹配不到，网络端点因此拿不到它的权限。
+   * 调用方身份只含标识、名称与权限，不带 Token 或摘要，也不进入凭证列表与持久化，网络端点无法认证它。
    * 配额按它自己的标识计数，不与任何测试凭证共用额度。
    */
   createInternalCaller(input: { id: string; name: string; scopes: readonly SandboxMcpScope[]; transport: SandboxTestCallTransport }): SandboxInternalCaller {
-    const credential: SandboxTestCredential = {
+    const credential: SandboxCaller = {
       id: `internal:${input.id}`,
       name: input.name,
       scopes: normalizeScopes(input.scopes),
-      enabled: true,
-      tokenDigest: '',
-      createdAt: new Date().toISOString(),
     }
     const declarations = SANDBOX_MCP_TOOL_DECLARATIONS.filter(({ scope }) => credential.scopes.includes(scope))
     return {
@@ -650,7 +643,7 @@ export class SandboxMcpService {
     return await this.invokeTool(this.requireCredential(token), tool, argumentsValue, context)
   }
 
-  private async invokeTool(credential: SandboxTestCredential, tool: string, argumentsValue: unknown, context: SandboxTestCallContext): Promise<unknown> {
+  private async invokeTool(credential: SandboxCaller, tool: string, argumentsValue: unknown, context: SandboxTestCallContext): Promise<unknown> {
     const args = asRecord(argumentsValue)
     const transport = context.transport ?? 'mcp'
     const startedAt = Date.now()
@@ -685,7 +678,7 @@ export class SandboxMcpService {
    * 真出现同时命中的工具时改这一处即可。不合成三态枚举去表达一种不存在的状态。
    */
   private async executeTool(
-    credential: SandboxTestCredential,
+    credential: SandboxCaller,
     entry: SandboxMcpToolEntry,
     args: Record<string, unknown>,
     transport: SandboxTestCallTransport,
@@ -698,7 +691,7 @@ export class SandboxMcpService {
 
   /** 把服务实例的能力收成执行体看得见的那一份窄运行时。 */
   private createToolRuntime(
-    credential: SandboxTestCredential,
+    credential: SandboxCaller,
     entry: SandboxMcpToolEntry,
     args: Record<string, unknown>,
     transport: SandboxTestCallTransport,
@@ -980,12 +973,12 @@ export class SandboxMcpService {
     return credential
   }
 
-  private requireScope(credential: SandboxTestCredential, scope: SandboxMcpScope) {
+  private requireScope(credential: SandboxCaller, scope: SandboxMcpScope) {
     if (!credential.scopes.includes(scope)) throw new SandboxMcpError('permission_denied', `凭证缺少 ${scope} 权限`)
   }
 
   private appendCallRecord(
-    credential: SandboxTestCredential,
+    credential: SandboxCaller,
     tool: string,
     args: Record<string, unknown>,
     sourceIp: string | undefined,

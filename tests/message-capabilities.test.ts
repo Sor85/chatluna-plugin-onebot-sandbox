@@ -184,9 +184,8 @@ describe('消息能力判据', () => {
 })
 
 const appearance: SandboxAppearance = {
-  enableSandboxFrostedGlass: true,
   sandboxTimBubbleTail: true,
-  sandboxColorMode: 'auto',
+  sandboxIncomingBubbleStyle: 'shadow',
   sandboxAccentColor: '#2563eb',
   sandboxMarkRecalledMessages: true,
 }

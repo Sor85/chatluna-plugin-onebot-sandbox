@@ -14,10 +14,7 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
  */
 export function readStepThought(step: unknown): string {
   const record = readRecord(step)
-  const blocks = [
-    ...Array.isArray(record?.content) ? record.content : [],
-    ...Array.isArray(record?.toolCalls) ? record.toolCalls : [],
-  ]
+  const blocks: unknown[] = Array.isArray(record?.content) ? record.content : []
   return blocks
     .map((value) => {
       const block = readRecord(value)

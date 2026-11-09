@@ -8,7 +8,7 @@ import { Random } from './random'
 import { h } from '@satorijs/core'
 import { resolve } from 'node:path'
 import { SandboxBot } from './bot'
-import { BUILTIN_AVATARS, findBuiltinAvatarByReference, getBuiltinAvatarReference, pickUnusedBuiltinAvatar } from './builtin-avatars'
+import { BUILTIN_AVATARS, findBuiltinAvatarByReference, pickUnusedBuiltinAvatar } from './builtin-avatars'
 import { SandboxChannelAssignee } from './channel-assignee'
 import { SandboxChatLunaStateStore } from './chatluna/state'
 import { bindSandboxUserPermissions } from './chatluna/user-permissions'
@@ -39,7 +39,6 @@ import {
   listVisibleConversationIds,
   projectVisibleConversations,
   pruneConversationMessageIds,
-  normalizeSceneConversationInstances,
   readConversationMessageIds,
   removeConversationInstance,
   removeConversations,
@@ -432,7 +431,7 @@ export class SandboxControlService {
   private disposed = false
 
   constructor(private ctx: Context, options: SandboxControlServiceOptions = {}) {
-    this.initialScene = this.normalizeSceneForwards(structuredClone(options.initialScene ?? createDefaultScene()))
+    this.initialScene = this.validateSnapshot(structuredClone(options.initialScene ?? createDefaultScene()))
     this.scene = structuredClone(this.initialScene)
     this.runtimeBotsActive = options.runtimeActive ?? true
     this.runtimeBotRegistry = options.runtimeBots ?? new SandboxRuntimeBotRegistry()
@@ -565,7 +564,7 @@ export class SandboxControlService {
   }
 
   replaceScene(snapshot: SandboxSnapshot): void {
-    const next = structuredClone(snapshot)
+    const next = this.validateSnapshot(structuredClone(snapshot))
     const participantIds = new Set(next.participants.map(({ id }) => id))
     if (participantIds.size !== next.participants.length) throw new SandboxDomainError('参与者 ID 不能重复')
     if (next.participants.some(({ id }) => !/^\d+$/.test(id))) throw new SandboxDomainError('参与者 ID 必须是十进制字符串')
@@ -581,17 +580,15 @@ export class SandboxControlService {
     const conversationIds = listConversationIds(next)
     if (next.messages.some(({ authorId, conversationId }) => !participantIds.has(authorId) || !conversationIds.has(conversationId))) throw new SandboxDomainError('消息引用不存在的参与者或会话')
     if (next.messages.some(({ media }) => media?.some(({ id, reference }) => reference !== `sandbox-media://${id}`))) throw new SandboxDomainError('消息包含无效媒体引用')
-    // 未发布阶段直接规范化 forwards；缺失时补空数组，避免旧测试快照或半成品导入炸掉。
-    this.normalizeSceneForwards(next)
-    const forwardIds = new Set(next.forwards!.map(({ id }) => id))
-    if (forwardIds.size !== next.forwards!.length) throw new SandboxDomainError('合并转发 ID 不能重复')
-    if (next.forwards!.some(({ authorId, nodes }) => !participantIds.has(authorId) || !Array.isArray(nodes) || !nodes.length)) {
+    const forwardIds = new Set(next.forwards.map(({ id }) => id))
+    if (forwardIds.size !== next.forwards.length) throw new SandboxDomainError('合并转发 ID 不能重复')
+    if (next.forwards.some(({ authorId, nodes }) => !participantIds.has(authorId) || !Array.isArray(nodes) || !nodes.length)) {
       throw new SandboxDomainError('合并转发资源无效')
     }
-    if (next.forwards!.some(({ nodes }) => nodes.some(({ media }) => media?.some(({ id, reference }) => reference !== `sandbox-media://${id}`)))) {
+    if (next.forwards.some(({ nodes }) => nodes.some(({ media }) => media?.some(({ id, reference }) => reference !== `sandbox-media://${id}`)))) {
       throw new SandboxDomainError('合并转发包含无效媒体引用')
     }
-    if (next.forwards!.some(({ nodes }) => nodes.some(({ forwardId }) => !!forwardId && !forwardIds.has(forwardId)))) {
+    if (next.forwards.some(({ nodes }) => nodes.some(({ forwardId }) => !!forwardId && !forwardIds.has(forwardId)))) {
       throw new SandboxDomainError('合并转发引用了不存在的嵌套资源')
     }
     if (next.messages.some(({ forwardId }) => !!forwardId && !forwardIds.has(forwardId))) {
@@ -631,8 +628,7 @@ export class SandboxControlService {
     const id = reference?.match(/^sandbox-media:\/\/([a-f0-9]{32})$/)?.[1]
     if (!id) return reference
     const media = this.mediaStorage.readById(id)
-    const builtin = findBuiltinAvatarByReference(media.reference)
-    return builtin ? `data:image/png;base64,${builtin.png}` : `data:${media.mimeType};base64,${media.dataBase64}`
+    return `data:${media.mimeType};base64,${media.dataBase64}`
   }
 
   private toSatoriMediaElement(item: SandboxMedia): ReturnType<typeof h> {
@@ -675,38 +671,42 @@ export class SandboxControlService {
 
   private saveAvatar(fileName: string, mimeType: string, dataBase64: string): string {
     if (!mimeType.startsWith('image/')) throw new SandboxDomainError(`头像必须是图片：${mimeType || '未知类型'}`)
-    const reference = this.mediaStorage.save({ fileName, mimeType, dataBase64 }).reference
-    return this.rematerializeBuiltinAvatar(reference) ?? reference
+    return this.mediaStorage.save({ fileName, mimeType, dataBase64 }).reference
   }
 
-  private ensureStableAvatars(): void {
+  private ensureStableAvatars(): boolean {
+    let changed = false
     for (const participant of this.scene.participants) {
       if (!participant.avatar) {
         participant.avatar = this.createDefaultAvatar(participant.kind)
+        changed = true
       } else {
-        participant.avatar = this.rematerializeBuiltinAvatar(participant.avatar) ?? participant.avatar
+        this.rematerializeBuiltinAvatar(participant.avatar)
       }
     }
+    // 群的头像分类由所属集合决定，不读取导入 JSON 中未建模的 kind 字段。
     for (const group of this.scene.groups) {
       if (!group.avatar) {
         group.avatar = this.createDefaultAvatar('group')
+        changed = true
       } else {
-        group.avatar = this.rematerializeBuiltinAvatar(group.avatar) ?? group.avatar
+        this.rematerializeBuiltinAvatar(group.avatar)
       }
     }
+    return changed
   }
 
   private rematerializeBuiltinAvatar(reference: string): string | undefined {
     const avatar = findBuiltinAvatarByReference(reference)
     if (!avatar) return
-    const current = getBuiltinAvatarReference(avatar)
+    const current = avatar.reference
     if (this.hasManagedAvatar(current)) return current
     const restored = this.mediaStorage.save({
       fileName: `builtin-${avatar.kind}-${avatar.id}.png`,
       mimeType: 'image/png',
       dataBase64: avatar.png,
     }).reference
-    // 旧 SVG 引用迁到 PNG 自己的内容哈希，不能在旧 ID 下替换字节，破坏媒体缓存的永久有效性。
+    // 恢复当前内置 PNG 时仍须保持内容哈希与字节一致。
     if (restored !== current) throw new SandboxDomainError(`内置头像引用恢复不一致：${reference}`)
     return restored
   }
@@ -726,7 +726,7 @@ export class SandboxControlService {
     // 先按内容寻址引用选出未占用项，再只物化被选中的图片，避免未分配池项成为无主媒体。
     const selected = pickUnusedBuiltinAvatar(
       pool,
-      new Set(pool.filter((avatar) => [avatar.reference, ...avatar.legacyReferences].some((reference) => used.has(reference)))),
+      new Set(pool.filter((avatar) => used.has(avatar.reference))),
     )
     return this.saveAvatar(
       `builtin-${kind}-${selected.id}.png`,
@@ -917,7 +917,7 @@ export class SandboxControlService {
       conversations: projection.conversations,
       conversationInstances: projection.conversationInstances,
       messages,
-      forwards: this.getForwards().filter(({ id }) => visibleForwardIds.has(id)),
+      forwards: this.scene.forwards.filter(({ id }) => visibleForwardIds.has(id)),
     })
   }
 
@@ -938,7 +938,7 @@ export class SandboxControlService {
     const visibleForwardIds = new Set(messages.flatMap(({ forwardId }) => forwardId ? [forwardId] : []))
     return {
       messages: structuredClone(messages),
-      forwards: structuredClone(this.getForwards().filter(({ id }) => visibleForwardIds.has(id))),
+      forwards: structuredClone(this.scene.forwards.filter(({ id }) => visibleForwardIds.has(id))),
       nextBeforeMessageId: start > 0 ? messageIds[0] : undefined,
     }
   }
@@ -1771,9 +1771,9 @@ export class SandboxControlService {
       ...(title ? { title } : {}),
       nodes,
     }
-    this.getForwards().push(forward)
+    this.scene.forwards.push(forward)
     const content = this.formatForwardPreview(nodes)
-    const message = this.appendMessage(context.operator.id, context.conversation.id, content, undefined, undefined, undefined, undefined, forward.id)
+    const message = this.appendMessage(context.operator.id, context.conversation.id, content, undefined, undefined, undefined, forward.id)
     const onebotMessage = [{ type: 'forward', data: { id: forward.id } }]
     const delivery = this.dispatchMessageToBots(
       context,
@@ -1801,7 +1801,7 @@ export class SandboxControlService {
     const forwardId = input.forwardId?.trim()
       || this.resolveForwardIdFromMessage(input.operatorId, input.messageId)
     if (!forwardId) throw new SandboxDomainError('缺少合并转发 ID')
-    const forward = this.getForwards().find(({ id }) => id === forwardId)
+    const forward = this.scene.forwards.find(({ id }) => id === forwardId)
     if (!forward) throw new SandboxDomainError(`合并转发不存在：${forwardId}`)
     // 资源本身不绑定会话：外层消息直接引用，或从已可见转发资源的嵌套节点进入，都允许展开。
     if (!this.canAccessForward(input.operatorId, forward.id)) {
@@ -1810,17 +1810,12 @@ export class SandboxControlService {
     return structuredClone(forward)
   }
 
-  private getForwards(): SandboxForward[] {
-    if (!this.scene.forwards) this.scene.forwards = []
-    return this.scene.forwards
-  }
-
-  private normalizeSceneForwards(snapshot: SandboxSnapshot): SandboxSnapshot {
+  private validateSnapshot(snapshot: SandboxSnapshot): SandboxSnapshot {
+    for (const key of ['participants', 'groups', 'conversations', 'conversationInstances', 'messages', 'forwards', 'friendships', 'requests'] as const) {
+      if (!Array.isArray(snapshot[key])) throw new SandboxDomainError(`场景集合必须是数组：${key}`)
+    }
     normalizeSceneUserAuthorities(snapshot)
-    snapshot.forwards = Array.isArray(snapshot.forwards) ? snapshot.forwards : []
-    // 会话实例集合与 forwards 同样在读取路径补空数组，避免旧快照或半成品导入炸掉解析；
-    // 那条不变量归解析模块所有，这里只调用它，不自己动实例集合。
-    return normalizeSceneConversationInstances(snapshot)
+    return snapshot
   }
 
   private canAccessForward(operatorId: string, forwardId: string, seen = new Set<string>()): boolean {
@@ -1831,7 +1826,7 @@ export class SandboxControlService {
       if (findVisibleConversation(this.scene, operatorId, message.conversationId)) return true
     }
     // 嵌套资源：只要某个已可见父转发的节点引用它，就允许继续读取详情。
-    for (const parent of this.getForwards()) {
+    for (const parent of this.scene.forwards) {
       if (!parent.nodes.some((node) => node.forwardId === forwardId)) continue
       if (this.canAccessForward(operatorId, parent.id, seen)) return true
     }
@@ -1917,7 +1912,7 @@ export class SandboxControlService {
       if (!content && !media?.length && !node.forwardId) {
         throw new SandboxDomainError(`合并转发节点 #${index + 1} 不能为空`)
       }
-      if (node.forwardId && !this.getForwards().some(({ id }) => id === node.forwardId)) {
+      if (node.forwardId && !this.scene.forwards.some(({ id }) => id === node.forwardId)) {
         throw new SandboxDomainError(`嵌套合并转发不存在：${node.forwardId}`)
       }
       if (media?.some(({ id, reference }) => reference !== `sandbox-media://${id}`)) {
@@ -2033,7 +2028,7 @@ export class SandboxControlService {
       .find(({ id }) => id === input.mediaId)
     if (messageMedia) return this.mediaStorage.read(messageMedia)
     // 合并转发详情中的媒体只挂在节点上；嵌套资源按 canAccessForward 递归可达，与 getForwardMessage 一致。
-    const forwardMedia = this.getForwards()
+    const forwardMedia = this.scene.forwards
       .filter(({ id }) => this.canAccessForward(input.operatorId, id))
       .flatMap(({ nodes }) => nodes.flatMap(({ media }) => media ?? []))
       .find(({ id }) => id === input.mediaId)
@@ -2201,22 +2196,18 @@ export class SandboxControlService {
     // 撤回后保留历史回应，但禁止继续新增或取消，避免把历史事实改写成当前操作。
     const denial = denyMessageCapability('react', this.toMessageCapabilityInput(message, conversation, input.operatorId))
     if (denial) throw new SandboxDomainError(describeReactionDenial(denial, input.messageId))
-    // 与撤回一致地覆盖同一广播组，避免同一条逻辑消息的副本之间回应不一致。
-    for (const target of this.scene.messages.filter(({ id, broadcastId }) => id === message.id
-      || (!!message.broadcastId && broadcastId === message.broadcastId))) {
-      const reactions = target.reactions ?? []
-      const reaction = reactions.find((item) => item.emojiId === emojiId)
-      if (!input.enabled) {
-        if (reaction) reaction.participantIds = reaction.participantIds.filter((id) => id !== input.operatorId)
-      } else if (!reaction) {
-        reactions.push({ emojiId, participantIds: [input.operatorId] })
-      } else if (!reaction.participantIds.includes(input.operatorId)) {
-        reaction.participantIds.push(input.operatorId)
-      }
-      const remaining = reactions.filter(({ participantIds }) => participantIds.length)
-      if (remaining.length) target.reactions = remaining
-      else delete target.reactions
+    const reactions = message.reactions ?? []
+    const reaction = reactions.find((item) => item.emojiId === emojiId)
+    if (!input.enabled) {
+      if (reaction) reaction.participantIds = reaction.participantIds.filter((id) => id !== input.operatorId)
+    } else if (!reaction) {
+      reactions.push({ emojiId, participantIds: [input.operatorId] })
+    } else if (!reaction.participantIds.includes(input.operatorId)) {
+      reaction.participantIds.push(input.operatorId)
     }
+    const remaining = reactions.filter(({ participantIds }) => participantIds.length)
+    if (remaining.length) message.reactions = remaining
+    else delete message.reactions
     this.commitSceneMutation()
   }
 
@@ -2267,14 +2258,10 @@ export class SandboxControlService {
     const denial = denyMessageCapability('recall', { message, conversation, operatorId, group })
     if (denial) throw new SandboxDomainError(describeRecallDenial(denial, message, operatorId))
     const recalledAt = new Date().toISOString()
-    const recalled = this.scene.messages.filter(({ id, broadcastId }) => id === message.id
-      || (!!message.broadcastId && broadcastId === message.broadcastId))
-    for (const target of recalled) {
-      target.lifecycle = {
-        status: 'recalled',
-        operatorId,
-        recalledAt,
-      }
+    message.lifecycle = {
+      status: 'recalled',
+      operatorId,
+      recalledAt,
     }
     this.commitSceneMutation()
     if (group) {
@@ -2328,7 +2315,6 @@ export class SandboxControlService {
     replyToMessageId?: string,
     media?: SandboxMedia[],
     event?: SandboxMessage['event'],
-    broadcastId?: string,
     forwardId?: string,
   ): SandboxMessage {
     requireConversation(this.scene, conversationId)
@@ -2340,7 +2326,6 @@ export class SandboxControlService {
       content,
       createdAt: new Date().toISOString(),
       replyToMessageId,
-      broadcastId,
       // 只保留媒体元数据：上游（MCP 上传缓存）会把 dataBase64 挂在同一个对象上，
       // 直接存进场景会让正文 base64 随每次整场景落盘写进数据库。
       media: media?.map(toMediaMetadata),
@@ -2414,12 +2399,11 @@ export class SandboxControlService {
     if (!persistence) return
     const result = await this.loadSceneAfterDatabaseReady(persistence)
     if (result.kind === 'loaded') {
-      // 未发布阶段直接补齐 forwards，避免本地旧快照缺字段导致读取路径崩溃。
-      this.scene = this.normalizeSceneForwards(structuredClone(result.scene))
-      // 配置调小上限后，恢复的旧场景必须立刻收敛，否则第一次写入仍然是超限的完整场景。
-      // 必须排在头像规范化之前：后者结尾按最终引用集回收媒体，淘汰要先落定。
+      this.scene = this.validateSnapshot(structuredClone(result.scene))
+      // 配置调小上限后，恢复的场景必须立刻收敛；淘汰后再按最终引用集回收媒体。
       const trimmed = this.reclaimSceneMessages()
-      const normalized = await this.normalizePersistedAvatars()
+      const normalized = this.ensureStableAvatars()
+      this.mediaStorage.reclaimUnreferenced(this.getMediaReferences())
       this.syncRuntimeBots()
       if (normalized || trimmed) {
         await persistence.save(this.getSnapshot())
@@ -2442,69 +2426,13 @@ export class SandboxControlService {
     this.ctx.logger('onebot-sandbox').warn(`场景持久化暂不可用，已保留当前进程内场景且不会覆盖数据库：${reason}`)
   }
 
-  private async normalizePersistedAvatars(): Promise<boolean> {
-    let changed = false
-    for (const participant of this.scene.participants) {
-      const previous = participant.avatar
-      if (!previous) {
-        participant.avatar = this.createDefaultAvatar(participant.kind)
-        changed = true
-        continue
-      }
-      if (previous.startsWith('sandbox-media://')) {
-        const restored = this.rematerializeBuiltinAvatar(previous)
-        if (restored) {
-          participant.avatar = restored
-          changed ||= restored !== previous
-        } else if (!this.hasManagedAvatar(previous)) {
-          this.ctx.logger('onebot-sandbox').warn(`参与者头像媒体不存在，已保留原引用等待恢复：${participant.id}`)
-        }
-        continue
-      }
-      try {
-        participant.avatar = await this.importAvatar(participant.kind, participant.id, previous)
-      } catch (error) {
-        this.ctx.logger('onebot-sandbox').warn('%s\n%s', `参与者头像规范化失败，已替换为默认值：${participant.id}`, errorDetail(error))
-        participant.avatar = this.createDefaultAvatar(participant.kind)
-      }
-      changed = true
-    }
-    for (const group of this.scene.groups) {
-      const previous = group.avatar
-      if (!previous) {
-        group.avatar = this.createDefaultAvatar('group')
-        changed = true
-        continue
-      }
-      if (previous.startsWith('sandbox-media://')) {
-        const restored = this.rematerializeBuiltinAvatar(previous)
-        if (restored) {
-          group.avatar = restored
-          changed ||= restored !== previous
-        } else if (!this.hasManagedAvatar(previous)) {
-          this.ctx.logger('onebot-sandbox').warn(`群头像媒体不存在，已保留原引用等待恢复：${group.id}`)
-        }
-        continue
-      }
-      try {
-        group.avatar = await this.importAvatar('group', group.id, previous)
-      } catch (error) {
-        this.ctx.logger('onebot-sandbox').warn('%s\n%s', `群头像规范化失败，已替换为默认值：${group.id}`, errorDetail(error))
-        group.avatar = this.createDefaultAvatar('group')
-      }
-      changed = true
-    }
-    this.mediaStorage.reclaimUnreferenced(this.getMediaReferences())
-    return changed
-  }
-
   private getMediaReferences(): Set<string> {
     return new Set([
       ...this.scene.participants.flatMap(({ avatar }) => avatar ? [avatar] : []),
       ...this.scene.groups.flatMap(({ avatar }) => avatar ? [avatar] : []),
       ...this.scene.messages.flatMap(({ media }) => media?.map(({ reference }) => reference) ?? []),
       // 合并转发节点内的媒体也必须计入引用，避免场景回收删掉详情里的图片。
-      ...this.getForwards().flatMap(({ nodes }) => nodes.flatMap(({ media }) => media?.map(({ reference }) => reference) ?? [])),
+      ...this.scene.forwards.flatMap(({ nodes }) => nodes.flatMap(({ media }) => media?.map(({ reference }) => reference) ?? [])),
     ])
   }
 
@@ -3023,7 +2951,7 @@ export class SandboxControlService {
 
   // 从仍被消息引用的外层 forward 出发 BFS，保留可达嵌套资源，删除其余孤儿。
   private pruneUnreferencedForwards(): void {
-    const forwards = this.getForwards()
+    const forwards = this.scene.forwards
     if (!forwards.length) return
     const byId = new Map(forwards.map((forward) => [forward.id, forward]))
     const reachable = new Set<string>()

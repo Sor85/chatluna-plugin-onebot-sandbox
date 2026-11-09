@@ -81,24 +81,20 @@ describe('SandboxMcpService', () => {
     expect(() => service.updateCredential(credential.id, { scopes: [] })).toThrow(/至少选择一项有效权限/)
   })
 
-  it('保留只有摘要的旧凭证，并允许重新生成可查看的 Token', () => {
+  it('缺少明文 Token 的凭证不再加载，当前凭证仍能轮换', () => {
     const { app, directory, control, service, credential } = createService(['read'])
     writeFileSync(join(directory, 'test-credentials.json'), `${JSON.stringify([{
       id: 'legacy-credential',
       name: '旧摘要凭证',
       scopes: ['read'],
       enabled: true,
-      // 真实的旧记录带的是完整 sha256 摘要；长度不合规的摘要现在会让整条被丢弃（见凭证存储健壮性用例）。
       tokenDigest: createHash('sha256').update('legacy-token').digest('hex'),
       createdAt: new Date().toISOString(),
     }], null, 2)}\n`)
 
     const reloaded = new SandboxMcpService(app, control, { dataDirectory: directory })
-    expect(reloaded.listCredentials()).toEqual([expect.objectContaining({
-      id: 'legacy-credential',
-      name: '旧摘要凭证',
-    })])
-    expect(reloaded.listCredentials()[0]).not.toHaveProperty('token')
+    expect(reloaded.listCredentials()).toEqual([])
+    expect(reloaded.authenticate('legacy-token')).toBeUndefined()
 
     const rotated = service.rotateCredentialToken(credential.id)
     expect(rotated.token).toMatch(/^[A-Za-z0-9_-]{43}$/)

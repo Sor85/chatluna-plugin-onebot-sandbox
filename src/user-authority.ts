@@ -7,7 +7,7 @@ export function normalizeUserAuthority(value: unknown): SandboxUserAuthority | u
   throw new SandboxDomainError('用户权限等级必须是 0 到 5 的整数')
 }
 
-/** 旧场景没有该字段时保持未设置；导入与恢复都校验，不能通过整块快照绕过写入口。 */
+/** 未设置表示沿用宿主等级；导入与恢复都校验，不能通过整块快照绕过写入口。 */
 export function normalizeSceneUserAuthorities(snapshot: SandboxSnapshot): void {
   for (const participant of snapshot.participants) {
     if (participant.kind !== 'user') continue

@@ -14,6 +14,7 @@ const snapshot: SandboxSnapshot = {
     { id: 'private:10001:20001', type: 'direct', participantIds: ['10001', '20001'], messageIds: [] },
     { id: 'private:10002:20001', type: 'direct', participantIds: ['10002', '20001'], messageIds: [] },
   ],
+  conversationInstances: [],
   messages: [],
   forwards: [],
   friendships: [],

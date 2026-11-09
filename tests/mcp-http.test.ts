@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { App, captureLogs } from './helpers/app'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -197,7 +197,8 @@ describe('MCP Streamable HTTP', () => {
     })
 
     expect(response.headers.get('content-type')).toContain('application/json')
-    expect(await response.json()).toMatchObject({ result: { serverInfo: { name: 'chatluna-plugin-onebot-sandbox' } } })
+    const { name, version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+    expect(await response.json()).toMatchObject({ result: { serverInfo: { name, version } } })
   })
 
   it('非回环监听缺少 TLS 时照常启动，并持续告警明文传输', async () => {

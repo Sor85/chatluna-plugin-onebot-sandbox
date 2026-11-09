@@ -12,9 +12,8 @@ import type { SandboxAppearance } from '../src/types'
 import { MCP_RESOURCE_URIS, MCP_TOOL_CATALOGUE, toMcpToolCatalogue } from './helpers/mcp-tool-catalogue'
 
 const appearance: SandboxAppearance = {
-  enableSandboxFrostedGlass: true,
   sandboxTimBubbleTail: true,
-  sandboxColorMode: 'auto',
+  sandboxIncomingBubbleStyle: 'shadow',
   sandboxAccentColor: '#2563eb',
   sandboxMarkRecalledMessages: true,
 }

@@ -54,16 +54,12 @@ export interface SandboxTestCredential {
   name: string
   scopes: SandboxMcpScope[]
   enabled: boolean
-  token?: string
+  token: string
   tokenDigest: string
   createdAt: string
 }
 
 export type SandboxTestPublicCredential = Omit<SandboxTestCredential, 'tokenDigest'>
-
-export interface SandboxTestCreatedCredential extends SandboxTestPublicCredential {
-  token: string
-}
 
 export interface SandboxMcpEventCursor {
   epoch: string

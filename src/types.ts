@@ -297,7 +297,6 @@ interface SandboxMessageBase {
   content: string
   createdAt: string
   replyToMessageId?: string
-  broadcastId?: string
   media?: SandboxMedia[]
   // 外层消息只挂资源 ID；完整 node 列表保存在场景 forwards 集合中。
   forwardId?: string
@@ -566,12 +565,10 @@ export interface SandboxSnapshot {
   conversations: SandboxConversation[]
   // 会话实例是独立集合：既有「遍历根会话」的实现因此默认只看到根会话，需要全部会话的
   // 少数路径（消息搜索、保留窗口裁剪、场景导出）经会话解析模块显式合并两个集合。
-  // 读取路径统一把缺失值规范成 []，以便旧测试夹具与未改动的客户端空快照继续通过类型检查。
-  conversationInstances?: SandboxConversationInstance[]
+  conversationInstances: SandboxConversationInstance[]
   messages: SandboxMessage[]
   // 合并转发资源与消息解耦；重启后仍可按 forwardId 展开完整 node。
-  // 读取路径统一把缺失值规范成 []，以便旧测试夹具与未改动的客户端空快照继续通过类型检查。
-  forwards?: SandboxForward[]
+  forwards: SandboxForward[]
   friendships: SandboxFriendship[]
   requests: SandboxRelationshipRequest[]
 }

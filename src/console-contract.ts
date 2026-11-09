@@ -37,7 +37,6 @@ import type { SandboxHttpApiCapabilityCatalog } from './mcp/http-api'
 import type {
   SandboxTestCallRecord,
   SandboxMcpCapabilityCatalog,
-  SandboxTestCreatedCredential,
   SandboxTestPublicCredential,
   SandboxMcpScope,
 } from './mcp/types'
@@ -46,8 +45,8 @@ import type { SandboxTestSpaceSummary } from './test-spaces'
 /**
  * Console 契约：前后端之间端点名、入参、出参与广播载荷的唯一声明。
  *
- * 服务端的事件映射、对 `@koishijs/console` 的 `Events` 模块增强与客户端 `send` / `receive`
- * 的签名全部从这里派生，加端点只改这一处。本模块只有类型，不 import 控制服务，因此客户端
+ * 服务端的 WebUI action 与客户端 invoke 的签名全部从这里派生，加端点只改这一处。
+ * 本模块只有类型，不 import 控制服务，因此客户端
  * 引用它不会把服务端运行时拖进前端产物；入参与出参一律引用既有领域类型，不复制一份形状。
  *
  * 分组按客户端页面的能力书写，只是给读的人用的；端点集合是全体分组的并集。
@@ -106,9 +105,9 @@ export interface SandboxTestEndpointConsoleEvents {
   'onebot-sandbox.mcp-capabilities': () => SandboxMcpCapabilityCatalog
   'onebot-sandbox.http-capabilities': () => SandboxHttpApiCapabilityCatalog
   'onebot-sandbox.test-credentials': () => SandboxTestPublicCredential[]
-  'onebot-sandbox.create-test-credential': (input: { name: string; scopes: SandboxMcpScope[] }) => SandboxTestCreatedCredential
+  'onebot-sandbox.create-test-credential': (input: { name: string; scopes: SandboxMcpScope[] }) => SandboxTestPublicCredential
   'onebot-sandbox.update-test-credential': (input: { id: string; name?: string; scopes?: SandboxMcpScope[] }) => SandboxTestPublicCredential
-  'onebot-sandbox.rotate-test-credential-token': (input: { id: string }) => SandboxTestCreatedCredential
+  'onebot-sandbox.rotate-test-credential-token': (input: { id: string }) => SandboxTestPublicCredential
   'onebot-sandbox.set-test-credential-enabled': (input: { id: string; enabled: boolean }) => void
   'onebot-sandbox.revoke-test-credential': (input: { id: string }) => void
 }

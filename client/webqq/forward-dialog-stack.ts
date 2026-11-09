@@ -41,27 +41,35 @@ export function closeForwardStack(): ForwardDialogFrame[] {
  */
 export async function loadForwardDialogFrame(input: {
   readonly input: { forwardId?: string, messageId?: string }
-  readonly load: (input: { forwardId?: string, messageId?: string }) => Promise<SandboxForward>
+  readonly load: (input: { forwardId?: string, messageId?: string }) => Promise<SandboxForward | undefined>
 }): Promise<ForwardDialogFrame | undefined> {
-  let forward: SandboxForward
+  let forward: SandboxForward | undefined
   try {
     forward = await input.load(input.input)
   } catch {
     return
   }
 
+  if (!forward) return
+  let cancelled = false
   const nestedEntries = await Promise.all(
     forward.nodes
       .map((node) => node.forwardId)
       .filter((forwardId): forwardId is string => !!forwardId)
       .map(async (forwardId) => {
         try {
-          return [forwardId, await input.load({ forwardId })] as const
+          const nested = await input.load({ forwardId })
+          if (!nested) {
+            cancelled = true
+            return
+          }
+          return [forwardId, nested] as const
         } catch {
           return undefined
         }
       }),
   )
+  if (cancelled) return
 
   return {
     // 没有可推断的标题时留空，由界面按当前语言显示「合并转发」。

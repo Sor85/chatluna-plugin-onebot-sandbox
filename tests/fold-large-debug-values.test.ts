@@ -259,9 +259,8 @@ describe('控制服务与 Console 单条详情', () => {
       addListener(event, callback) { listeners.set(event, callback as never) },
       broadcast() {},
     }, control, {
-      enableSandboxFrostedGlass: true,
       sandboxTimBubbleTail: true,
-      sandboxColorMode: 'auto',
+      sandboxIncomingBubbleStyle: 'shadow',
       sandboxAccentColor: '#2563eb',
       sandboxMarkRecalledMessages: true,
     })

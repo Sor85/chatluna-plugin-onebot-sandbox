@@ -16,13 +16,9 @@ export {
   type BuiltinAvatarKind,
 }
 
-export function getBuiltinAvatarReference(avatar: BuiltinAvatar): string {
-  return avatar.reference
-}
-
 export function findBuiltinAvatarByReference(reference: string): BuiltinAvatar | undefined {
   for (const pool of Object.values(BUILTIN_AVATARS)) {
-    const avatar = pool.find((candidate) => candidate.reference === reference || candidate.legacyReferences.includes(reference))
+    const avatar = pool.find((candidate) => candidate.reference === reference)
     if (avatar) return avatar
   }
 }

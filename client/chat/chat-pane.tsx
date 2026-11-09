@@ -49,6 +49,7 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
   const [selection, setSelection] = React.useState<MessageSelectionState>(exitMessageSelection())
   const [forwardTargetOpen, setForwardTargetOpen] = React.useState(false)
   const [forwardStack, setForwardStack] = React.useState<ForwardDialogFrame[]>([])
+  const forwardRequest = React.useRef(0)
   const [imageUrl, setImageUrl] = React.useState('')
   // 悬浮发送框回报的占位高度，初值按单行胶囊估算（44 + 28），首帧不至于让末条消息被遮住。
   const [composerSpace, setComposerSpace] = React.useState(72)
@@ -62,7 +63,7 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
       return reply ? [[reply.id, reply] as const] : []
     })) as Record<string, SandboxMessage>
   }, [messages, snapshot.messages])
-  const forwardPreviews = React.useMemo(() => buildForwardPreviewMap(messages, snapshot.forwards ?? []), [messages, snapshot.forwards])
+  const forwardPreviews = React.useMemo(() => buildForwardPreviewMap(messages, snapshot.forwards), [messages, snapshot.forwards])
   const capabilities = React.useMemo(() => buildMessageCapabilityMap({ messages, conversation, operatorId, group }), [messages, conversation, operatorId, group])
   const friendMenuStates = React.useMemo<Record<string, FriendMenuState>>(() => {
     if (!operatorId) return {}
@@ -103,7 +104,7 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
   }), [snapshot, workspace.conversations, operatorId, resolveAvatar, t])
   const chatLunaStates = workspace.workspace.chatLunaStates.filter(({ conversationId }) => conversationId === conversation?.id)
 
-  // 换会话时清掉与上一个会话绑定的临时状态。
+  // 换会话或操作者时清掉旧视角的临时状态；卸载也使在途转发请求失效。
   React.useEffect(() => {
     setReplyTo('')
     setReactionTarget('')
@@ -111,7 +112,8 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
     setForwardTargetOpen(false)
     setForwardStack(closeForwardStack())
     setSearchOpen(false)
-  }, [conversation?.id])
+    return () => { forwardRequest.current++ }
+  }, [conversation?.id, operatorId])
 
   // Esc 的优先级：先关转发目标，再退出多选，最后关闭查找。
   React.useEffect(() => {
@@ -134,8 +136,15 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
   const conversationId = conversation?.id
 
   const openForward = async (input: { forwardId?: string, messageId?: string }, mode: 'replace' | 'push') => {
-    const frame = await loadForwardDialogFrame({ input, load: (request) => store.getForwardMessage(request) })
-    if (frame) setForwardStack((stack) => pushForwardFrame(stack, frame, mode))
+    const requestId = ++forwardRequest.current
+    const isCurrent = () => requestId === forwardRequest.current
+      && store.getView().currentOperatorId === operatorId
+      && store.getView().activeConversationId === conversationId
+    const frame = await loadForwardDialogFrame({
+      input,
+      load: (request) => isCurrent() ? store.getForwardMessage(request) : Promise.resolve(undefined),
+    })
+    if (frame && isCurrent()) setForwardStack((stack) => pushForwardFrame(stack, frame, mode))
   }
 
   const title = conversation?.title ?? group?.name ?? peer?.name ?? conversation?.id ?? t('sandbox.chat.pick')
@@ -287,7 +296,10 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
       <ForwardViewer
         stack={forwardStack}
         imageOpen={!!imageUrl}
-        onCloseFrom={(depth) => setForwardStack((stack) => depth ? stack.slice(0, depth) : closeForwardStack())}
+        onCloseFrom={(depth) => {
+          forwardRequest.current++
+          setForwardStack((stack) => depth ? stack.slice(0, depth) : closeForwardStack())
+        }}
         onOpenForward={(forwardId) => void openForward({ forwardId }, 'push')}
         onOpenImage={setImageUrl}
       />
@@ -299,5 +311,5 @@ export function ChatPane({ detailsVisible, onToggleDetails, onBack, mentionBridg
 function visibleConversation(store: ReturnType<typeof useSandbox>['store'], conversationId: string | undefined) {
   const snapshot = store.snapshot
   if (!snapshot || !conversationId) return undefined
-  return [...snapshot.conversations, ...(snapshot.conversationInstances ?? [])].find(({ id }) => id === conversationId)
+  return [...snapshot.conversations, ...snapshot.conversationInstances].find(({ id }) => id === conversationId)
 }

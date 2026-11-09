@@ -18,6 +18,7 @@ const snapshot: SandboxSnapshot = {
     participantIds: ['10001', '20001'],
     messageIds: ['message-1'],
   }],
+  conversationInstances: [],
   messages: [{
     id: 'message-1',
     authorId: '10001',

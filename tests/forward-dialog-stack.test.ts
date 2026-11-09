@@ -108,6 +108,18 @@ describe('合并转发对话栈', () => {
       expect(result).toBeUndefined()
     })
 
+    it('根资源读取已取消时不打开窗口', async () => {
+      expect(await loadForwardDialogFrame({ input: { forwardId: 'f1' }, load: async () => undefined })).toBeUndefined()
+    })
+
+    it('嵌套资源因切换视角取消时，整帧丢弃而不是展示旧外层内容', async () => {
+      const outer = forward('f1', [node('乙', '[合并转发]', 'f2')])
+      expect(await loadForwardDialogFrame({
+        input: { forwardId: 'f1' },
+        load: async ({ forwardId }) => forwardId === 'f1' ? outer : undefined,
+      })).toBeUndefined()
+    })
+
     /** 节点做浅拷贝：直接把服务端返回的对象放进帧里，弹窗内的改动会写穿到缓存。 */
     it('节点是拷贝而不是服务端返回的同一个对象', async () => {
       const result = await loadForwardDialogFrame({

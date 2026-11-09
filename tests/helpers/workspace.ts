@@ -14,6 +14,7 @@ export function workspaceFor(operatorId = '10001', revision = 1): SandboxWorkspa
     groups: [{
       id: '30001',
       name: '测试群',
+      announcements: [],
       members: [
         { participantId: '10001', role: 'owner' },
         { participantId: '10003', role: 'member' },
@@ -29,6 +30,8 @@ export function workspaceFor(operatorId = '10001', revision = 1): SandboxWorkspa
       }))),
       { id: 'group:30001', type: 'group', groupId: '30001', messageIds: [] },
     ],
+    conversationInstances: [],
+    forwards: [],
     messages: [],
     friendships: ['10001', '10003'].flatMap((userId) => ['20001', '20002'].map((botId) => ({
       id: `friend:${userId}:${botId}`,

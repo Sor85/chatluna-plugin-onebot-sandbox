@@ -21,13 +21,11 @@ describe('角色内心活动', () => {
   })
 
   it('工具模式：从 reply 工具的 content 参数里取，其他工具的参数不算', () => {
-    expect(readStepThought({
-      content: [],
-      toolCalls: [
-        { type: 'tool-call', toolName: 'memory_write', input: { content: '<think>不该读到</think>' } },
-        { type: 'tool-call', toolName: 'reply', input: { content: '<think>先安慰一下</think>没事的' } },
-      ],
-    })).toBe('先安慰一下')
+    const toolCalls = [
+      { type: 'tool-call', toolName: 'memory_write', input: { content: '<think>不该读到</think>' } },
+      { type: 'tool-call', toolName: 'reply', input: { content: '<think>先安慰一下</think>没事的' } },
+    ]
+    expect(readStepThought({ content: toolCalls, toolCalls })).toBe('先安慰一下')
   })
 
   it('形状不对时返回空字符串，而不是抛错', () => {

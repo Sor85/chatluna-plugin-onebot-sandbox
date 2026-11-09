@@ -3,7 +3,6 @@ import {
   createEmptyComposerDraft,
   deleteComposerBackward,
   detectMentionTrigger,
-  draftText,
   filterMentionCandidates,
   insertComposerMention,
   isComposerDraftEmpty,
@@ -26,7 +25,6 @@ describe('WebQQ 内联提及草稿', () => {
       { type: 'mention', id: '10002', name: '测试用户2' },
       { type: 'text', text: ' 在吗' },
     ])
-    expect(draftText(draft.tokens)).toBe('你好 @测试用户2 在吗')
     expect(serializeComposerDraft(draft.tokens)).toBe('你好 <at id="10002"/> 在吗')
     expect(draft.offset).toBe(1)
   })
@@ -74,7 +72,11 @@ describe('WebQQ 内联提及草稿', () => {
       { id: '10003', name: '测试用户' },
     )
     expect(serializeComposerDraft(replaced.tokens)).toBe('你好 <at id="10003"/>')
-    expect(draftText(replaced.tokens)).toBe('你好 @测试用户 ')
+    expect(replaced.tokens).toEqual([
+      { type: 'text', text: '你好 ' },
+      { type: 'mention', id: '10003', name: '测试用户' },
+      { type: 'text', text: ' ' },
+    ])
     expect(replaced.offset).toBe(1)
 
     const deleted = deleteComposerBackward(replaced.tokens, replaced.tokenIndex, replaced.offset)

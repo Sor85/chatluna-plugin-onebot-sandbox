@@ -7,9 +7,8 @@ import type { SandboxAppearance } from '../src/types'
 import { SandboxDomainError } from '../src/types'
 
 const appearance: SandboxAppearance = {
-  enableSandboxFrostedGlass: true,
   sandboxTimBubbleTail: true,
-  sandboxColorMode: 'auto',
+  sandboxIncomingBubbleStyle: 'shadow',
   sandboxAccentColor: '#2563eb',
   sandboxMarkRecalledMessages: true,
 }

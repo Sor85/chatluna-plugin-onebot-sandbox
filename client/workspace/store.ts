@@ -89,6 +89,8 @@ export class WorkspaceStore {
   private refreshTask: Promise<void> | undefined
   private pendingRefresh = false
   private mediaLoading = new Set<string>()
+  private readEpoch = 0
+  private historyTasks = new Map<string, Promise<void>>()
   private disposed = false
 
   constructor(readonly spaceId: string | undefined) {}
@@ -108,10 +110,21 @@ export class WorkspaceStore {
   /** 只停止写入视图；监听器由 `useSyncExternalStore` 自行退订，清空会误删重挂载后的订阅。 */
   dispose() {
     this.disposed = true
+    this.invalidateReads()
+  }
+
+  private invalidateReads() {
+    this.readEpoch++
+    this.historyTasks.clear()
+  }
+
+  private isCurrentRead(epoch: number, operatorId: string) {
+    return !this.disposed && epoch === this.readEpoch && operatorId === this.view.currentOperatorId
   }
 
   private set(patch: Partial<WorkspaceView>) {
     if (this.disposed) return
+    if ('currentOperatorId' in patch && patch.currentOperatorId !== this.view.currentOperatorId) this.invalidateReads()
     this.view = { ...this.view, ...patch }
     for (const listener of this.listeners) listener()
   }
@@ -321,50 +334,72 @@ export class WorkspaceStore {
     return invoke('onebot-sandbox.search-conversation-messages', this.scoped({ ...input, operatorId: this.requireOperatorId() }))
   }
 
+  /** 视角切换或卸载后的结果返回 undefined，调用方不能继续展示旧转发内容。 */
   async getForwardMessage(input: { forwardId?: string, messageId?: string }) {
-    const forward = await invoke('onebot-sandbox.get-forward-message', this.scoped({ ...input, operatorId: this.requireOperatorId() }))
-    const workspace = this.view.workspace
-    if (workspace && !(workspace.snapshot.forwards ?? []).some(({ id }) => id === forward.id)) {
-      this.set({ workspace: { ...workspace, snapshot: { ...workspace.snapshot, forwards: [...(workspace.snapshot.forwards ?? []), forward] } } })
-      void this.loadVisibleMedia()
+    if (this.disposed) return
+    const operatorId = this.requireOperatorId()
+    const epoch = this.readEpoch
+    try {
+      const forward = await invoke('onebot-sandbox.get-forward-message', this.scoped({ ...input, operatorId }))
+      if (!this.isCurrentRead(epoch, operatorId)) return
+      const workspace = this.view.workspace
+      if (!workspace) return
+      if (!workspace.snapshot.forwards.some(({ id }) => id === forward.id)) {
+        this.set({ workspace: { ...workspace, snapshot: { ...workspace.snapshot, forwards: [...workspace.snapshot.forwards, forward] } } })
+        void this.loadVisibleMedia()
+      }
+      return forward
+    } catch (error) {
+      if (this.isCurrentRead(epoch, operatorId)) throw error
     }
-    return forward
   }
 
-  /** 向前翻历史：服务端只给最近一段，旧消息按最早一条的 ID 继续取，拼到会话头部。 */
-  async loadEarlierMessages(conversationId: string) {
+  /** 同一视角、同一会话复用在途分页；切换视角或卸载会使旧请求失效。 */
+  loadEarlierMessages(conversationId: string): Promise<void> {
     const workspace = this.view.workspace
-    if (!workspace) return
+    if (this.disposed || !workspace) return Promise.resolve()
+    const pending = this.historyTasks.get(conversationId)
+    if (pending) return pending
     const beforeMessageId = readConversationMessageIds(workspace.snapshot, conversationId)[0]
-    if (!beforeMessageId) return
-    const history = await invoke('onebot-sandbox.message-history', this.scoped({
-      operatorId: this.requireOperatorId(),
-      conversationId,
-      beforeMessageId,
-      limit: 50,
-    }))
-    const current = this.view.workspace ?? workspace
-    const snapshot = current.snapshot
-    const knownIds = new Set(snapshot.messages.map(({ id }) => id))
-    const knownForwardIds = new Set((snapshot.forwards ?? []).map(({ id }) => id))
-    const prepend = <T extends { id: string, messageIds: string[] }>(rows: T[]) => rows.map((row) => row.id === conversationId ? {
-      ...row,
-      messageIds: [...history.messages.map(({ id }) => id), ...row.messageIds],
-      hasMoreMessages: !!history.nextBeforeMessageId,
-    } : row)
-    this.set({
-      workspace: {
-        ...current,
-        snapshot: {
-          ...snapshot,
-          conversations: prepend(snapshot.conversations),
-          conversationInstances: prepend(snapshot.conversationInstances ?? []),
-          messages: [...history.messages.filter(({ id }) => !knownIds.has(id)), ...snapshot.messages],
-          forwards: [...(snapshot.forwards ?? []), ...(history.forwards ?? []).filter(({ id }) => !knownForwardIds.has(id))],
-        },
-      },
+    if (!beforeMessageId) return Promise.resolve()
+    const operatorId = this.requireOperatorId()
+    const epoch = this.readEpoch
+    const task = (async () => {
+      try {
+        const history = await invoke('onebot-sandbox.message-history', this.scoped({ operatorId, conversationId, beforeMessageId, limit: 50 }))
+        if (!this.isCurrentRead(epoch, operatorId)) return
+        const current = this.view.workspace
+        // 会话可能已被清空、删除或重新裁剪，不把旧分页接到另一条边界上。
+        if (!current || readConversationMessageIds(current.snapshot, conversationId)[0] !== beforeMessageId) return
+        const snapshot = current.snapshot
+        const knownIds = new Set(snapshot.messages.map(({ id }) => id))
+        const knownForwardIds = new Set(snapshot.forwards.map(({ id }) => id))
+        const prepend = <T extends { id: string, messageIds: string[] }>(rows: T[]) => rows.map((row) => row.id === conversationId ? {
+          ...row,
+          messageIds: [...new Set([...history.messages.map(({ id }) => id), ...row.messageIds])],
+          hasMoreMessages: !!history.nextBeforeMessageId,
+        } : row)
+        this.set({
+          workspace: {
+            ...current,
+            snapshot: {
+              ...snapshot,
+              conversations: prepend(snapshot.conversations),
+              conversationInstances: prepend(snapshot.conversationInstances),
+              messages: [...history.messages.filter(({ id }) => !knownIds.has(id)), ...snapshot.messages],
+              forwards: [...snapshot.forwards, ...(history.forwards ?? []).filter(({ id }) => !knownForwardIds.has(id))],
+            },
+          },
+        })
+        void this.loadVisibleMedia()
+      } catch (error) {
+        if (this.isCurrentRead(epoch, operatorId)) throw error
+      }
+    })().finally(() => {
+      if (this.historyTasks.get(conversationId) === task) this.historyTasks.delete(conversationId)
     })
-    void this.loadVisibleMedia()
+    this.historyTasks.set(conversationId, task)
+    return task
   }
 
   resolveAvatar(reference: string | undefined) {
@@ -406,7 +441,7 @@ function visibleMediaIdsOf(snapshot: SandboxSnapshot) {
     .flatMap((reference) => mediaIdOf(reference) ?? []))
   const messageMediaIds = new Set([
     ...snapshot.messages.flatMap(({ media }) => media?.map(({ id }) => id) ?? []),
-    ...(snapshot.forwards ?? []).flatMap(({ nodes }) => nodes.flatMap(({ media }) => media?.map(({ id }) => id) ?? [])),
+    ...snapshot.forwards.flatMap(({ nodes }) => nodes.flatMap(({ media }) => media?.map(({ id }) => id) ?? [])),
   ])
   return { avatarIds, messageMediaIds }
 }

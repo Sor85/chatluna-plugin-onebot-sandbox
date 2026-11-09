@@ -11,6 +11,8 @@ function snapshot(overrides: Partial<SandboxSnapshot> = {}): SandboxSnapshot {
     participants: [],
     groups: [],
     conversations: [],
+    conversationInstances: [],
+    forwards: [],
     messages: [],
     friendships: [],
     requests: [],

@@ -77,18 +77,8 @@ function findRootRow(scene: SandboxSnapshot, conversationId: string): SandboxCon
   return scene.conversations.find(({ id }) => id === conversationId)
 }
 
-/**
- * 实例集合的唯一读取口。
- *
- * 缺失与形状不对都归一成空数组：本模块是实例集合的持有者，「场景里的实例集合永远是数组」这条
- * 不变量因此只在这里成立一次。半成品导入可能带来任意 JSON，读取路径不能假设它是数组。
- */
-function instanceRows(scene: SandboxSnapshot): SandboxConversationInstance[] {
-  return Array.isArray(scene.conversationInstances) ? scene.conversationInstances : []
-}
-
 function findInstanceRow(scene: SandboxSnapshot, conversationId: string): SandboxConversationInstance | undefined {
-  return instanceRows(scene).find(({ id }) => id === conversationId)
+  return scene.conversationInstances.find(({ id }) => id === conversationId)
 }
 
 /** 会话在场景里的存储行，无论它存在会话集合还是实例集合。 */
@@ -169,7 +159,7 @@ export function listRootConversations(scene: SandboxSnapshot): ResolvedConversat
 
 /** 场景里的全部会话实例，按存储顺序。 */
 export function listConversationInstances(scene: SandboxSnapshot): ResolvedConversation[] {
-  return instanceRows(scene).flatMap((instance) => {
+  return scene.conversationInstances.flatMap((instance) => {
     const resolved = resolveInstance(scene, instance)
     return resolved ? [resolved] : []
   })
@@ -415,7 +405,7 @@ export function createConversationInstance(
     ...(input.forkPoint ? { forkPoint: { ...input.forkPoint } } : {}),
     messageIds: [],
   }
-  scene.conversationInstances = [...instanceRows(scene), instance]
+  scene.conversationInstances = [...scene.conversationInstances, instance]
   return resolveInstance(scene, instance)!
 }
 
@@ -438,7 +428,7 @@ export function renameConversationInstance(scene: SandboxSnapshot, conversationI
 export function removeConversationInstance(scene: SandboxSnapshot, conversationId: string): Set<string> {
   const instance = findInstanceRow(scene, conversationId)
   if (!instance) throw new SandboxDomainError(`会话实例不存在：${conversationId}`)
-  scene.conversationInstances = instanceRows(scene).filter(({ id }) => id !== instance.id)
+  scene.conversationInstances = scene.conversationInstances.filter(({ id }) => id !== instance.id)
   return new Set([instance.id])
 }
 
@@ -463,7 +453,7 @@ export function clearConversationMessageIds(scene: SandboxSnapshot, conversation
  * 空实例是合法状态：淘汰掉实例最后一条消息不会删除实例本身。
  */
 export function pruneConversationMessageIds(scene: SandboxSnapshot, removedMessageIds: ReadonlySet<string>): void {
-  for (const row of [...scene.conversations, ...instanceRows(scene)]) {
+  for (const row of [...scene.conversations, ...scene.conversationInstances]) {
     if (!row.messageIds.some((id) => removedMessageIds.has(id))) continue
     row.messageIds = row.messageIds.filter((id) => !removedMessageIds.has(id))
   }
@@ -483,12 +473,12 @@ export function removeConversations(
   const matched = listConversations(scene).filter(predicate)
   const removedRootIds = new Set(matched.filter(({ kind }) => kind === 'root').map(({ id }) => id))
   const removedIds = new Set(matched.map(({ id }) => id))
-  for (const instance of instanceRows(scene)) {
+  for (const instance of scene.conversationInstances) {
     if (removedRootIds.has(instance.rootConversationId)) removedIds.add(instance.id)
   }
   if (!removedIds.size) return removedIds
   scene.conversations = scene.conversations.filter(({ id }) => !removedIds.has(id))
-  scene.conversationInstances = instanceRows(scene).filter(({ id }) => !removedIds.has(id))
+  scene.conversationInstances = scene.conversationInstances.filter(({ id }) => !removedIds.has(id))
   return removedIds
 }
 
@@ -547,7 +537,7 @@ export function projectVisibleConversations(
     scene.conversations
       .filter(({ id }) => visibleRootIds.has(id))
       .map((conversation) => truncate(scene, conversation, messageLimit, false)),
-    instanceRows(scene)
+    scene.conversationInstances
       .filter(({ rootConversationId }) => visibleRootIds.has(rootConversationId))
       .map((instance) => truncate(scene, instance, messageLimit, false)),
   )
@@ -557,7 +547,7 @@ export function projectVisibleConversations(
 export function trimConversationMessages(scene: SandboxSnapshot, messageLimit: number): ConversationProjection {
   return toProjection(
     scene.conversations.map((conversation) => truncate(scene, conversation, messageLimit, true)),
-    instanceRows(scene).map((instance) => truncate(scene, instance, messageLimit, true)),
+    scene.conversationInstances.map((instance) => truncate(scene, instance, messageLimit, true)),
   )
 }
 
@@ -570,7 +560,7 @@ export interface ConversationReferenceScope {
 /** 替换场景时校验会话集合与实例集合的自洽性。 */
 export function validateSceneConversations(scene: SandboxSnapshot, scope: ConversationReferenceScope): void {
   const rootIds = new Set(scene.conversations.map(({ id }) => id))
-  const instances = instanceRows(scene)
+  const instances = scene.conversationInstances
   const conversationIds = new Set([...rootIds, ...instances.map(({ id }) => id)])
   if (conversationIds.size !== scene.conversations.length + instances.length) throw new SandboxDomainError('会话 ID 不能重复')
   for (const conversation of scene.conversations) {
@@ -597,10 +587,4 @@ export function validateSceneConversations(scene: SandboxSnapshot, scope: Conver
       throw new SandboxDomainError('会话引用不存在的消息')
     }
   }
-}
-
-/** 把缺失或形状不对的会话实例集合规范成空数组，让旧测试夹具与半成品导入不必自带该字段。 */
-export function normalizeSceneConversationInstances(scene: SandboxSnapshot): SandboxSnapshot {
-  scene.conversationInstances = instanceRows(scene)
-  return scene
 }

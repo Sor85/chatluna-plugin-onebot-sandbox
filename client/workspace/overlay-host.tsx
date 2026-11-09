@@ -12,6 +12,7 @@ import {
   Input,
 } from '@chatluna/ui-kit'
 import { toast } from '@chatluna/ui-client/client'
+import { resolveConversation } from '../../src/conversation-resolution'
 import { useT } from '../i18n'
 import { EntityDialog, type EntityDialogTarget } from '../environment/entity-dialog'
 import { SandboxAvatar } from '../shared/avatar'
@@ -58,15 +59,15 @@ export function useOverlayState(store: WorkspaceStore) {
         setState((current) => ({ ...current, text: { kind, targetId, groupId: group.id, value } }))
       },
       openConversationRename: (conversationId) => {
-        const instance = store.snapshot?.conversationInstances?.find(({ id }) => id === conversationId)
+        const instance = store.snapshot?.conversationInstances.find(({ id }) => id === conversationId)
         if (instance) setState((value) => ({ ...value, text: { kind: 'rename', conversationId, value: instance.title ?? '' } }))
       },
       openProfile: (participantId, anchor) => {
         const snapshot = store.snapshot
         if (!snapshot) return
         const view = store.getView()
-        const conversation = [...snapshot.conversations, ...(snapshot.conversationInstances ?? [])].find(({ id }) => id === view.activeConversationId)
-        const groupId = conversation && 'groupId' in conversation ? conversation.groupId : undefined
+        const conversation = view.activeConversationId ? resolveConversation(snapshot, view.activeConversationId) : undefined
+        const groupId = conversation?.groupId
         const card = buildProfileCardModel(t, { snapshot, participantId, viewerId: view.currentOperatorId, groupId })
         if (card) setState((value) => ({ ...value, profile: { card, ...anchorOf(anchor) } }))
       },

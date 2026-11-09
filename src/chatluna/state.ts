@@ -34,7 +34,6 @@ interface ChatLunaAgentPayload {
 
 interface ChatLunaStepPayload {
   content?: unknown
-  toolCalls?: unknown
   usage?: { inputTokens?: unknown, cacheReadTokens?: unknown, cacheWriteTokens?: unknown, outputTokens?: unknown, totalTokens?: unknown }
   trace?: { attributes?: Record<string, unknown> }
 }
@@ -79,17 +78,14 @@ function readNumber(value: unknown): number {
 
 function readSessionTarget(session: unknown): { botParticipantId: string, channelId: string } | undefined {
   const value = readRecord(session)
-  const bot = readRecord(value?.bot)
-  const channel = readRecord(value?.channel)
-  const botParticipantId = readString(value?.selfId) ?? readString(bot?.selfId)
-  const channelId = readString(value?.channelId) ?? readString(channel?.id)
+  const botParticipantId = readString(value?.selfId)
+  const channelId = readString(value?.channelId)
   if (!botParticipantId || !channelId) return
   return { botParticipantId, channelId }
 }
 
 function readAgentSessionId(agent: ChatLunaAgentPayload | undefined): string | undefined {
-  const id = agent?.session?.id
-  return typeof id === 'string' || typeof id === 'number' ? String(id) : undefined
+  return readString(agent?.session?.id)
 }
 
 function createStateKey(botParticipantId: string, conversationId: string) {

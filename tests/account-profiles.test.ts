@@ -333,6 +333,7 @@ describe('类型化账号资料', () => {
         { id: 'private:10001:20001', type: 'direct', participantIds: ['10001', '20001'], messageIds: [] },
         { id: 'group:30001', type: 'group', groupId: '30001', messageIds: [] },
       ],
+      conversationInstances: [],
       messages: [],
       forwards: [],
       friendships: [{

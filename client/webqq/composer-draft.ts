@@ -5,7 +5,6 @@ export interface ComposerDraft { tokens: ComposerDraftToken[], tokenIndex: numbe
 export interface MentionCandidate { id: string, name: string, avatar?: string, kind: 'user' | 'bot', keywords?: string[] }
 
 export function createEmptyComposerDraft(): ComposerDraft { return { tokens: [{ type: 'text', text: '' }], tokenIndex: 0, offset: 0 } }
-export function draftText(tokens: readonly ComposerDraftToken[]): string { return tokens.map((token) => token.type === 'text' ? token.text : `@${token.name}`).join('') }
 export function isComposerDraftEmpty(tokens: readonly ComposerDraftToken[]): boolean { return !tokens.some((token) => token.type === 'mention' || !!token.text.trim()) }
 export function serializeComposerDraft(tokens: readonly ComposerDraftToken[]): string { return tokens.map((token) => token.type === 'mention' ? `<at id="${token.id}"/>` : token.text.replace(/ /g, ' ')).join('').trim() }
 

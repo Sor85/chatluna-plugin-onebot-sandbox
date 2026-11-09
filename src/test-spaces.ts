@@ -40,7 +40,7 @@ export function trimSnapshotMessages(snapshot: SandboxSnapshot, limit: number): 
     // 会让消费端拿着「只有自有消息」的列表去拼一份已经被裁过的来源前缀。
     conversationInstances: trimmed.conversationInstances,
     messages,
-    forwards: (snapshot.forwards ?? []).filter(({ id }) => visibleForwardIds.has(id)),
+    forwards: snapshot.forwards.filter(({ id }) => visibleForwardIds.has(id)),
   }
 }
 

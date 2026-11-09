@@ -89,10 +89,6 @@ export class SandboxMediaStorage {
     }
   }
 
-  unpin(id: string): void {
-    this.pinned.delete(id)
-  }
-
   isPinned(id: string): boolean {
     return this.pinned.has(id)
   }

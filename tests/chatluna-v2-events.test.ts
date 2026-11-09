@@ -29,7 +29,7 @@ function createStore(resolve: (bot: string, channelId: string) => string | undef
   return { store, emit, archived, changes: () => changes }
 }
 
-const agent = { session: { id: 42 } }
+const agent = { session: { id: '42' } }
 const session = { selfId: 'bot-1', channelId: 'private:user-1' }
 
 function step(turn: number, stepNumber: number, options: { usage?: { inputTokens: number, outputTokens: number }, text?: string } = {}) {

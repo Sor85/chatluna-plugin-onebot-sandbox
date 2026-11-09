@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getCommonSandboxEmojiFaces,
   getSandboxEmojiFace,
@@ -6,6 +6,13 @@ import {
   rememberSandboxEmojiId,
   searchSandboxEmojiFaces,
 } from '../client/webqq/emoji-catalog'
+
+const storage = vi.hoisted(() => new Map<string, unknown>())
+vi.mock('@chatluna/ui-storage', () => ({
+  readStored: (key: string) => storage.get(key),
+  writeStored: (key: string, value: unknown) => storage.set(key, value),
+}))
+beforeEach(() => storage.clear())
 
 describe('本地表情目录', () => {
   it('提供完整目录、常用区和搜索', () => {
@@ -18,18 +25,10 @@ describe('本地表情目录', () => {
   })
 
   it('记住最近使用的表情到本地常用区', () => {
-    const storage = new Map<string, string>()
-    const api = {
-      getItem(key: string) {
-        return storage.get(key) ?? null
-      },
-      setItem(key: string, value: string) {
-        storage.set(key, value)
-      },
-    }
-    expect(loadRecentSandboxEmojiIds(api)).toEqual([])
-    expect(rememberSandboxEmojiId('76', api)).toEqual(['76'])
-    expect(rememberSandboxEmojiId('66', api)).toEqual(['66', '76'])
-    expect(loadRecentSandboxEmojiIds(api)).toEqual(['66', '76'])
+    expect(loadRecentSandboxEmojiIds()).toEqual([])
+    expect(rememberSandboxEmojiId('76')).toEqual(['76'])
+    expect(rememberSandboxEmojiId('66')).toEqual(['66', '76'])
+    expect(loadRecentSandboxEmojiIds()).toEqual(['66', '76'])
+    expect(storage.get('chatluna.onebot-sandbox.recent-emoji-ids')).toEqual(['66', '76'])
   })
 })

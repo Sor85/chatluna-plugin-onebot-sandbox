@@ -47,10 +47,6 @@ export class ScopeRowIndex {
     this.nextSequence = Math.max(this.nextSequence, nextSequence, sequence + 1)
   }
 
-  has(sequence: number): boolean {
-    return this.rows.some((row) => row.sequence === sequence)
-  }
-
   clear(nextSequence: number): void {
     this.rows = []
     this.nextSequence = Math.max(this.nextSequence, nextSequence)
@@ -126,15 +122,6 @@ export class InMemoryRecordRows<Record extends SandboxRecordRow, Query extends S
     for (const record of this.bodies.values()) {
       if (record.id === recordId) return structuredClone(record)
     }
-  }
-
-  async replace(record: Record, bytes: number): Promise<SandboxRecordScopeSummary> {
-    // 只有仍然存在的行才回写；否则容量回收删掉的记录会被 update 复活。
-    if (this.index.has(record.sequence)) {
-      this.bodies.set(record.sequence, structuredClone(record))
-      this.index.put(record.sequence, bytes)
-    }
-    return this.index.summary()
   }
 
   async query(query: Query): Promise<Record[]> {

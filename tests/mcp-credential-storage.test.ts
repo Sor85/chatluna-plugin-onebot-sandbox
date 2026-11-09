@@ -59,6 +59,7 @@ const goodCredential = {
   name: '合规凭证',
   scopes: ['read'],
   enabled: true,
+  token: goodToken,
   tokenDigest: digestToken(goodToken),
   createdAt: '2026-08-29T09:00:00.000Z',
 }

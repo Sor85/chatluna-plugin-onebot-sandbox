@@ -6,7 +6,7 @@ import { SandboxTestSpaceService } from '../src/test-spaces'
 import type { SandboxAppearance } from '../src/types'
 
 const apps: App[] = []
-const appearance: SandboxAppearance = { enableSandboxFrostedGlass: true, sandboxTimBubbleTail: true, sandboxColorMode: 'auto', sandboxAccentColor: '#2563eb', sandboxMarkRecalledMessages: true }
+const appearance: SandboxAppearance = { sandboxTimBubbleTail: true, sandboxIncomingBubbleStyle: 'shadow', sandboxAccentColor: '#2563eb', sandboxMarkRecalledMessages: true }
 afterEach(async () => Promise.all(apps.splice(0).map((app) => app.stop())))
 
 describe('AI 测试空间 Console 适配器', () => {

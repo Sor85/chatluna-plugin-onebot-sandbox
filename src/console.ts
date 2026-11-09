@@ -74,7 +74,6 @@ export interface SandboxConsoleRegistrar {
   addListener<Event extends keyof SandboxConsoleEvents>(
     event: Event,
     callback: SandboxConsoleEvents[Event],
-    options: { authority: number },
   ): unknown
   broadcast<Channel extends keyof SandboxConsoleBroadcasts>(
     type: Channel,
@@ -225,85 +224,83 @@ export function registerConsole(
     }
   }
 
-  // Koishi 的 Events 映射规模较大，直接调用泛型 addListener 会让 TypeScript
-  // 展开整个事件联合并触发 TS2590；这里保留事件名约束，回调由各领域函数自身类型校验。
+  // 在异构端点注册处收窄事件名，回调的领域入参与返回值由对应方法校验。
   const registerListener = console.addListener.bind(console) as (
     event: keyof SandboxConsoleEvents,
     callback: (...args: any[]) => any,
-    options: { authority: number },
   ) => unknown
   const workspaceListener = (input?: SpaceScoped<GetSandboxWorkspaceInput>) => getWorkspace(input)
-  registerListener('onebot-sandbox.workspace', workspaceListener, { authority: 4 })
-  registerListener('onebot-sandbox.message-history', async (input) => (await resolveReadyControl(input, false)).getMessageHistory(assertInteractionInput(withoutSpaceId(input)) as GetMessageHistoryInput), { authority: 4 })
+  registerListener('onebot-sandbox.workspace', workspaceListener)
+  registerListener('onebot-sandbox.message-history', async (input) => (await resolveReadyControl(input, false)).getMessageHistory(assertInteractionInput(withoutSpaceId(input)) as GetMessageHistoryInput))
   registerListener('onebot-sandbox.search-conversation-messages', async (input) => (
     await resolveReadyControl(input, false)
-  ).searchConversationMessages(assertInteractionInput(withoutSpaceId(input)) as SearchConversationMessagesInput), { authority: 4 })
+  ).searchConversationMessages(assertInteractionInput(withoutSpaceId(input)) as SearchConversationMessagesInput))
   registerListener('onebot-sandbox.create-conversation-instance', async (input) => {
     // 与其余变更端点同口径返回完整工作区状态，外加新会话 ID，客户端一次请求完成状态替换与选中。
     const { conversationId } = (await resolveReadyControl(input, true))
       .createConversationInstance(assertInteractionInput(withoutSpaceId(input)) as CreateConversationInstanceInput)
     return { ...await getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId }), conversationId }
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.branch-conversation-instance', async (input) => {
     const { conversationId } = (await resolveReadyControl(input, true))
       .branchConversationInstance(assertInteractionInput(withoutSpaceId(input)) as BranchConversationInstanceInput)
     return { ...await getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId }), conversationId }
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.rename-conversation-instance', async (input) => {
     (await resolveReadyControl(input, true))
       .renameConversationInstance(assertInteractionInput(withoutSpaceId(input)) as RenameConversationInstanceInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.delete-conversation-instance', async (input) => {
     (await resolveReadyControl(input, true))
       .deleteConversationInstance(assertInteractionInput(withoutSpaceId(input)) as DeleteConversationInstanceInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.send-message', async (input) => {
     // 消息同步落库后立即返回，机器人投递在后台继续：让 WebQQ 的用户消息不被插件处理时长阻塞。
     // 吞掉这个 Promise 是安全的——投递模块对派发前后的任何失败都会写调试记录并记一行日志。
     const { delivery } = (await resolveReadyControl(input, true)).startMessageSend(assertInteractionInput(withoutSpaceId(input)) as SendMessageInput)
     delivery.catch(() => {})
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.send-media-message', async (input) => {
     // 与发送文字同一套后台投递语义，失败同样由投递模块留痕。
     const { delivery } = (await resolveReadyControl(input, true)).startMediaMessageSend(assertInteractionInput(withoutSpaceId(input)) as SendMediaMessageInput)
     delivery.catch(() => {})
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.send-forward-message', async (input) => {
     // 合并转发领域路径会等待机器人投递，保证返回的工作区已包含外层 forward 卡片。
     await (await resolveReadyControl(input, true)).sendForwardMessage(assertInteractionInput(withoutSpaceId(input)) as SendForwardMessageInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.get-forward-message', async (input) => (
     await resolveReadyControl(input, false)
-  ).getForwardMessage(assertInteractionInput(withoutSpaceId(input)) as GetForwardMessageInput), { authority: 4 })
+  ).getForwardMessage(assertInteractionInput(withoutSpaceId(input)) as GetForwardMessageInput))
   registerListener('onebot-sandbox.recall-message', async (input) => {
     await (await resolveReadyControl(input, true)).recallMessage(assertInteractionInput(withoutSpaceId(input)) as RecallMessageInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.clear-conversation-messages', async (input) => {
     (await resolveReadyControl(input, true)).clearConversationMessages(assertInteractionInput(withoutSpaceId(input)) as ClearConversationMessagesInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.set-message-reaction', async (input) => {
     await (await resolveReadyControl(input, true)).setMessageReaction(assertInteractionInput(withoutSpaceId(input)) as SetMessageReactionInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.media-content', async (input) => {
     const content = (await resolveReadyControl(input, false)).getMediaContent(assertInteractionInput(withoutSpaceId(input)) as GetMediaContentInput)
     return withAudioPreview(content)
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.set-group-announcement', async (input) => {
     (await resolveReadyControl(input, true)).setGroupAnnouncement(assertInteractionInput(withoutSpaceId(input)) as SetGroupAnnouncementInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.delete-group-announcement', async (input) => {
     (await resolveReadyControl(input, true)).deleteGroupAnnouncement(assertInteractionInput(withoutSpaceId(input)) as DeleteGroupAnnouncementInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.manage-environment', async (input) => {
     const activeControl = await resolveReadyControl(input, true)
     const command = assertEnvironmentInput(withoutSpaceId(input) as ManageSandboxEnvironmentInput)
@@ -349,15 +346,15 @@ export function registerConsole(
         break
     }
     return getWorkspace({ spaceId: input.spaceId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.friend-action', async (input) => {
     await (await resolveReadyControl(input, true)).performFriendAction(assertInteractionInput(withoutSpaceId(input)) as PerformFriendActionInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   registerListener('onebot-sandbox.group-action', async (input) => {
     await (await resolveReadyControl(input, true)).performGroupAction(assertInteractionInput(withoutSpaceId(input)) as PerformGroupActionInput)
     return getWorkspace({ spaceId: input.spaceId, operatorId: input.operatorId })
-  }, { authority: 4 })
+  })
   if (presets) {
     const presetCatalog = (): SandboxBotPresetCatalog => {
       try {
@@ -369,45 +366,45 @@ export function registerConsole(
         throw error
       }
     }
-    registerListener('onebot-sandbox.bot-presets', presetCatalog, { authority: 4 })
+    registerListener('onebot-sandbox.bot-presets', presetCatalog)
     registerListener('onebot-sandbox.set-bot-preset', async (input: SpaceScoped<{ botId: string; presetId: string | null }>) => {
       const bot = resolveControl(input, false).getSnapshot().participants.find(({ id }) => id === input.botId)
       if (bot?.kind !== 'bot') throw new SandboxDomainError(`机器人不存在：${input.botId}`)
       await presets.assign(input.botId, input.presetId ?? undefined)
       return presetCatalog()
-    }, { authority: 4 })
+    })
   }
-  registerListener('onebot-sandbox.debug-records', listDebugRecords, { authority: 4 })
-  registerListener('onebot-sandbox.debug-record', getDebugRecord, { authority: 4 })
-  registerListener('onebot-sandbox.clear-debug-records', clearDebugRecords, { authority: 4 })
+  registerListener('onebot-sandbox.debug-records', listDebugRecords)
+  registerListener('onebot-sandbox.debug-record', getDebugRecord)
+  registerListener('onebot-sandbox.clear-debug-records', clearDebugRecords)
   if (endpoint) {
     const { mcp, httpApi, mcpEndpoint } = endpoint
     mcp.onActivity((running) => {
       void console.broadcast('onebot-sandbox.mcp-activity', { running })
     })
-    registerListener('onebot-sandbox.mcp-capabilities', () => ({ ...mcp.getCapabilityCatalog(), endpoint: mcpEndpoint }), { authority: 4 })
-    registerListener('onebot-sandbox.http-capabilities', () => httpApi, { authority: 4 })
-    registerListener('onebot-sandbox.test-call-records', (input = {}) => mcp.listCallRecords(input), { authority: 4 })
-    registerListener('onebot-sandbox.test-call-record', (input) => mcp.getCallRecord(input.recordId), { authority: 4 })
-    registerListener('onebot-sandbox.clear-test-call-records', () => mcp.clearCallRecords(), { authority: 4 })
-    registerListener('onebot-sandbox.test-credentials', () => mcp.listCredentials(), { authority: 4 })
-    registerListener('onebot-sandbox.create-test-credential', (input) => mcp.createCredential(input.name, input.scopes), { authority: 4 })
-    registerListener('onebot-sandbox.update-test-credential', (input) => mcp.updateCredential(input.id, input), { authority: 4 })
-    registerListener('onebot-sandbox.rotate-test-credential-token', (input) => mcp.rotateCredentialToken(input.id), { authority: 4 })
-    registerListener('onebot-sandbox.set-test-credential-enabled', (input) => mcp.setCredentialEnabled(input.id, input.enabled), { authority: 4 })
-    registerListener('onebot-sandbox.revoke-test-credential', (input) => mcp.revokeCredential(input.id), { authority: 4 })
+    registerListener('onebot-sandbox.mcp-capabilities', () => ({ ...mcp.getCapabilityCatalog(), endpoint: mcpEndpoint }))
+    registerListener('onebot-sandbox.http-capabilities', () => httpApi)
+    registerListener('onebot-sandbox.test-call-records', (input = {}) => mcp.listCallRecords(input))
+    registerListener('onebot-sandbox.test-call-record', (input) => mcp.getCallRecord(input.recordId))
+    registerListener('onebot-sandbox.clear-test-call-records', () => mcp.clearCallRecords())
+    registerListener('onebot-sandbox.test-credentials', () => mcp.listCredentials())
+    registerListener('onebot-sandbox.create-test-credential', (input) => mcp.createCredential(input.name, input.scopes))
+    registerListener('onebot-sandbox.update-test-credential', (input) => mcp.updateCredential(input.id, input))
+    registerListener('onebot-sandbox.rotate-test-credential-token', (input) => mcp.rotateCredentialToken(input.id))
+    registerListener('onebot-sandbox.set-test-credential-enabled', (input) => mcp.setCredentialEnabled(input.id, input.enabled))
+    registerListener('onebot-sandbox.revoke-test-credential', (input) => mcp.revokeCredential(input.id))
   }
   if (testSpaces) {
     registerListener('onebot-sandbox.test-spaces', () => testSpaces.listSpaces()
-      .map((space) => ({ ...space, snapshot: trimSnapshotMessages(space.snapshot, 10) })), { authority: 4 })
+      .map((space) => ({ ...space, snapshot: trimSnapshotMessages(space.snapshot, 10) })))
     registerListener('onebot-sandbox.create-test-space', ({ name }) => {
       const space = testSpaces.createSpace({ name })
       return testSpaces.takeOver(space.id)
-    }, { authority: 4 })
-    registerListener('onebot-sandbox.take-over-test-space', ({ spaceId }) => testSpaces.takeOver(spaceId), { authority: 4 })
-    registerListener('onebot-sandbox.return-test-space', ({ spaceId }) => testSpaces.returnControl(spaceId), { authority: 4 })
-    registerListener('onebot-sandbox.terminate-test-space', ({ spaceId }) => testSpaces.terminateSpace(spaceId), { authority: 4 })
-    registerListener('onebot-sandbox.reactivate-test-space', ({ spaceId }) => testSpaces.reactivateSpace(spaceId), { authority: 4 })
-    registerListener('onebot-sandbox.delete-test-space', ({ spaceId }) => testSpaces.deleteSpace(spaceId), { authority: 4 })
+    })
+    registerListener('onebot-sandbox.take-over-test-space', ({ spaceId }) => testSpaces.takeOver(spaceId))
+    registerListener('onebot-sandbox.return-test-space', ({ spaceId }) => testSpaces.returnControl(spaceId))
+    registerListener('onebot-sandbox.terminate-test-space', ({ spaceId }) => testSpaces.terminateSpace(spaceId))
+    registerListener('onebot-sandbox.reactivate-test-space', ({ spaceId }) => testSpaces.reactivateSpace(spaceId))
+    registerListener('onebot-sandbox.delete-test-space', ({ spaceId }) => testSpaces.deleteSpace(spaceId))
   }
 }

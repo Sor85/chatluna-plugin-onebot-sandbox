@@ -196,16 +196,12 @@ export function TestCredentialManager() {
             {editing && (
               <div className="flex flex-col gap-2">
                 <Label>Token</Label>
-                {editing.token ? (
-                  <div className="flex items-center gap-2">
-                    <code className="min-w-0 flex-1 rounded-md bg-muted px-2.5 py-2 font-mono text-xs break-all">{editing.token}</code>
-                    <Button size="icon-sm" variant="ghost" aria-label={t('sandbox.credential.copy')} onClick={() => void copy(editing.token!)}><CopyIcon /></Button>
-                  </div>
-                ) : (
-                  <p className="text-xs leading-5 text-muted-foreground">{t('sandbox.credential.noPlainToken')}</p>
-                )}
+                <div className="flex items-center gap-2">
+                  <code className="min-w-0 flex-1 rounded-md bg-muted px-2.5 py-2 font-mono text-xs break-all">{editing.token}</code>
+                  <Button size="icon-sm" variant="ghost" aria-label={t('sandbox.credential.copy')} onClick={() => void copy(editing.token)}><CopyIcon /></Button>
+                </div>
                 <Button size="sm" variant="outline" className="self-start" disabled={saving} onClick={() => void rotate()}>
-                  {t(editing.token ? 'sandbox.credential.rotate' : 'sandbox.credential.generate')}
+                  {t('sandbox.credential.rotate')}
                 </Button>
                 <p className="text-[11px] text-muted-foreground">
                   {t('sandbox.credential.createdAt', { time: time(editing.createdAt) })} · {t(editing.enabled ? 'sandbox.env.enabled' : 'sandbox.env.disabled')}
