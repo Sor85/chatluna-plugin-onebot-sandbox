@@ -7,6 +7,7 @@ import '@chatluna/schema'
 import type {} from '@chatluna/ui-server'
 import type {} from '@cordisjs/plugin-database'
 import { resolveBaseDir } from './base-dir'
+import { DEFAULT_MEDIA_MAX_SIZE, MEBIBYTE } from './media-limits'
 import { createWebuiRegistrar } from './webui'
 import { registerConsole } from './console'
 import { registerSettings } from './settings'
@@ -79,6 +80,7 @@ export interface Config extends SandboxAppearance {
   persistenceMode: SandboxPersistenceMode
   sceneMessageLimit: number
   sceneMessageMaxBytes: number
+  mediaMaxSizeMiB: number
   testEndpoint: SandboxTestEndpointConfig
   botTools: SandboxBotToolsConfig
   presetEditing: { editablePresets: string[] }
@@ -127,6 +129,11 @@ const sceneMessageFields = {
     .description('超出后从最旧的消息开始丢弃，丢弃后不可恢复'),
   sceneMessageMaxBytes: Schema.number().min(64 * 1024).default(DEFAULT_SCENE_MESSAGE_MAX_BYTES).extra('label', '体积上限（字节）')
     .description('单个空间场景 JSON 的大小上限，超出后同样从最旧的消息开始丢弃'),
+}
+
+const mediaFields = {
+  mediaMaxSizeMiB: Schema.number().min(1).max(1024).step(1).default(DEFAULT_MEDIA_MAX_SIZE / MEBIBYTE).extra('label', '单文件大小上限（MiB）')
+    .description('图片、音频、视频、附件与头像共用的上传及下载上限'),
 }
 
 const endpointListenFields = {
@@ -209,6 +216,7 @@ export const Settings = Schema.intersect([
   Schema.intersect([
     Schema.object(storageModeFields),
     Schema.object(sceneMessageFields).extra('i18n', 'group.sceneMessages').description('场景消息'),
+    Schema.object(mediaFields).extra('i18n', 'group.media').description('媒体文件'),
   ]).extra('i18n', 'group.storage').extra('label', '数据存储')
     .description('模拟环境的保存位置，以及消息的保留上限。上限按主环境与每个 AI 测试空间分别计算'),
   Schema.object({ ...endpointFields, ...botToolFields, ...permissionEditingFields, ...presetEditingFields }).extra('i18n', 'group.endpoint').extra('label', '测试端点')
@@ -221,7 +229,7 @@ export const Settings = Schema.intersect([
  */
 export const Config = Schema.object(
   Object.fromEntries(
-    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...endpointFields, ...botToolFields, ...permissionEditingFields, ...presetEditingFields })
+    Object.entries({ ...appearanceFields, ...storageModeFields, ...sceneMessageFields, ...mediaFields, ...endpointFields, ...botToolFields, ...permissionEditingFields, ...presetEditingFields })
       .map(([key, field]) => [key, (field as Schema).hidden()]),
   ),
 ).description('设置在 OneBot 沙盒工作台的「设置」页编辑') as unknown as Schema<Config>
@@ -243,6 +251,7 @@ declare module 'cordis' {
 
 export function apply(ctx: Context, config: Config) {
   const baseDir = resolveBaseDir(ctx)
+  const mediaMaxSize = config.mediaMaxSizeMiB * MEBIBYTE
   const getDatabase = () => ctx.get('database')
   let persistence: KoishiDatabaseScenePersistence | undefined
   let createDebugPersistence: (scopeId: string) => SandboxOneBotDebugPersistence
@@ -273,6 +282,7 @@ export function apply(ctx: Context, config: Config) {
     debugPersistence: createDebugPersistence('main'),
     sceneMessageLimit: config.sceneMessageLimit,
     sceneMessageMaxBytes: config.sceneMessageMaxBytes,
+    mediaMaxSize,
   })
   const testSpaces = new SandboxTestSpaceService(
     ctx,
@@ -282,6 +292,7 @@ export function apply(ctx: Context, config: Config) {
     {
       sceneMessageLimit: config.sceneMessageLimit,
       sceneMessageMaxBytes: config.sceneMessageMaxBytes,
+      mediaMaxSize,
     },
   )
   ctx.provide('onebot_sandbox', control)
@@ -327,6 +338,7 @@ export function apply(ctx: Context, config: Config) {
       // 自述与监听器读同一份配置，HTTP 能力页不会与实际生效的路径、基址和开关漂移。
       httpApi: describeHttpApiCapabilities({
         enabled: config.testEndpoint.http.enabled,
+        mediaMaxSize,
         path: config.testEndpoint.http.path,
         host: config.testEndpoint.shared.host,
         port: config.testEndpoint.shared.port,

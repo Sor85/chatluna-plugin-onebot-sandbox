@@ -11,7 +11,8 @@ import { createRequire } from 'node:module'
 import type { Context } from 'cordis'
 import { SandboxMcpError } from './types'
 import { SandboxMcpService } from './service'
-import { HTTP_API_MAX_BODY_BYTES, handleHttpApiRequest, isHttpApiPath, toHttpApiErrorResponse } from './http-api'
+import { handleHttpApiRequest, isHttpApiPath, toHttpApiErrorResponse } from './http-api'
+import { mediaRequestBodyLimit } from '../media-limits'
 
 const packageInfo = createRequire(import.meta.url)('chatluna-plugin-onebot-sandbox/package.json') as { name: string; version: string }
 
@@ -190,7 +191,11 @@ export class SandboxTestEndpointServer {
       if (protocol === 'http') return await this.handleHttpApi(request, response, url, token, sourceIp)
 
       mcp = this.createMcpServer(token, sourceIp)
-      transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+        maxRequestBodySize: mediaRequestBodyLimit(this.service.getMediaMaxSize()),
+      })
       await mcp.connect(transport)
       // 不再等待响应写入完成：SDK 1.29.0 的 handleRequest 把请求整体委托给
       // @hono/node-server 的 getRequestListener 并 await 它，返回时响应已经写完。
@@ -257,12 +262,13 @@ export class SandboxTestEndpointServer {
    */
   private async readBody(request: IncomingMessage): Promise<string> {
     const chunks: Buffer[] = []
+    const limit = mediaRequestBodyLimit(this.service.getMediaMaxSize())
     let size = 0
     for await (const chunk of request) {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string)
       size += buffer.byteLength
-      if (size > HTTP_API_MAX_BODY_BYTES) {
-        throw new SandboxMcpError('payload_too_large', `请求体超过 ${HTTP_API_MAX_BODY_BYTES} 字节上限`, false, '请减小请求体，或改用 upload_media 分次上传媒体。')
+      if (size > limit) {
+        throw new SandboxMcpError('payload_too_large', `请求体超过 ${limit} 字节上限`, false, '请减小请求体，或改用 upload_media 分次上传媒体。')
       }
       chunks.push(buffer)
     }

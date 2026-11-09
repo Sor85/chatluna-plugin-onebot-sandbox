@@ -49,7 +49,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@satorijs/core": "~4.6.1",
     "cosmokit": "^1.8.1",
     "schemastery": "3.18.0",

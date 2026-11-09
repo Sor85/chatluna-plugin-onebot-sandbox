@@ -3,6 +3,8 @@ import { ArrowLeftIcon, ChevronRightIcon, UploadIcon } from 'lucide-react'
 import { Button } from '@chatluna/ui-kit'
 import { BUILTIN_AVATARS, type BuiltinAvatar, type BuiltinAvatarKind } from '../../src/builtin-avatar-png'
 import { useT } from '../i18n'
+import { MEBIBYTE } from '../../src/media-limits'
+import { useWorkspace } from '../workspace/context'
 
 function avatarDataUrl(avatar: BuiltinAvatar) {
   return `data:image/png;base64,${avatar.png}`
@@ -37,6 +39,7 @@ export function AvatarChoices({ kind, onSelect }: {
   onSelect(avatar: string): void
 }) {
   const t = useT()
+  const { workspace } = useWorkspace()
   const [error, setError] = React.useState('')
   const fileInput = React.useRef<HTMLInputElement>(null)
 
@@ -45,6 +48,7 @@ export function AvatarChoices({ kind, onSelect }: {
     event.target.value = ''
     if (!file) return
     if (!file.type.startsWith('image/')) return setError(t('sandbox.avatar.notImage'))
+    if (file.size > workspace.mediaMaxSize) return setError(t('sandbox.avatar.oversize', { size: workspace.mediaMaxSize / MEBIBYTE }))
     const reader = new FileReader()
     reader.addEventListener('load', () => {
       if (typeof reader.result !== 'string') return

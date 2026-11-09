@@ -49,6 +49,7 @@ export function workspaceFor(operatorId = '10001', revision = 1): SandboxWorkspa
       conversationInstances: projection.conversationInstances,
     },
     chatLunaStates: [],
+    mediaMaxSize: 10 * 1024 * 1024,
     appearance: {
       sandboxTimBubbleTail: true,
       sandboxIncomingBubbleStyle: 'shadow',

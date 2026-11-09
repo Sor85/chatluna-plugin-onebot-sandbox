@@ -47,6 +47,7 @@ export function trimSnapshotMessages(snapshot: SandboxSnapshot, limit: number): 
 export interface SandboxTestSpaceRetention {
   sceneMessageLimit?: number
   sceneMessageMaxBytes?: number
+  mediaMaxSize?: number
 }
 
 interface SandboxTestSpaceRecord extends Omit<SandboxTestSpaceSummary, 'snapshot'> {
@@ -262,6 +263,7 @@ export class SandboxTestSpaceService {
       // 每个空间独立持有场景消息配额，与主环境和其他空间互不共享。
       sceneMessageLimit: this.retention.sceneMessageLimit,
       sceneMessageMaxBytes: this.retention.sceneMessageMaxBytes,
+      mediaMaxSize: this.retention.mediaMaxSize,
     })
   }
 

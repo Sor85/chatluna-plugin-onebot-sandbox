@@ -5,8 +5,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, w
 import type { SandboxMedia, SandboxMediaContent, SandboxMediaType } from './types'
 import { SandboxDomainError } from './types'
 import { isBase64 } from './base64'
-
-export const MAX_MEDIA_SIZE = 10 * 1024 * 1024
+import { assertMediaSize, DEFAULT_MEDIA_MAX_SIZE } from './media-limits'
 
 /** 同时钉住的在途上传数量上限；超出后最旧的钉住项被释放，重新变成可回收孤儿。 */
 export const MAX_PINNED_MEDIA = 256
@@ -62,7 +61,8 @@ export class SandboxMediaStorage {
   // 按插入顺序限量，避免"上传后从不发送"的调用把孤儿正文永久钉在磁盘上。
   private pinned = new Set<string>()
 
-  constructor(private directory: string, private maxPinned = MAX_PINNED_MEDIA) {
+  constructor(private directory: string, private maxPinned = MAX_PINNED_MEDIA, readonly maxSize = DEFAULT_MEDIA_MAX_SIZE) {
+    if (!Number.isSafeInteger(maxSize) || maxSize < 1) throw new SandboxDomainError('媒体大小上限必须是正整数字节数')
     mkdirSync(directory, { recursive: true })
   }
 
@@ -103,15 +103,13 @@ export class SandboxMediaStorage {
     // 先按 Base64 理论长度拒绝超限输入，避免扫描和解码巨型字符串。
     const dataBase64 = input.dataBase64.trim()
     const paddingSize = dataBase64.endsWith('==') ? 2 : dataBase64.endsWith('=') ? 1 : 0
-    if (Math.floor(dataBase64.length * 3 / 4) - paddingSize > MAX_MEDIA_SIZE) {
-      throw new SandboxDomainError('媒体大小不能超过 10 MB')
-    }
+    assertMediaSize(Math.floor(dataBase64.length * 3 / 4) - paddingSize, this.maxSize)
     if (!isBase64(dataBase64)) {
       throw new SandboxDomainError('媒体内容不是有效的 Base64')
     }
     const content = Buffer.from(dataBase64, 'base64')
     if (!content.length) throw new SandboxDomainError('媒体内容不能为空')
-    if (content.length > MAX_MEDIA_SIZE) throw new SandboxDomainError('媒体大小不能超过 10 MB')
+    assertMediaSize(content.length, this.maxSize)
 
     // 内容寻址：相同正文复用同一媒体 ID，便于头像去重与引用感知回收。
     const id = createHash('sha256').update(content).digest('hex').slice(0, 32)

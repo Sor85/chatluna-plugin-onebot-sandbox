@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from '@chatluna/ui-kit'
 import type { SendMediaFileInput } from '../../src/types'
+import { MEBIBYTE } from '../../src/media-limits'
 import { useT } from '../i18n'
 import { SandboxAvatar } from '../shared/avatar'
 import { CreateEntityPopover } from '../environment/create-popover'
@@ -57,7 +58,6 @@ interface Attachment {
   extension: string
 }
 
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
 // 胶囊内 padding(8) + 三个 gap(12) + 附件按钮(32) + 发送按钮(36)。
 const COMPOSER_FIXED_WIDTH = 88
 // 输入区可压缩到 0（min-width: 0），低于这个宽度就该省略头像而不是压扁输入框。
@@ -95,7 +95,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
 }>(function Composer({ replyingTo, mentionCandidates, onClearReply, onSend, onOpenImage, onSpaceChange }, ref) {
   const t = useT()
   const { store, dialogs } = useSandbox()
-  const { conversation, operatorId, snapshot, resolveAvatar } = useWorkspace()
+  const { conversation, operatorId, snapshot, resolveAvatar, workspace } = useWorkspace()
   const editor = React.useRef<HTMLDivElement>(null)
   const fileInput = React.useRef<HTMLInputElement>(null)
   const [, rerender] = React.useReducer((value: number) => value + 1, 0)
@@ -225,7 +225,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
     const next: Attachment[] = []
     let oversize = false
     for (const file of files) {
-      if (file.size > MAX_ATTACHMENT_SIZE) {
+      if (file.size > workspace.mediaMaxSize) {
         oversize = true
         continue
       }
@@ -236,7 +236,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
         ...splitFileName(file.name),
       })
     }
-    if (oversize) setError(t('sandbox.composer.oversize'))
+    if (oversize) setError(t('sandbox.composer.oversize', { size: workspace.mediaMaxSize / MEBIBYTE }))
     if (next.length) setAttachments((list) => [...list, ...next])
   }
 

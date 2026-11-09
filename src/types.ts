@@ -625,6 +625,8 @@ export interface SandboxWorkspaceState {
   snapshot: SandboxSnapshot
   chatLunaStates: SandboxChatLunaState[]
   appearance: SandboxAppearance
+  /** 当前实例的单文件字节上限，由插件设置统一提供。 */
+  mediaMaxSize: number
   persistence: SandboxPersistenceStatus
 }
 

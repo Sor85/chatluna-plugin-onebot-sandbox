@@ -618,6 +618,10 @@ export class SandboxMcpService {
     return this.control.getSnapshot().revision
   }
 
+  getMediaMaxSize(): number {
+    return this.control.mediaMaxSize
+  }
+
   isActivityRunning(): boolean {
     return this.activityRunning
   }

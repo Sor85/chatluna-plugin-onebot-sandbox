@@ -22,7 +22,8 @@ import {
   type InboundMessageContext,
   type InboundQuotedMessage,
 } from './inbound-delivery'
-import { SandboxMediaStorage, MAX_MEDIA_SIZE, toMediaMetadata } from './media-storage'
+import { SandboxMediaStorage, toMediaMetadata } from './media-storage'
+import { readMediaResponse } from './media-download'
 import { SandboxOneBotDebugStore, type AppendOneBotDebugRecordInput, type SandboxOneBotDebugPersistence } from './onebot-debug'
 import { toOneBotMessageSegments, toOneBotRawMessage, type SandboxOneBotMessageSegment } from './onebot-message'
 import type { SandboxSceneLoadResult, SandboxScenePersistence } from './persistence'
@@ -133,6 +134,8 @@ import {
 
 export interface SandboxControlServiceOptions {
   mediaDirectory?: string
+  /** 单个新上传或下载的媒体文件字节上限；主环境与测试空间共用设置。 */
+  mediaMaxSize?: number
   persistence?: SandboxScenePersistence
   debugPersistence?: SandboxOneBotDebugPersistence
   debugRecordLimit?: number
@@ -459,7 +462,7 @@ export class SandboxControlService {
         // 内存模式使用独立目录，避免与 Database 共享 media 目录互相回收。
         : resolve(resolveBaseDir(ctx), 'data/chatluna/onebot-sandbox/ephemeral-media', randomUUID().replaceAll('-', ''))
     )
-    this.mediaStorage = new SandboxMediaStorage(this.mediaDirectory)
+    this.mediaStorage = new SandboxMediaStorage(this.mediaDirectory, undefined, options.mediaMaxSize)
     // database 服务可能晚于本插件加载，构造时的可用性不可信；数据库模式的清理决策移到 ready 读取场景之后。
     if (!this.persistence) this.mediaStorage.clear()
     this.ensureStableAvatars()
@@ -615,6 +618,10 @@ export class SandboxControlService {
     this.notifySceneMutation()
   }
 
+  get mediaMaxSize(): number {
+    return this.mediaStorage.maxSize
+  }
+
   storeMedia(input: { fileName: string; mimeType: string; dataBase64: string }): SandboxMedia {
     const media = this.mediaStorage.save(input)
     // 上传与发送是两步契约（MCP upload_media → send_message）。钉住正文，
@@ -659,13 +666,8 @@ export class SandboxControlService {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new SandboxDomainError('头像 URL 仅支持 HTTP(S)')
     const response = await fetch(url, { signal: AbortSignal.timeout(10_000) })
     if (!response.ok) throw new SandboxDomainError(`头像下载失败：HTTP ${response.status}`)
-    const contentLength = Number(response.headers.get('content-length'))
-    if (Number.isFinite(contentLength) && contentLength > MAX_MEDIA_SIZE) {
-      throw new SandboxDomainError('头像大小不能超过 10 MB')
-    }
     const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? ''
-    const content = Buffer.from(await response.arrayBuffer())
-    if (content.length > MAX_MEDIA_SIZE) throw new SandboxDomainError('头像大小不能超过 10 MB')
+    const content = await readMediaResponse(response, this.mediaMaxSize, '头像')
     return this.saveAvatar(`${kind}-${entityId}-avatar`, mimeType, content.toString('base64'))
   }
 

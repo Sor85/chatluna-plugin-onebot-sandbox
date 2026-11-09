@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { App } from './helpers/app'
 import { SandboxControlService } from '../src/control-service'
-import { MAX_MEDIA_SIZE, SandboxMediaStorage } from '../src/media-storage'
+import { SandboxMediaStorage } from '../src/media-storage'
+import { DEFAULT_MEDIA_MAX_SIZE } from '../src/media-limits'
 import { redactTestCallValue } from '../src/mcp/call-records'
 import { SandboxOneBotDebugStore } from '../src/onebot-debug'
 
@@ -25,7 +26,7 @@ async function directory() {
 }
 
 describe('大附件 Base64 校验', () => {
-  it.each([attachmentSize, MAX_MEDIA_SIZE - 2, MAX_MEDIA_SIZE - 1, MAX_MEDIA_SIZE])('%i 字节媒体可以保存和读回，覆盖三种尾部填充', async (size) => {
+  it.each([attachmentSize, DEFAULT_MEDIA_MAX_SIZE - 2, DEFAULT_MEDIA_MAX_SIZE - 1, DEFAULT_MEDIA_MAX_SIZE])('%i 字节媒体可以保存和读回，覆盖三种尾部填充', async (size) => {
     const storage = new SandboxMediaStorage(await directory())
     const content = Buffer.alloc(size, 0x41)
     const media = storage.save({ fileName: 'fixture.zip', mimeType: 'application/zip', dataBase64: content.toString('base64') })
@@ -35,8 +36,8 @@ describe('大附件 Base64 校验', () => {
 
   it('仍然拒绝超过 10 MiB 的媒体', async () => {
     const storage = new SandboxMediaStorage(await directory())
-    expect(() => storage.save({ fileName: 'fixture.zip', mimeType: 'application/zip', dataBase64: Buffer.alloc(MAX_MEDIA_SIZE + 1).toString('base64') }))
-      .toThrow('媒体大小不能超过 10 MB')
+    expect(() => storage.save({ fileName: 'fixture.zip', mimeType: 'application/zip', dataBase64: Buffer.alloc(DEFAULT_MEDIA_MAX_SIZE + 1).toString('base64') }))
+      .toThrow('媒体大小不能超过 10 MiB')
   })
 
   it.each(['', 'A', 'AAA', 'AAAAA', 'A===', '====', 'AA=A', '=AAA', 'AA-_', 'AA A', 'AA\nA', 'AA A', 'AA!A', 'AA中A'])('拒绝非法内容 %j', async (dataBase64) => {

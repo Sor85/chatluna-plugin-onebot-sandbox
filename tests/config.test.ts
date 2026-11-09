@@ -28,6 +28,15 @@ describe('插件持久化配置', () => {
     expect(Config.dict.webQQChatStyle).toBeUndefined()
   })
 
+  it('单文件大小上限默认 10 MiB，可按整数调整并保留有限边界', () => {
+    expect(Config({}).mediaMaxSizeMiB).toBe(10)
+    expect(Config({ mediaMaxSizeMiB: 50 }).mediaMaxSizeMiB).toBe(50)
+    expect(Config({ mediaMaxSizeMiB: 1024 }).mediaMaxSizeMiB).toBe(1024)
+    for (const value of [0, -1, 1.5, 1025, NaN, Infinity]) {
+      expect(() => Config({ mediaMaxSizeMiB: value })).toThrow()
+    }
+  })
+
   it('每个顶层字段都有标题', () => {
     for (const [key, field] of Object.entries(Config.dict ?? {})) {
       // 两个分组各是所在分区的唯一字段，分区标题就是它的标题；分组里的字段另外核对。

@@ -7,7 +7,7 @@ import { App } from './helpers/app'
 import { h, Universal } from '@satorijs/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SandboxControlService } from '../src/control-service'
-import { MAX_MEDIA_SIZE } from '../src/media-storage'
+import { DEFAULT_MEDIA_MAX_SIZE } from '../src/media-limits'
 import { getOneBotMessageSequence } from '../src/onebot-profiles'
 
 const runningApps: App[] = []
@@ -45,7 +45,7 @@ async function createMediaServer(): Promise<string> {
     if (request.url === '/too-large') {
       response.writeHead(200, {
         'content-type': 'image/png',
-        'content-length': String(MAX_MEDIA_SIZE + 1),
+        'content-length': String(DEFAULT_MEDIA_MAX_SIZE + 1),
       })
       response.end()
       return
@@ -499,7 +499,7 @@ describe('Koishi 与 OneBot 机器人桥接', () => {
     for (const [path, error] of [
       ['/missing', '下载远程媒体失败'],
       ['/text', '媒体类型不匹配'],
-      ['/too-large', '媒体大小不能超过 10 MB'],
+      ['/too-large', '媒体大小不能超过 10 MiB'],
     ] as const) {
       await expect(bot.internal._request('send_group_msg', {
         group_id: 30001,

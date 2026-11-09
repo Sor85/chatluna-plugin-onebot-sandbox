@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SandboxControlService, SandboxRuntimeBotRegistry } from '../src/control-service'
-import { HTTP_API_ERROR_STATUS, HTTP_API_MAX_BODY_BYTES, HTTP_API_VERSION, describeHttpApiCapabilities, isHttpApiPath, normalizeBasePath, parseHttpApiArguments, resolveHttpApiRoute } from '../src/mcp/http-api'
+import { HTTP_API_ERROR_STATUS, HTTP_API_VERSION, describeHttpApiCapabilities, isHttpApiPath, normalizeBasePath, parseHttpApiArguments, resolveHttpApiRoute } from '../src/mcp/http-api'
 import { SandboxTestEndpointServer } from '../src/mcp/server'
 import { STABLE_ERROR_CODES, SandboxMcpService, type SandboxMcpQuotaConfig } from '../src/mcp/service'
 import type { SandboxMcpScope } from '../src/mcp/types'
@@ -153,7 +153,7 @@ describe('HTTP 测试接口自述', () => {
       '/test-api/v1/resources',
       '/test-api/v1/resources?uri=<资源 URI>',
     ])
-    expect(catalog.maxBodyBytes).toBe(HTTP_API_MAX_BODY_BYTES)
+    expect(catalog.maxBodyBytes).toBe(32 * 1024 * 1024)
     expect(catalog.errorStatuses.map(({ code }) => code)).toEqual([...STABLE_ERROR_CODES])
     expect(catalog.errorStatuses.find(({ code }) => code === 'rate_limited')?.status).toBe(429)
   })

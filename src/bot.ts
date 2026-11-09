@@ -26,7 +26,7 @@ import {
 } from './onebot-profiles'
 import { createOneBotDebugError } from './onebot-debug'
 import type { InboundEventConversations } from './inbound-delivery'
-import { MAX_MEDIA_SIZE } from './media-storage'
+import { readMediaResponse } from './media-download'
 import {
   listVisibleConversationIds,
   listVisibleRootConversations,
@@ -1057,35 +1057,14 @@ export class SandboxBot extends Bot<any, SandboxBot.Config> {
     }
     if (!response.ok) throw new Error(`下载远程媒体失败：${response.status} ${response.statusText || source}`)
 
-    const declaredSize = Number(response.headers.get('content-length'))
-    if (Number.isFinite(declaredSize) && declaredSize > MAX_MEDIA_SIZE) throw new Error('媒体大小不能超过 10 MB')
     const responseMimeType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()
     const mimeType = responseMimeType || media.mimeType?.toLowerCase() || this.getDefaultMediaMimeType(media.type)
     this.assertOutboundMediaType(media.type, mimeType)
-    if (!response.body) throw new Error(`下载远程媒体失败：响应内容为空（${source}）`)
-
-    const chunks: Buffer[] = []
-    const reader = response.body.getReader()
-    let size = 0
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        size += value.byteLength
-        if (size > MAX_MEDIA_SIZE) {
-          await reader.cancel().catch(() => {})
-          throw new Error('媒体大小不能超过 10 MB')
-        }
-        chunks.push(Buffer.from(value))
-      }
-    } finally {
-      reader.releaseLock()
-    }
-    if (!size) throw new Error('媒体内容不能为空')
+    const content = await readMediaResponse(response, this.control.mediaMaxSize)
     return {
       fileName: media.fileName || this.getOutboundMediaFileName(media.type, mimeType),
       mimeType,
-      dataBase64: Buffer.concat(chunks, size).toString('base64'),
+      dataBase64: content.toString('base64'),
     }
   }
 

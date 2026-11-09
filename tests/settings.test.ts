@@ -67,6 +67,14 @@ describe('插件设置', () => {
     }])
   })
 
+  it('单文件上限可以保存，超出范围时不写入配置', async () => {
+    const host = createHost('onebot-sandbox:abc', {})
+    await host.save({ config: { mediaMaxSizeMiB: 50 }, revision: 'stamp-1' })
+    expect(host.saves).toMatchObject([{ options: { config: { mediaMaxSizeMiB: 50 } } }])
+    await expect(host.save({ config: { mediaMaxSizeMiB: 0 } })).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
+    expect(host.saves).toHaveLength(1)
+  })
+
   it('不符合 schema 的值拒绝写入', async () => {
     const host = createHost('onebot-sandbox:abc', {})
     await expect(host.save({ config: { sceneMessageLimit: 0 } })).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })

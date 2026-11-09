@@ -1,5 +1,6 @@
 import type { SandboxMcpService, SandboxMcpStableErrorCode } from './service'
 import { SandboxMcpError } from './types'
+import { DEFAULT_MEDIA_MAX_SIZE, mediaRequestBodyLimit } from '../media-limits'
 
 /**
  * HTTP 测试接口：测试控制端点上与 MCP 并列的第二种协议表述。
@@ -18,9 +19,6 @@ import { SandboxMcpError } from './types'
 
 /** 路径版本段。与 `testApiVersion` 同步推进：破坏性变更走新的版本段而不是原地改。 */
 export const HTTP_API_VERSION = 'v1'
-
-/** 请求体上限。`upload_media` 走 base64，正常上传远小于此；超出即拒，避免单个请求吃满内存。 */
-export const HTTP_API_MAX_BODY_BYTES = 32 * 1024 * 1024
 
 /**
  * 稳定错误码到 HTTP 状态码的映射。
@@ -201,6 +199,7 @@ export interface SandboxHttpApiEndpoint {
   host: string
   port: number
   tls: boolean
+  mediaMaxSize?: number
 }
 
 /**
@@ -220,8 +219,8 @@ export function toHttpApiBaseUrl({ host, port, tls }: Pick<SandboxHttpApiEndpoin
  * HTTP 表述的自述，与 `resolveHttpApiRoute` 同处一个模块。
  *
  * 「路径怎么解析」与「端点上有哪些路由」必须由同一份代码回答：分开写的话，下一次改路由会让
- * 控制台上的路由表静默变成过期文档，而没有任何测试会红。请求体上限与错误码映射同理，直接读
- * 本模块的那两个常量，而不是在别处抄一份数值。
+ * 控制台上的路由表静默变成过期文档，而没有任何测试会红。请求体预算复用媒体限额换算，错误码直接
+ * 读取映射常量，不在自述里另写一套规则。
  */
 export function describeHttpApiCapabilities(endpoint: SandboxHttpApiEndpoint): SandboxHttpApiCapabilityCatalog {
   const base = normalizeBasePath(endpoint.path)
@@ -231,7 +230,7 @@ export function describeHttpApiCapabilities(endpoint: SandboxHttpApiEndpoint): S
     basePath: base,
     version: HTTP_API_VERSION,
     baseUrl: toHttpApiBaseUrl(endpoint),
-    maxBodyBytes: HTTP_API_MAX_BODY_BYTES,
+    maxBodyBytes: mediaRequestBodyLimit(endpoint.mediaMaxSize ?? DEFAULT_MEDIA_MAX_SIZE),
     routes: [
       { kind: 'list-tools', method: 'GET', target: `${prefix}/tools`, summary: '列出当前凭证权限范围内的工具及其参数 Schema' },
       { kind: 'call-tool', method: 'POST', target: `${prefix}/tools/<工具名>`, summary: '调用一个工具，请求体直接就是工具参数；无参工具可以不带请求体' },
