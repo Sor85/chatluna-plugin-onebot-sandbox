@@ -504,9 +504,12 @@
   color: rgb(255 255 255 / 78%);
 }
 
+/* 上限只写像素：含百分比的 max-width 在计算气泡内容宽度时按 none 处理，
+   横图会按 max-height 换算出的宽度撑开气泡，右侧留出空白。
+   气泡变窄时本容器作为拉伸的 flex 项随之收窄，不需要 100% 兜底。 */
 .sandbox-message-media {
   display: flex;
-  max-width: min(280px, 100%);
+  max-width: 280px;
   flex-direction: column;
 }
 
