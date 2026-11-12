@@ -66,6 +66,7 @@
     "cordis": "^4.0.0-rc.12"
   },
   "devDependencies": {
+    "@chatluna/agent": "workspace:*",
     "@chatluna/chat": "workspace:*",
     "@chatluna/core": "workspace:*",
     "@chatluna/permission": "workspace:*",

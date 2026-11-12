@@ -1,3 +1,4 @@
+import type {} from '@chatluna/agent'
 import { requestAt, type MessageEntry, type SessionEntry, type SessionStore } from '@chatluna/session'
 import { findChatLunaRuntime, readRecord, SandboxChatLunaError } from './runtime'
 
